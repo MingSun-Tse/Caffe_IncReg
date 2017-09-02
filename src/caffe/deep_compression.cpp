@@ -2,8 +2,8 @@
 using namespace std;
 namespace caffe {
     int DeepCompression::step_ = -1;
-    int DeepCompression::num_pruned_column[20] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
-    int DeepCompression::num_pruned_row[20] = {0, 0, 0, 0, 0};
+    int DeepCompression::num_pruned_column[100] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    int DeepCompression::num_pruned_row[100] = {0, 0, 0, 0, 0};
     bool DeepCompression::IN_TEST = false;
     bool DeepCompression::IN_RETRAIN = false;
     string DeepCompression::Method = "PFilter"; // "SPP", "PPruning", "PFilter"
@@ -38,9 +38,9 @@ namespace caffe {
     
     
     // PruneRate etc.
-    float DeepCompression::PruneRate[20] = {0.75, 0.75, 0.75, 0.75, 0.75};
-    float DeepCompression::prune_ratio[20] = {0.75, 0.75, 0.75, 0.75, 0.75};
-    int DeepCompression::prune_interval[20] = {834, 834, 834, 834, 834}; // hard pruning
+    float DeepCompression::PruneRate[100] = {0.75, 0.75, 0.75, 0.75, 0.75};
+    float DeepCompression::prune_ratio[100] = {0.75, 0.75, 0.75, 0.75, 0.75};
+    int DeepCompression::prune_interval[100] = {834, 834, 834, 834, 834}; // hard pruning
     int DeepCompression::num_of_col_to_prune_per_time = 1;  // the number of columns to prune per time
     int DeepCompression::num_row_once_prune = 2; // the "m" parameter in paper "Pruning Filter"
     
@@ -51,13 +51,13 @@ namespace caffe {
     float DeepCompression::learning_speed = 0;
     
     // history_prob
-    vector<float> DeepCompression::history_prob[20];
+    vector<float> DeepCompression::history_prob[100];
     
-    vector<bool> DeepCompression::IF_row_pruned[20];
-    vector<bool> DeepCompression::IF_col_pruned[20];
+    vector<bool> DeepCompression::IF_row_pruned[100];
+    vector<bool> DeepCompression::IF_col_pruned[100];
     int DeepCompression::max_layer_index = 0;
-    int DeepCompression::filter_area[20] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
-    int DeepCompression::group[20] = {1, 1, 1, 1, 1};
+    int DeepCompression::filter_area[100] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    int DeepCompression::group[100] = {1, 1, 1, 1, 1};
     
     
     

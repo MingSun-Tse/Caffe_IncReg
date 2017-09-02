@@ -19,11 +19,11 @@ public:
     ~DeepCompression() {};
 
     static int step_;
-    static float PruneRate[20];
-    static float prune_ratio[20];
-    static int prune_interval[20];
-    static int num_pruned_column[20];
-    static int num_pruned_row[20];
+    static float PruneRate[100];
+    static float prune_ratio[100];
+    static int prune_interval[100];
+    static int num_pruned_column[100];
+    static int num_pruned_row[100];
     static bool IN_TEST;
     static bool IN_RETRAIN;
     static string Method;
@@ -63,13 +63,13 @@ public:
     static float learning_speed;
     
     // history_prob
-    static vector<float> history_prob[20];
+    static vector<float> history_prob[100];
     
-    static vector<bool> IF_row_pruned[20]; // used in "pfilter" 
-    static vector<bool> IF_col_pruned[20]; // used in "pfilter" 
+    static vector<bool> IF_row_pruned[100]; // used in "pfilter" 
+    static vector<bool> IF_col_pruned[100]; // used in "pfilter" 
     static int max_layer_index;
-    static int filter_area[20];
-    static int group[20];
+    static int filter_area[100];
+    static int group[100];
     
     }; 
 
