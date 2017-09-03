@@ -1,7 +1,6 @@
 #ifdef USE_CUDNN
 #include <vector>
 #include "caffe/layers/cudnn_conv_layer.hpp"
-#include "caffe/deep_compression.hpp"
 #include <climits>
 
 using namespace std;
@@ -16,6 +15,7 @@ void CuDNNConvolutionLayer<Dtype>::Forward_gpu(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
 
     // ADDED BY WANGHUAN -----------------------------------
+    /* DEPRECATED!!
     Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
     const int count = this->blobs_[0]->count();
     const int num_filter = this->blobs_[0]->shape()[0];
@@ -236,7 +236,9 @@ void CuDNNConvolutionLayer<Dtype>::Forward_gpu(
         }
         cout << endl;
     }
+  */
   // ------------------------------------------------------
+  
   
   const Dtype* weight = this->blobs_[0]->gpu_data();
   // cout << "gpu weight " << weight[1] << endl; // why this is wrong? WANGHUAN
@@ -273,6 +275,7 @@ void CuDNNConvolutionLayer<Dtype>::Forward_gpu(
     sync_conv_groups<<<1, 1>>>();
     
     // Restore weights ----------------
+    /*
     if (IF_RESTORE) {
         // cout << layer_name << ": restore weights! " << endl;
         this->blobs_[0]->mutable_cpu_data();
@@ -303,7 +306,9 @@ void CuDNNConvolutionLayer<Dtype>::Forward_gpu(
         // ========================
         */
     }
+    */
     // --------------------------------
+   
   }
 }
 
@@ -356,6 +361,7 @@ void CuDNNConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
 
 
       // ADDED BY WANGHUAN ------------------------------------------
+      /*
       Dtype* muweight_diff = this->blobs_[0]->mutable_cpu_diff();      
       const int count = this->blobs_[0]->count();
       
@@ -385,7 +391,7 @@ void CuDNNConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
               muweight_diff[j] *= this->masks_[j];
           }
       }
-      
+      */
       // -------------------------------------------------------------
 
 

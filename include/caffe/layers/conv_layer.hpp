@@ -78,9 +78,10 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
   virtual inline bool reverse_dimensions() { return false; }
   virtual void compute_output_shape();
   virtual void ComputeBlobMask(float ratio); // WANGHUAN
-  virtual void UpdateMasks_pfilter(int layer_index); // WANGHUAN
-  virtual void UpdateNumPrunedRow(int layer_index); // WANGHUAN
-  virtual void UpdateNumPrunedCol(int layer_index); // WANGHUAN
+  virtual void UpdateMasks_pfilter(); // WANGHUAN
+  virtual void UpdateNumPrunedRow(); // WANGHUAN
+  virtual void UpdateNumPrunedCol(); // WANGHUAN
+  virtual void PruneSetUp(const PruneParameter& prune_param); // WANGHUAN
   virtual Dtype normal_random();
 
 };

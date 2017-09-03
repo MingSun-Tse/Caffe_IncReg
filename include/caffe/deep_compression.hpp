@@ -6,22 +6,31 @@
 #define NUM_OF_WEIGHT_BUCKET 2
 #define RATIO 0.5
 
-using namespace std;
-
-//static bool if_prune_;
-//static bool is_first_step_;
-//static float PruneRate_;
 
 namespace caffe {
+using namespace std;
+
 class DeepCompression {
 public:
-    DeepCompression() {};
+     DeepCompression() {};
     ~DeepCompression() {};
 
+    // ----------------
+    static bool IF_mask;
+    static string prune_method;
+    static string criteria;
+    static int num_once_prune;
+    static int prune_interval;
+    static float rgamma;
+    static float rpower;
+    static float cgamma;
+    static float cpower;
+    static int prune_begin_iter;
+    // ----------------
+    
     static int step_;
     static float PruneRate[100];
     static float prune_ratio[100];
-    static int prune_interval[100];
     static int num_pruned_column[100];
     static int num_pruned_row[100];
     static bool IN_TEST;
@@ -29,7 +38,6 @@ public:
     static string Method;
     
     static int window_size;
-    static string criteria;
         
     static float score_decay_rate;
     static bool use_score_decay;
@@ -71,7 +79,7 @@ public:
     static int filter_area[100];
     static int group[100];
     
-    }; 
+}; 
 
 }
 

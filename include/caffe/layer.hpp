@@ -94,6 +94,10 @@ class Layer {
   int num_pruned_row;
   int num_pruned_weight;
   int num_recovered_column;
+  int layer_index;
+  Dtype prune_ratio;
+  Dtype delta;
+  
   
   vector<bool> is_pruned;
   vector<bool> IF_row_pruned;

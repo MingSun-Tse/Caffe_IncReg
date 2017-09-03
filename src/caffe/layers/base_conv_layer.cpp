@@ -8,7 +8,6 @@
 #include "caffe/deep_compression.hpp"
 
 namespace caffe {
-
 template <typename Dtype>
 void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
@@ -185,51 +184,8 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   // Propagate gradients to the parameters (as directed by backward pass).
   this->param_propagate_down_.resize(this->blobs_.size(), true);
   
-    // Initialize, WANGHUAN ---------------------------------------
-    const int count = this->blobs_[0]->count();
-    const int num_row = this->blobs_[0]->shape()[0];
-    const int num_col = count / num_row;
-    const string layer_name = this->layer_param_.name();
-    int layer_index = layer_name[0] - '0';
-    if ('0' <= layer_name[1] && layer_name[1] <= '9') {
-        layer_index = (layer_name[0] - '0') * 10 + layer_name[1] - '0'; // Assume there are at most 99 layers.
-    }
-    
-    DeepCompression::filter_area[layer_index] = this->blobs_[0]->shape()[2] * this->blobs_[0]->shape()[3];
-    DeepCompression::group[layer_index] = group_;
-      
-    this->masks_.resize(count, 1);
-    this->history_prob.resize(num_col, 1);
-    DeepCompression::history_prob[layer_index].resize(count, 1);
-    
-    // Pruning state info
-    this->num_pruned_column = 0;
-    this->num_pruned_row = 0;
-    this->is_pruned.resize(num_col, false);
-    this->IF_row_pruned.resize(num_row, false);
-    DeepCompression::IF_row_pruned[layer_index].resize(num_row, false);
-    DeepCompression::IF_col_pruned[layer_index].resize(num_col, false);
-    
-    this->num_pruned_weight = 0;
-    this->candidate_window.resize(DeepCompression::window_size, -1);
-
-    this->drop_column_masks.resize(count, 1);
-    
-    this->history_score.resize(num_col, 0);
-    this->history_diff.resize(count, 0);
-    this->history_weight.resize(count, 0);
-
-    this->blobs_[0]->mutable_cpu_second_diff = new Dtype[count];
-    for (int i = 0; i < count; ++i) {
-        this->blobs_[0]->mutable_cpu_second_diff[i] = 0;
-    }
-    
-    const float PruneRate = DeepCompression::PruneRate[layer_index];
-    if (num_col * PruneRate > DeepCompression::max_num_column_to_prune) {
-        DeepCompression::max_num_column_to_prune = num_col * PruneRate;
-    }
-    cout << "=== Masks etc. Initialized." << endl;
-    // -------------------------------------------------------------
+  // WANGHUAN 
+  this->PruneSetUp(this->layer_param_.prune_param());
 }
 
 template <typename Dtype>

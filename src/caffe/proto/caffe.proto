@@ -239,7 +239,38 @@ message SolverParameter {
   }
   // DEPRECATED: use type instead of solver_type
   optional SolverType solver_type = 30 [default = SGD];
+  
+  
+  // -----------------------------------------
+  // WANGHUAN: hyper-parameters of APP
+  // pruning
+  optional string prune_method = 41;
+  optional string criteria = 42;
+  optional int32 prune_begin_iter = 43;
+  optional int32 num_once_prune = 52; // how many columns/rows to prune per time
+  optional int32 prune_interval = 53; // how often to prune
+  optional float rgamma = 48; // recover
+  optional float rpower = 49; 
+  optional float cgamma = 50; // compression
+  optional float cpower = 51;
+
+  // decrease weight decay
+  optional string dwd_mode = 44;
+  optional int32 dwd_begin_iter = 45;
+  optional int32 dwd_end_iter = 46;
+  optional float wd_end = 47;
+  optional int32 dwd_step = 54;
+  // -----------------------------------------
+  
 }
+
+// WANGHUAN
+message PruneParameter{
+  optional float prune_ratio = 1 [default = 0];
+  optional float delta = 2 [default = 0];
+}
+
+
 
 // A message that stores the solver snapshots
 message SolverState {
@@ -306,7 +337,7 @@ message ParamSpec {
 // NOTE
 // Update the next available ID when you add a new LayerParameter field.
 //
-// LayerParameter next available layer-specific ID: 147 (last added: recurrent_param)
+// LayerParameter next available layer-specific ID: 148 (last added: prune_param)
 message LayerParameter {
   optional string name = 1; // the layer name
   optional string type = 2; // the layer type
@@ -403,7 +434,8 @@ message LayerParameter {
   optional ThresholdParameter threshold_param = 128;
   optional TileParameter tile_param = 138;
   optional WindowDataParameter window_data_param = 129;
-}
+  optional PruneParameter prune_param = 148; // WANGHUAN
+} 
 
 // Message that stores parameters used to apply transformation
 // to the data layer's data

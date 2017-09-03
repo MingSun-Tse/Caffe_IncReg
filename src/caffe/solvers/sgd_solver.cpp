@@ -180,25 +180,25 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
 
   // ------------------------------------------------
   // Decrease-Weight-Decay Mode, WANGHUAN
+  
   Dtype current_wd = weight_decay; // default
-  if (this->iter_ > DeepCompression::when_to_dwd) {
-      if (DeepCompression::dwd_mode == "linearly") { // TODO: rename when_to_dwd to dwd_begin_iter
-        const int begin = DeepCompression::when_to_dwd;
-        const int end = DeepCompression::dwd_end_iter;
-        current_wd = weight_decay * (1 - (1 - DeepCompression::wd_end) / (end - begin) * (std::min(this->iter_, end) - begin));
+  if (this->iter_ > this->param_.dwd_begin_iter()) {
+      if (this->param_.dwd_mode() == "linearly") {
+        const int begin = this->param_.dwd_begin_iter();
+        const int end   = this->param_.dwd_end_iter();
+        current_wd = weight_decay * (1 - (1 - this->param_.wd_end()) / (end - begin) * (std::min(this->iter_, end) - begin));
       
-      } else if (DeepCompression::dwd_mode == "step_linearly") {
-        const int begin = DeepCompression::when_to_dwd;
-        const int end = DeepCompression::dwd_end_iter;
-        const int tmp_iter = (std::min(this->iter_, end) - begin) / DeepCompression::dwd_step * DeepCompression::dwd_step;
-        current_wd = weight_decay * (1 - (1 - DeepCompression::wd_end) / (end - begin) * tmp_iter);
+      } else if (this->param_.dwd_mode() == "step_linearly") {
+        const int begin = this->param_.dwd_begin_iter();
+        const int end   = this->param_.dwd_end_iter();
+        const int tmp_iter = (std::min(this->iter_, end) - begin) / this->param_.dwd_step() * this->param_.dwd_step();
+        current_wd = weight_decay * (1 - (1 - this->param_.wd_end()) / (end - begin) * tmp_iter);
 
-      } else if (DeepCompression::dwd_mode == "adaptive") {
-        const int num_pruned = *std::max_element(DeepCompression::num_pruned_column, DeepCompression::num_pruned_column + 9); // 9 is the size, TODO: replace it using vector
+      } else if (this->param_.dwd_mode() == "adaptive") {
+        const int num_pruned = *std::max_element(DeepCompression::num_pruned_column, DeepCompression::num_pruned_column + 100); // 9 is the size, TODO: replace it using vector
         const int num_to_prune = DeepCompression::max_num_column_to_prune;
-        current_wd = weight_decay * (1 - (1 - DeepCompression::wd_end) / num_to_prune * num_pruned);
-      } 
-
+        current_wd = weight_decay * (1 - (1 - this->param_.wd_end()) / num_to_prune * num_pruned);
+      }
   } 
   // ------------------------------------------------
   Dtype local_decay = current_wd * net_params_weight_decay[param_id];

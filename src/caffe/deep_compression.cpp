@@ -1,13 +1,29 @@
 #include "caffe/deep_compression.hpp"
+
 using namespace std;
 namespace caffe {
+
+
+    // ----------------
+    bool DeepCompression::IF_mask;
+    string DeepCompression::prune_method;
+    string DeepCompression::criteria;
+    int DeepCompression::num_once_prune;
+    int DeepCompression::prune_interval;
+    float DeepCompression::rgamma;
+    float DeepCompression::rpower;
+    float DeepCompression::cgamma;
+    float DeepCompression::cpower;
+    int DeepCompression::prune_begin_iter;
+    // ----------------
+    
     int DeepCompression::step_ = -1;
     int DeepCompression::num_pruned_column[100] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
     int DeepCompression::num_pruned_row[100] = {0, 0, 0, 0, 0};
     bool DeepCompression::IN_TEST = false;
     bool DeepCompression::IN_RETRAIN = false;
     string DeepCompression::Method = "PFilter"; // "SPP", "PPruning", "PFilter"
-    string DeepCompression::criteria = "energy"; // prune criteria. Options: "energy", "diff", "None" - apply masks but not update them, used when retrain    
+    
 
     // use window proposal or score decay
     int DeepCompression::window_size = 40;
@@ -40,7 +56,6 @@ namespace caffe {
     // PruneRate etc.
     float DeepCompression::PruneRate[100] = {0.75, 0.75, 0.75, 0.75, 0.75};
     float DeepCompression::prune_ratio[100] = {0.75, 0.75, 0.75, 0.75, 0.75};
-    int DeepCompression::prune_interval[100] = {834, 834, 834, 834, 834}; // hard pruning
     int DeepCompression::num_of_col_to_prune_per_time = 1;  // the number of columns to prune per time
     int DeepCompression::num_row_once_prune = 2; // the "m" parameter in paper "Pruning Filter"
     
@@ -58,7 +73,7 @@ namespace caffe {
     int DeepCompression::max_layer_index = 0;
     int DeepCompression::filter_area[100] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
     int DeepCompression::group[100] = {1, 1, 1, 1, 1};
-    
+
     
     
 }

@@ -7,7 +7,6 @@
 
 
 #include "caffe/layers/cudnn_conv_layer.hpp"
-#include "caffe/deep_compression.hpp"
 
 namespace caffe {
 
@@ -19,7 +18,8 @@ namespace caffe {
 /**
  * TODO(dox) explain cuDNN interface
  */
- 
+
+/* DEPRECATED !!
 template <typename Dtype>
 void CuDNNConvolutionLayer<Dtype>::UpdateHistoryScores() {
     const int count = this->blobs_[0]->count();
@@ -214,6 +214,7 @@ void CuDNNConvolutionLayer<Dtype>::UpdateMasks() {
         std::cout << layer_name << " masks updated" << std::endl;        
     }
 }
+*/
 
 template <typename Dtype>
 void CuDNNConvolutionLayer<Dtype>::LayerSetUp(
@@ -287,7 +288,8 @@ void CuDNNConvolutionLayer<Dtype>::LayerSetUp(
 
     handles_setup_ = true;
 
-    // Initialize, WANGHUAN
+    // Initialize, WANGHUAN -------------------------------
+    /*
     const int count = this->blobs_[0]->count();
     const int num_filter = this->blobs_[0]->shape()[0];
     const int num_col = count / num_filter;
@@ -316,6 +318,8 @@ void CuDNNConvolutionLayer<Dtype>::LayerSetUp(
         DeepCompression::max_num_column_to_prune = num_col * PruneRate;
     }
     cout << "=== Masks etc. have been initialized" << endl;
+    */
+    // -----------------------------------------------------
 
 
 }

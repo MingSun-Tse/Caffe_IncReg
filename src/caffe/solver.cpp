@@ -67,6 +67,21 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   }
   iter_ = 0;
   current_step_ = 0;
+  
+  
+  // ------------------------------------------
+  // WANGHUAN, Init prune params
+  
+  DeepCompression::prune_method = param_.prune_method();
+  DeepCompression::criteria = param_.criteria();
+  DeepCompression::num_once_prune = param_.num_once_prune();
+  DeepCompression::prune_interval = param_.prune_interval();
+  DeepCompression::rgamma = param_.rgamma();
+  DeepCompression::rpower = param_.rpower();
+  DeepCompression::cgamma = param_.cgamma();
+  DeepCompression::cpower = param_.cpower(); 
+  DeepCompression::prune_begin_iter = param_.prune_begin_iter();
+  // ------------------------------------------
 }
 
 template <typename Dtype>
@@ -203,6 +218,8 @@ void Solver<Dtype>::Step(int iters) {
   int average_loss = this->param_.average_loss();
   losses_.clear();
   smoothed_loss_ = 0;
+  
+  
 
   while (iter_ < stop_iter) {
     // zero-init the params
@@ -225,10 +242,12 @@ void Solver<Dtype>::Step(int iters) {
     // accumulate the loss and gradient
     Dtype loss = 0;
 
+    // ----------------------------------------------------------------------
+    
     // WANGHUAN added, for iterative pruning
     DeepCompression::step_ = iter_ + 1;
     std::cout << "\n**** Step " << DeepCompression::step_ << " ****" << std::endl;
-
+    // ----------------------------------------------------------------------
     for (int i = 0; i < param_.iter_size(); ++i) {
       loss += net_->ForwardBackward();
     }
@@ -237,12 +256,14 @@ void Solver<Dtype>::Step(int iters) {
     // average the loss across iterations for smoothed reporting
     UpdateSmoothedLoss(loss, start_iter, average_loss); // 注意
     
+    // ----------------------------------------------------------------------
     // WANGHUAN, used for Adaptive SPP
     // DeepCompression::Delta_loss_history =  DeepCompression::Delta_loss_history * DeepCompression::loss_decay + (smoothed_loss_ - DeepCompression::loss);
     // DeepCompression::Delta_loss_history =  smoothed_loss_ - DeepCompression::loss;
     DeepCompression::learning_speed = DeepCompression::loss - smoothed_loss_;
     DeepCompression::loss = smoothed_loss_;
     cout << "learning_speed: " << DeepCompression::learning_speed << endl;
+    // ----------------------------------------------------------------------
     
 
     if (display) {
@@ -359,7 +380,11 @@ void Solver<Dtype>::TestAll() {
 template <typename Dtype>
 void Solver<Dtype>::Test(const int test_net_id) {
   CHECK(Caffe::root_solver());
+  
+  
   DeepCompression::IN_TEST = true; // WANGHUAN
+  
+  
   LOG(INFO) << "Iteration " << iter_
             << ", Testing net (#" << test_net_id << ")";
   CHECK_NOTNULL(test_nets_[test_net_id].get())->
@@ -508,7 +533,6 @@ void Solver<Dtype>::Restore(const char* state_file) {
 template <typename Dtype>
 void Solver<Dtype>::UpdateSmoothedLoss(Dtype loss, int start_iter,
     int average_loss) {
-  // cout << "average_loss: " << average_loss << endl; // WANGHUAN
   if (losses_.size() < average_loss) {
     losses_.push_back(loss);
     int size = losses_.size();
