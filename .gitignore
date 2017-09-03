@@ -1,0 +1,6 @@
+*.pyc
+*.exe
+*.o
+00Test_project/
+build/
+.build_release/
