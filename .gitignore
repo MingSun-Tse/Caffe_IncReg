@@ -2,5 +2,5 @@
 *.exe
 *.o
 00Test_project/
-build/
+build
 .build_release/
