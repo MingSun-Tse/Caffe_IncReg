@@ -71,7 +71,6 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   
   // ------------------------------------------
   // WANGHUAN, Init prune params
-  
   DeepCompression::prune_method = param_.prune_method();
   DeepCompression::criteria = param_.criteria();
   DeepCompression::num_once_prune = param_.num_once_prune();
@@ -81,6 +80,7 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   DeepCompression::cgamma = param_.cgamma();
   DeepCompression::cpower = param_.cpower(); 
   DeepCompression::prune_begin_iter = param_.prune_begin_iter();
+  DeepCompression::iter_size = param_.iter_size();
   // ------------------------------------------
 }
 
@@ -242,29 +242,30 @@ void Solver<Dtype>::Step(int iters) {
     // accumulate the loss and gradient
     Dtype loss = 0;
 
-    // ----------------------------------------------------------------------
-    
-    // WANGHUAN added, for iterative pruning
+    /// ----------------------------------------------------------------------
+    /// WANGHUAN added, for iterative pruning
     DeepCompression::step_ = iter_ + 1;
     std::cout << "\n**** Step " << DeepCompression::step_ << " ****" << std::endl;
-    // ----------------------------------------------------------------------
+    /// ----------------------------------------------------------------------
+    
+    DeepCompression::inner_iter = 0;
     for (int i = 0; i < param_.iter_size(); ++i) {
       loss += net_->ForwardBackward();
+      ++ DeepCompression::inner_iter;
     }
 
     loss /= param_.iter_size();
     // average the loss across iterations for smoothed reporting
-    UpdateSmoothedLoss(loss, start_iter, average_loss); // 注意
+    UpdateSmoothedLoss(loss, start_iter, average_loss); 
     
-    // ----------------------------------------------------------------------
-    // WANGHUAN, used for Adaptive SPP
-    // DeepCompression::Delta_loss_history =  DeepCompression::Delta_loss_history * DeepCompression::loss_decay + (smoothed_loss_ - DeepCompression::loss);
-    // DeepCompression::Delta_loss_history =  smoothed_loss_ - DeepCompression::loss;
+    /// ----------------------------------------------------------------------
+    /// WANGHUAN, used for Adaptive SPP
+    /// DeepCompression::Delta_loss_history =  DeepCompression::Delta_loss_history * DeepCompression::loss_decay + (smoothed_loss_ - DeepCompression::loss);
+    /// DeepCompression::Delta_loss_history =  smoothed_loss_ - DeepCompression::loss;
     DeepCompression::learning_speed = DeepCompression::loss - smoothed_loss_;
     DeepCompression::loss = smoothed_loss_;
     cout << "learning_speed: " << DeepCompression::learning_speed << endl;
-    // ----------------------------------------------------------------------
-    
+    /// ----------------------------------------------------------------------
 
     if (display) {
       LOG_IF(INFO, Caffe::root_solver()) << "Iteration " << iter_
@@ -292,7 +293,7 @@ void Solver<Dtype>::Step(int iters) {
     for (int i = 0; i < callbacks_.size(); ++i) {
       callbacks_[i]->on_gradients_ready();
     }
-    ApplyUpdate(); //- Virtual Function
+    ApplyUpdate(); /// Virtual Function
 
     // Increment the internal iter_ counter -- its value should always indicate
     // the number of times the weights have been updated.

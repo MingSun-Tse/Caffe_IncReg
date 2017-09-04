@@ -15,8 +15,8 @@ public:
      DeepCompression() {};
     ~DeepCompression() {};
 
-    // ----------------
-    static bool IF_mask;
+    /// --------------------------------
+    /// pass params from solver.prototxt to layer
     static string prune_method;
     static string criteria;
     static int num_once_prune;
@@ -26,18 +26,20 @@ public:
     static float cgamma;
     static float cpower;
     static int prune_begin_iter;
-    // ----------------
+    static int iter_size;
     
-    static int step_;
-    static float PruneRate[100];
-    static int num_pruned_column[100];
-    static int num_pruned_row[100];
+    /// share params between solver and layer
     static bool IN_TEST;
     static bool IN_RETRAIN;
-
+    static int inner_iter;
+    static int num_pruned_column[100];
+    static int num_pruned_row[100];
+    static int step_;
+    /// --------------------------------
     
-    static int window_size;
-        
+    static float PruneRate[100];
+
+    static int window_size;  
     static float score_decay_rate;
     static bool use_score_decay;
     

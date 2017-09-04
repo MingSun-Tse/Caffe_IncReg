@@ -76,11 +76,11 @@ class Layer {
   }
 
 
-  // added by wanghuan
+  // added by WANGHUAN
   void kmeans_cluster(vector<int> &cLabel, vector<Dtype> &cCentro, Dtype *cWeights, int nWeights, \
     vector<bool> &mask, int nCluster,  int max_iter);
 
-  // Deep compression, added by wanghuan
+  // Deep compression
   // 这个虚函数是必要的，因为只有卷积和FC层需要pruning，但是net.cpp中接口都是layers_，所以如果只能在这一层就定义好，然后在卷积和FC层具体实现
   // 其他例如loss、pool层就不实现
   virtual void ComputeBlobMask(float ratio) {}
@@ -97,9 +97,11 @@ class Layer {
   int layer_index;
   Dtype prune_ratio;
   Dtype delta;
+  bool IF_restore;
   
   
-  vector<bool> is_pruned;
+  vector<Dtype> weight_backup;
+  vector<bool> IF_col_pruned;
   vector<bool> IF_row_pruned;
   
   vector<int> random_col_perm;

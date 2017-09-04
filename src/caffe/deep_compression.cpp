@@ -4,8 +4,8 @@ using namespace std;
 namespace caffe {
 
 
-    // ----------------
-    bool DeepCompression::IF_mask;
+    /// --------------------------------
+    /// pass params from solver.prototxt to layer, not initialized here.
     string DeepCompression::prune_method;
     string DeepCompression::criteria;
     int DeepCompression::num_once_prune;
@@ -15,15 +15,18 @@ namespace caffe {
     float DeepCompression::cgamma;
     float DeepCompression::cpower;
     int DeepCompression::prune_begin_iter;
-    // ----------------
+    int DeepCompression::iter_size;
     
+    /// share params between solver and layer, initailized here.
+    int DeepCompression::inner_iter = 0;
     int DeepCompression::step_ = -1;
     int DeepCompression::num_pruned_column[100] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
     int DeepCompression::num_pruned_row[100] = {0, 0, 0, 0, 0};
     bool DeepCompression::IN_TEST = false;
     bool DeepCompression::IN_RETRAIN = false;
+    /// --------------------------------
     
-
+    
     // use window proposal or score decay
     int DeepCompression::window_size = 40;
     bool DeepCompression::use_score_decay = true;

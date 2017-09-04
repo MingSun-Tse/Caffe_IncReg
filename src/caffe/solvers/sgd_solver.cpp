@@ -122,7 +122,7 @@ void SGDSolver<Dtype>::ApplyUpdate() {
     LOG(INFO) << "Iteration " << this->iter_ << ", lr = " << rate;
   }
   ClipGradients();
-  ClearHistory(); // WANGHUAN
+  // ClearHistory(); // WANGHUAN
   for (int param_id = 0; param_id < this->net_->learnable_params().size();
        ++param_id) {
 
@@ -595,7 +595,7 @@ void SGDSolver<Dtype>::ComputeUpdateValue(int param_id, Dtype rate) {
   case Caffe::CPU: {
     caffe_cpu_axpby(net_params[param_id]->count(), local_rate,
               net_params[param_id]->cpu_diff(), momentum,
-              history_[param_id]->mutable_cpu_data()); // history = momentum * history + lrate * diff
+              history_[param_id]->mutable_cpu_data()); /// history = momentum * history + lrate * diff
     caffe_copy(net_params[param_id]->count(),
         history_[param_id]->cpu_data(),
         net_params[param_id]->mutable_cpu_diff());
@@ -620,22 +620,25 @@ void SGDSolver<Dtype>::ComputeUpdateValue(int param_id, Dtype rate) {
 template <typename Dtype>
 void SGDSolver<Dtype>::ClearHistory() {
     const vector<shared_ptr<Layer<Dtype> > >& layers = this->net_->layers();
-    int param_id = -2;
+    int param_id = 0;
     for (int i = 0; i < layers.size(); ++i) {
+    /// As long as layer i has masks, its history_ should be cleared. But only history_ of weights, since we only have masks for weights.
+    /// So the key is to relate layer i with corresponding param_id.
         const int count = layers[i]->masks_.size();
-        if (count) {
-            param_id += 2; // jump over tht biases
-            // std::cout << "Count of layer conv" << param_id/2 + 1 << ": " << count << std::endl;
-            // sleep(1);
-            Dtype* tmp = new Dtype[count];
+        if (count) { 
+            while (history_[param_id]->count() != count) { 
+                ++ param_id; /// jump over biases
+            }
+            bool* tmp = new bool[count];
             for (int k = 0; k < count; ++k) {
-                tmp[k] = (Dtype) layers[i]->masks_[k];
+                tmp[k] = layers[i]->masks_[k];
             }
             caffe_mul(count, 
                       (const Dtype*) tmp, 
                       history_[param_id]->cpu_data(), 
                       history_[param_id]->mutable_cpu_data());
             delete[] tmp;
+            ++ param_id;
         }
     }
 }
