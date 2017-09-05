@@ -67,6 +67,51 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
 }
 
 template <typename Dtype> 
+void ConvolutionLayer<Dtype>::TaylorPrune(const vector<Blob<Dtype>*>& top) {
+    for (int i = 0; i < top.size(); ++i) {
+        const Dtype* top_data = top[i]->cpu_data();
+        const Dtype* top_diff = top[i]->cpu_diff();
+        Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
+        const int num_c = top[i]->shape()[1]; /// channel
+        const int num_h = top[i]->shape()[2]; /// height
+        const int num_w = top[i]->shape()[3]; /// width
+        const int count = this->blobs_[0]->count();
+        const int num_row = this->blobs_[0]->shape()[0];
+        const int num_col = count / num_row;
+
+        typedef std::pair<Dtype, int> mypair;
+        vector<mypair> fm_score(num_c); /// feature map score
+        for (int c = 0; c < num_c; ++c) {
+            fm_score[c].second = c;
+            fm_score[c].first  = 0;
+        }
+        for (int n = 0; n < this->num_; ++n) {
+            for (int c = 0; c < num_c; ++c) {
+                for (int i = 0; i < num_h * num_w; ++i) {
+                    fm_score[c].first += fabs(top_diff[n * num_c * num_w * num_h + c * num_w * num_h + i] 
+                                            * top_data[n * num_c * num_w * num_h + c * num_w * num_h + i]);                          
+                }
+            }
+        } 
+        sort(fm_score.begin(), fm_score.end());
+        int num_once_prune = 1;
+        if (DeepCompression::num_once_prune >= 1) { num_once_prune = DeepCompression::num_once_prune; }
+        for (int i = 0; i < num_once_prune; ++i) {
+            const int c = fm_score[i].second;
+            for (int j = 0; j < num_col; ++j) {
+                muweight[c * num_col + j] = 0;
+                this->masks_[c * num_col + j] = 0;
+            }
+            this->IF_row_pruned[c] = true;
+            ++ this->num_pruned_row;
+        }
+    }
+}
+    
+    
+    
+    
+template <typename Dtype> 
 void ConvolutionLayer<Dtype>::ProbPrune() {
     Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
     const int count = this->blobs_[0]->count();
@@ -152,7 +197,7 @@ void ConvolutionLayer<Dtype>::ProbPrune() {
                     muweight[i * num_col + col_of_rank_j] = 0; 
                 } /// once pruned, zero out weights
             }
-        }
+        } 
     }
 
     /// Once the pruning ratio reached, set all the masks of non-zero prob to 1 and adjust their weights.
@@ -208,7 +253,6 @@ void ConvolutionLayer<Dtype>::ProbPrune() {
     }
     
     for (int i = 0; i < count; ++i) { muweight[i] *= this->masks_[i]; } /// do pruning
-
 
 }
 

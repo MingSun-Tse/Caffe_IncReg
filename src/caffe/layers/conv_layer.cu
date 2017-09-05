@@ -74,6 +74,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             } else if (DeepCompression::prune_method == "FP") { 
                 CHECK_GE(DeepCompression::prune_interval, 1)
                         << "Error: if 'FP' is used, 'prune_interval' must be set.";
+                
                 FilterPrune();
             } else if (DeepCompression::prune_method == "PP") {
                 ProbPrune();
@@ -105,6 +106,12 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             }
         }
     }
+    /// this->bottom_dim_: bottom feature map size, input
+    /// this->top_dim_: top feature map size, output
+    /// this->num_: batch size
+        
+   
+
     
     /// Print feature map to check --------
     /// If row 3 and 8 are pruned in previous layer, then channel 3 and 8 will be only biases in this layer's feature map.
@@ -204,35 +211,44 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     }
   }
   
-  /// ADDED BY WANGHUAN ------------------------------------------
-  Dtype* muweight_diff = this->blobs_[0]->mutable_cpu_diff();      
-  const int count = this->blobs_[0]->count();
-  
-  /// UpdateDiffs(); /// update second diff and so on
-  
-  /// Print and check
-  const string layer_name = this->layer_param_.name();
-  if (layer_name == "conv2" && DeepCompression::step_ % SHOW_INTERVAL == 0) {
-      cout.width(5);  cout << "Index" << "   ";
-      cout.width(16); cout << "DiffBeforeMasked" << "   ";
-      cout.width(4);  cout << "Mask" << "   ";
-      cout.width(4);  cout << "Prob" << endl;
-      for (int i = 0; i < 20; ++i) {
-          cout.width(3);  cout << "#";
-          cout.width(2);  cout << i+1 << "   ";
-          cout.width(16); cout << muweight_diff[i] << "   ";
-          cout.width(4);  cout << this->masks_[i] << "   ";
-          cout.width(4);  cout << DeepCompression::history_prob[this->layer_index][i] << endl;
-      }
-  }
-  
-  /// Apply masks to diff
-  const bool IF_mask = DeepCompression::IN_RETRAIN || (DeepCompression::step_ - 1) >= DeepCompression::prune_begin_iter;
-  if (IF_mask) {
-      if (DeepCompression::prune_method == "Prune" && DeepCompression::criteria == "diff") { } /// UpdateMasks(); }
-      for (int j = 0; j < count; ++j) { muweight_diff[j] *= this->masks_[j]; }
-  }
-  /// ------------------------------------------------------------- 
+/// ADDED BY WANGHUAN ------------------------------------------
+    Dtype* muweight_diff = this->blobs_[0]->mutable_cpu_diff();      
+    const int count = this->blobs_[0]->count();
+
+    /// UpdateDiffs(); /// update second diff and so on
+
+    /// Print and check
+    const string layer_name = this->layer_param_.name();
+    if (layer_name == "conv2" && DeepCompression::step_ % SHOW_INTERVAL == 0) {
+        cout.width(5);  cout << "Index" << "   ";
+        cout.width(16); cout << "DiffBeforeMasked" << "   ";
+        cout.width(4);  cout << "Mask" << "   ";
+        cout.width(4);  cout << "Prob" << endl;
+        for (int i = 0; i < 20; ++i) {
+            cout.width(3);  cout << "#";
+            cout.width(2);  cout << i+1 << "   ";
+            cout.width(16); cout << muweight_diff[i] << "   ";
+            cout.width(4);  cout << this->masks_[i] << "   ";
+            cout.width(4);  cout << DeepCompression::history_prob[this->layer_index][i] << endl;
+        }
+    }
+
+    /// Apply masks to diff
+    const bool IF_mask = DeepCompression::IN_RETRAIN || (DeepCompression::step_ - 1) >= DeepCompression::prune_begin_iter;
+    if (IF_mask) {
+        for (int j = 0; j < count; ++j) { muweight_diff[j] *= this->masks_[j]; }
+        if (DeepCompression::prune_method == "Prune" && DeepCompression::criteria == "diff") {
+            /// UpdateMasks(); 
+        } else if (DeepCompression::prune_method == "TP") {
+            CHECK_GE(DeepCompression::prune_interval, 1)
+                << "Error: if 'TP' is used, 'prune_interval' must be set.";
+            if ((DeepCompression::step_ - 1) % DeepCompression::prune_interval == 0) { TaylorPrune(top); }
+        }
+            
+    }
+
+
+/// ------------------------------------------------------------- 
   
   
 }

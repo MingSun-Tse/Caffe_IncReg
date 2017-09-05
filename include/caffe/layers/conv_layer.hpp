@@ -79,6 +79,7 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
   virtual void compute_output_shape();
   virtual void ComputeBlobMask(float ratio); // WANGHUAN
   virtual void FilterPrune(); // WANGHUAN
+  virtual void TaylorPrune(const vector<Blob<Dtype>*>& top);
   virtual void ProbPrune();
   virtual void UpdateNumPrunedRow(); // WANGHUAN
   virtual void UpdateNumPrunedCol(); // WANGHUAN
