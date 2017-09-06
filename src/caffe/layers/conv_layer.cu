@@ -1,7 +1,7 @@
 #include <vector>
 #include "caffe/layers/conv_layer.hpp"
 #include "caffe/deep_compression.hpp"
-#define SHOW_INTERVAL 1
+#define SHOW_INTERVAL 20
 
 using namespace std;
 
@@ -10,7 +10,7 @@ namespace caffe {
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-
+          
     /// ADDED BY WANGHUAN -----------------------------------
     Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
     const int count = this->blobs_[0]->count();
@@ -18,9 +18,8 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const int num_col = count / num_row;
     const string layer_name = this->layer_param_.name();
     if (this->layer_index > DeepCompression::max_layer_index) { DeepCompression::max_layer_index = this->layer_index; }
-    const bool IF_mask =  DeepCompression::IN_RETRAIN 
-                                 || (DeepCompression::step_ - 1) >= DeepCompression::prune_begin_iter;
-    vector<Dtype> weight_backup(count, 0);
+    const bool IF_mask = DeepCompression::prune_method != "None" && (DeepCompression::IN_RETRAIN 
+                               || (DeepCompression::step_ - 1) >= DeepCompression::prune_begin_iter);
     this->IF_restore = false;
     
     /// Check -------------------------------------------
@@ -45,7 +44,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         const Dtype pruned_ratio = 1 - (1 - this->num_pruned_column * 1.0 / num_col) * (1 - this->num_pruned_row * 1.0 / num_row);
         
         /// Print and check
-        if (this->layer_index < 5 && DeepCompression::inner_iter == 0) {
+        if (DeepCompression::prune_method != "None" && this->layer_index < 5 && DeepCompression::inner_iter == 0) {
             cout << layer_name << "  IF_mask: " << IF_mask << "  pruned_ratio: ";
             cout.width(3); cout << pruned_ratio << "  prune_ratio: " << this->prune_ratio << endl;
         }
@@ -109,9 +108,6 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     /// this->bottom_dim_: bottom feature map size, input
     /// this->top_dim_: top feature map size, output
     /// this->num_: batch size
-        
-   
-
     
     /// Print feature map to check --------
     /// If row 3 and 8 are pruned in previous layer, then channel 3 and 8 will be only biases in this layer's feature map.

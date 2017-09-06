@@ -22,10 +22,9 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     const int num_col = count / num_row;
     const string layer_name = this->layer_param_.name();
     
-    if (DeepCompression::prune_method != "None") {
-        CHECK_EQ(layer_name[0], '[') 
-            << "Error: The layer name is not started with layer_index in the format of '[3]conv4', please convert your prototxt.";
-    }
+    CHECK_EQ(layer_name[0], '[') 
+        << "Error: The layer name is not started with layer_index in the format of '[3]conv4', please convert your prototxt.";
+    
     int i = 1;
     this->layer_index = 0;
     while (layer_name[i] != ']') { 

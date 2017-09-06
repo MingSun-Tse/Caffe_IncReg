@@ -180,17 +180,21 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
 
   // ------------------------------------------------
   // Decrease-Weight-Decay Mode, WANGHUAN
-  
   Dtype current_wd = weight_decay; // default
-  if (this->iter_ > this->param_.dwd_begin_iter()) {
+  if (this->param_.dwd_mode() != "None") {
+      CHECK_GE(this->param_.wd_end(), 0) << "Error: wd_end must be in [0, 1]";
+      CHECK_LE(this->param_.wd_end(), 1) << "Error: wd_end must be in [0, 1]";
+      
       if (this->param_.dwd_mode() == "linearly") {
         const int begin = this->param_.dwd_begin_iter();
         const int end   = this->param_.dwd_end_iter();
+        CHECK_GE(end, begin - 1) << "Error: dwd_end_iter must be larger than dwd_begin_iter.";
         current_wd = weight_decay * (1 - (1 - this->param_.wd_end()) / (end - begin) * (std::min(this->iter_, end) - begin));
       
       } else if (this->param_.dwd_mode() == "step_linearly") {
         const int begin = this->param_.dwd_begin_iter();
         const int end   = this->param_.dwd_end_iter();
+        CHECK_GE(end, begin - 1) << "Error: dwd_end_iter must be larger than dwd_begin_iter.";
         const int tmp_iter = (std::min(this->iter_, end) - begin) / this->param_.dwd_step() * this->param_.dwd_step();
         current_wd = weight_decay * (1 - (1 - this->param_.wd_end()) / (end - begin) * tmp_iter);
 
@@ -199,7 +203,8 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         const int num_to_prune = DeepCompression::max_num_column_to_prune;
         current_wd = weight_decay * (1 - (1 - this->param_.wd_end()) / num_to_prune * num_pruned);
       }
-  } 
+  }
+  
   // ------------------------------------------------
   Dtype local_decay = current_wd * net_params_weight_decay[param_id];
   

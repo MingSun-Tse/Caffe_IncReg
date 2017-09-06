@@ -51,6 +51,20 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   LOG_IF(INFO, Caffe::root_solver()) << "Initializing solver from parameters: "
     << std::endl << param.DebugString(); // 这里打印出solver_params
   param_ = param;
+  
+  // ------------------------------------------
+  // WANGHUAN, copy prune params
+  DeepCompression::prune_method = param_.prune_method();
+  DeepCompression::criteria = param_.criteria();
+  DeepCompression::num_once_prune = param_.num_once_prune();
+  DeepCompression::prune_interval = param_.prune_interval();
+  DeepCompression::rgamma = param_.rgamma();
+  DeepCompression::rpower = param_.rpower();
+  DeepCompression::cgamma = param_.cgamma();
+  DeepCompression::cpower = param_.cpower(); 
+  DeepCompression::prune_begin_iter = param_.prune_begin_iter();
+  DeepCompression::iter_size = param_.iter_size();
+  // ------------------------------------------
 
   CHECK_GE(param_.average_loss(), 1) << "average_loss should be non-negative.";
 
@@ -67,21 +81,7 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   }
   iter_ = 0;
   current_step_ = 0;
-  
-  
-  // ------------------------------------------
-  // WANGHUAN, Init prune params
-  DeepCompression::prune_method = param_.prune_method();
-  DeepCompression::criteria = param_.criteria();
-  DeepCompression::num_once_prune = param_.num_once_prune();
-  DeepCompression::prune_interval = param_.prune_interval();
-  DeepCompression::rgamma = param_.rgamma();
-  DeepCompression::rpower = param_.rpower();
-  DeepCompression::cgamma = param_.cgamma();
-  DeepCompression::cpower = param_.cpower(); 
-  DeepCompression::prune_begin_iter = param_.prune_begin_iter();
-  DeepCompression::iter_size = param_.iter_size();
-  // ------------------------------------------
+
 }
 
 template <typename Dtype>
