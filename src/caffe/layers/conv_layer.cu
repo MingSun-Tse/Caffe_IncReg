@@ -230,7 +230,8 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     }
 
     /// Apply masks to diff
-    const bool IF_mask = DeepCompression::IN_RETRAIN || (DeepCompression::step_ - 1) >= DeepCompression::prune_begin_iter;
+    const bool IF_mask = DeepCompression::prune_method != "None" && (DeepCompression::IN_RETRAIN 
+                               || (DeepCompression::step_ - 1) >= DeepCompression::prune_begin_iter);
     if (IF_mask) {
         for (int j = 0; j < count; ++j) { muweight_diff[j] *= this->masks_[j]; }
         if (DeepCompression::prune_method == "Prune" && DeepCompression::criteria == "diff") {
