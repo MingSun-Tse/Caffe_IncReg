@@ -122,7 +122,7 @@ void SGDSolver<Dtype>::ApplyUpdate() {
     LOG(INFO) << "Iteration " << this->iter_ << ", lr = " << rate;
   }
   ClipGradients();
-  // ClearHistory(); // WANGHUAN
+  ClearHistory(); // WANGHUAN
   for (int param_id = 0; param_id < this->net_->learnable_params().size();
        ++param_id) {
 
@@ -627,14 +627,15 @@ void SGDSolver<Dtype>::ClearHistory() {
     const vector<shared_ptr<Layer<Dtype> > >& layers = this->net_->layers();
     int param_id = 0;
     for (int i = 0; i < layers.size(); ++i) {
-    /// As long as layer i has masks, its history_ should be cleared. But only history_ of weights, since we only have masks for weights.
+    /// As long as layer i has masks, its history_ should be cleared. But only clear history_ of weights, since we only have masks for weights.
     /// So the key is to relate layer i with corresponding param_id.
         const int count = layers[i]->masks_.size();
+        
         if (count) { 
             while (history_[param_id]->count() != count) { 
                 ++ param_id; /// jump over biases
             }
-            bool* tmp = new bool[count];
+            Dtype* tmp = new Dtype[count]; /// TODEBUG: Why cannot use bool?
             for (int k = 0; k < count; ++k) {
                 tmp[k] = layers[i]->masks_[k];
             }

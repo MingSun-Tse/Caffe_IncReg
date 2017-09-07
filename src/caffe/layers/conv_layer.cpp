@@ -15,6 +15,7 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     /// set up prune parameters
     this->prune_ratio = prune_param.prune_ratio();
     this->delta = prune_param.delta();
+    this->pruned_ratio = 0;
     
     /// set up masks etc.
     const int count = this->blobs_[0]->count();
@@ -91,10 +92,15 @@ void ConvolutionLayer<Dtype>::TaylorPrune(const vector<Blob<Dtype>*>& top) {
                                             * top_data[n * num_c * num_w * num_h + c * num_w * num_h + i]);                          
                 }
             }
-        } 
+        }
+        for (int c = 0; c < num_c; ++c) {
+            if (this->IF_row_pruned[c]) {
+                fm_score[c].first = INT_MAX;
+            }
+        }
         sort(fm_score.begin(), fm_score.end());
         int num_once_prune = 1;
-        if (DeepCompression::num_once_prune >= 1) { num_once_prune = DeepCompression::num_once_prune; }
+        if (DeepCompression::num_once_prune > 1) { num_once_prune = DeepCompression::num_once_prune; }
         for (int i = 0; i < num_once_prune; ++i) {
             const int c = fm_score[i].second;
             for (int j = 0; j < num_col; ++j) {
@@ -328,8 +334,6 @@ void ConvolutionLayer<Dtype>::UpdateNumPrunedCol() {
 
 template <typename Dtype> 
 void ConvolutionLayer<Dtype>::FilterPrune() {
-    if ((DeepCompression::step_ - 1) % DeepCompression::prune_interval != 0) { return; }    
-    
     Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
     const int count = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];

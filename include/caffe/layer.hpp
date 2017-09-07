@@ -96,10 +96,10 @@ class Layer {
   int num_recovered_column;
   int layer_index;
   Dtype prune_ratio;
+  Dtype pruned_ratio;
   Dtype delta;
   bool IF_restore;
-  
-  
+
   vector<Dtype> weight_backup;
   vector<bool> IF_col_pruned;
   vector<bool> IF_row_pruned;

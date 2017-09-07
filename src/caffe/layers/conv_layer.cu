@@ -4,7 +4,6 @@
 #define SHOW_INTERVAL 20
 
 using namespace std;
-
 namespace caffe {
 
 template <typename Dtype>
@@ -39,45 +38,53 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     /// -------------------------------------------------
     
     if (this->phase_ == 0) {
-        /// UpdateNumPrunedRow();
-        /// UpdateNumPrunedCol();
-        const Dtype pruned_ratio = 1 - (1 - this->num_pruned_column * 1.0 / num_col) * (1 - this->num_pruned_row * 1.0 / num_row);
         
         /// Print and check
         if (DeepCompression::prune_method != "None" && this->layer_index < 5 && DeepCompression::inner_iter == 0) {
-            cout << layer_name << "  IF_mask: " << IF_mask << "  pruned_ratio: ";
-            cout.width(3); cout << pruned_ratio << "  prune_ratio: " << this->prune_ratio << endl;
+            cout << layer_name << "  IF_mask: " << IF_mask 
+                 << "  pruned_ratio: " << this->pruned_ratio
+                 << "  prune_ratio: " << this->prune_ratio 
+                 << "  num_pruned_col: " << this->num_pruned_column
+                 << "  num_pruned_row: " << this->num_pruned_row << endl;
         }
-                            
-        /// Update masks and apply masks
-        if (IF_mask && pruned_ratio < this->prune_ratio) {
-            
-            /// Print and check (before pruning)
-            if (this->layer_index == 1 && DeepCompression::step_ % SHOW_INTERVAL == 0 && DeepCompression::inner_iter == 0) {
-                /// cout.setf(std::ios::left);
-                cout.width(5);  cout << "Index" << "   ";
-                cout.width(18); cout << "WeightBeforeMasked" << "   ";
-                cout.width(4);  cout << "Mask" << "   ";
-                cout.width(4);  cout << "Prob" << endl;
-                for (int i = 0; i < 20; ++i) {
-                    cout.width(3);  cout << "#";
-                    cout.width(2);  cout << i+1 << "   ";
-                    cout.width(18); cout << muweight[i] << "   ";
-                    cout.width(4);  cout << this->masks_[i] << "   ";
-                    cout.width(4);  cout << DeepCompression::history_prob[this->layer_index][i] << endl;
-                }
+        
+        /// Print and check (before pruning)
+        if (this->layer_index == 1 && DeepCompression::step_ % SHOW_INTERVAL == 0 && DeepCompression::inner_iter == 0) {
+            /// cout.setf(std::ios::left);
+            cout.width(5);  cout << "Index" << "   ";
+            cout.width(18); cout << "WeightBeforeMasked" << "   ";
+            cout.width(4);  cout << "Mask" << "   ";
+            cout.width(4);  cout << "Prob" << endl;
+            for (int i = 0; i < 20; ++i) {
+                cout.width(3);  cout << "#";
+                cout.width(2);  cout << i+1 << "   ";
+                cout.width(18); cout << muweight[i] << "   ";
+                cout.width(4);  cout << this->masks_[i] << "   ";
+                cout.width(4);  cout << DeepCompression::history_prob[this->layer_index][i] << endl;
             }
-            
+        }
+
+        /// Update masks and apply masks
+        if (IF_mask && this->pruned_ratio < this->prune_ratio) {
             if (DeepCompression::prune_method == "Prune" && DeepCompression::criteria == "L2-norm") { 
                 /// UpdateMasks(); 
-            } else if (DeepCompression::prune_method == "FP") { 
+            } else if (DeepCompression::prune_method == "FP") {
                 CHECK_GE(DeepCompression::prune_interval, 1)
                         << "Error: if 'FP' is used, 'prune_interval' must be set.";
-                
-                FilterPrune();
+                if ((DeepCompression::step_ - 1) % DeepCompression::prune_interval == 0) { FilterPrune(); }    
             } else if (DeepCompression::prune_method == "PP") {
                 ProbPrune();
-            } /// TODO: change to switch
+            }
+            
+            /// UpdateNumPrunedRow();
+            UpdateNumPrunedCol();
+            this->pruned_ratio = 1 - (1 - this->num_pruned_column * 1.0 / num_col) * (1 - this->num_pruned_row * 1.0 / num_row);
+            if (this->pruned_ratio >= this->prune_ratio) {
+                cout << layer_name << " prune finished!" 
+                     << "  step: " << DeepCompression::step_ 
+                     << "  pruned_ratio: " << this->pruned_ratio << endl;
+            }
+            
         }   
     } else {
         if (DeepCompression::prune_method == "PP") {
@@ -214,8 +221,7 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     /// UpdateDiffs(); /// update second diff and so on
 
     /// Print and check
-    const string layer_name = this->layer_param_.name();
-    if (layer_name == "conv2" && DeepCompression::step_ % SHOW_INTERVAL == 0) {
+    if (this->layer_index == 1 && DeepCompression::step_ % SHOW_INTERVAL == 0) {
         cout.width(5);  cout << "Index" << "   ";
         cout.width(16); cout << "DiffBeforeMasked" << "   ";
         cout.width(4);  cout << "Mask" << "   ";
@@ -234,16 +240,16 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
                                || (DeepCompression::step_ - 1) >= DeepCompression::prune_begin_iter);
     if (IF_mask) {
         for (int j = 0; j < count; ++j) { muweight_diff[j] *= this->masks_[j]; }
-        if (DeepCompression::prune_method == "Prune" && DeepCompression::criteria == "diff") {
-            /// UpdateMasks(); 
-        } else if (DeepCompression::prune_method == "TP") {
-            CHECK_GE(DeepCompression::prune_interval, 1)
-                << "Error: if 'TP' is used, 'prune_interval' must be set.";
-            if ((DeepCompression::step_ - 1) % DeepCompression::prune_interval == 0) { TaylorPrune(top); }
+        if (this->pruned_ratio < this->prune_ratio) {
+            if (DeepCompression::prune_method == "Prune" && DeepCompression::criteria == "diff") {
+                /// UpdateMasks(); 
+            } else if (DeepCompression::prune_method == "TP") {
+                CHECK_GE(DeepCompression::prune_interval, 1)
+                    << "Error: if 'TP' is used, 'prune_interval' must be set.";
+                if ((DeepCompression::step_ - 1) % DeepCompression::prune_interval == 0) { TaylorPrune(top); }
+            }
         }
-            
     }
-
 
 /// ------------------------------------------------------------- 
   
