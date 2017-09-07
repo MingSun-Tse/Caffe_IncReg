@@ -27,14 +27,15 @@ public:
     static float cpower;
     static int prune_begin_iter;
     static int iter_size;
-    
+     
     /// share params between solver and layer
     static bool IN_TEST;
     static bool IN_RETRAIN;
     static int inner_iter;
-    static int num_pruned_column[100];
+    static int num_pruned_col[100];
     static int num_pruned_row[100];
     static int step_;
+    static bool IF_prune_finished[100];
     /// --------------------------------
     
     static float PruneRate[100];

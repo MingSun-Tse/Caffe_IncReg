@@ -179,12 +179,13 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       bias_filler->Fill(this->blobs_[1].get());
     }
   }
-  kernel_dim_ = this->blobs_[0]->count(1);
+  kernel_dim_ = this->blobs_[0]->count(1); 
   weight_offset_ = conv_out_channels_ * kernel_dim_ / group_;
   // Propagate gradients to the parameters (as directed by backward pass).
   this->param_propagate_down_.resize(this->blobs_.size(), true);
   
   /// WANGHUAN
+  cout << DeepCompression::prune_method << endl;
   if (DeepCompression::prune_method != "None") {
     this->PruneSetUp(this->layer_param_.prune_param());
   }

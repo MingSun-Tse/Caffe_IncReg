@@ -90,7 +90,7 @@ class Layer {
   vector<bool> masks_;
   vector<int> indices_;
   vector<Dtype> centroids_;
-  int num_pruned_column;
+  int num_pruned_col;
   int num_pruned_row;
   int num_pruned_weight;
   int num_recovered_column;

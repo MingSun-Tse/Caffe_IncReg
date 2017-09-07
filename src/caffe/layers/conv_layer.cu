@@ -38,13 +38,26 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     /// -------------------------------------------------
     
     if (this->phase_ == 0) {
+        if (IF_mask) {
+            UpdateNumPrunedRow();
+            UpdateNumPrunedCol(); 
+            this->pruned_ratio = 1 - (1 - this->num_pruned_col * 1.0 / num_col) * (1 - this->num_pruned_row * 1.0 / num_row);
+            if (!DeepCompression::IF_prune_finished[this->layer_index]) {
+                if (this->pruned_ratio >= this->prune_ratio) {
+                    DeepCompression::IF_prune_finished[this->layer_index] = true;
+                    cout << layer_name << " prune finished!" 
+                         << "  step: " << DeepCompression::step_ 
+                         << "  pruned_ratio: " << this->pruned_ratio << endl;
+                }
+            }
+        }
         
         /// Print and check
         if (DeepCompression::prune_method != "None" && this->layer_index < 5 && DeepCompression::inner_iter == 0) {
             cout << layer_name << "  IF_mask: " << IF_mask 
                  << "  pruned_ratio: " << this->pruned_ratio
                  << "  prune_ratio: " << this->prune_ratio 
-                 << "  num_pruned_col: " << this->num_pruned_column
+                 << "  num_pruned_col: " << this->num_pruned_col
                  << "  num_pruned_row: " << this->num_pruned_row << endl;
         }
         
@@ -75,16 +88,6 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             } else if (DeepCompression::prune_method == "PP") {
                 ProbPrune();
             }
-            
-            /// UpdateNumPrunedRow();
-            UpdateNumPrunedCol();
-            this->pruned_ratio = 1 - (1 - this->num_pruned_column * 1.0 / num_col) * (1 - this->num_pruned_row * 1.0 / num_row);
-            if (this->pruned_ratio >= this->prune_ratio) {
-                cout << layer_name << " prune finished!" 
-                     << "  step: " << DeepCompression::step_ 
-                     << "  pruned_ratio: " << this->pruned_ratio << endl;
-            }
-            
         }   
     } else {
         if (DeepCompression::prune_method == "PP") {

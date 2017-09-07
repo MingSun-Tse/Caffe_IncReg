@@ -2,11 +2,11 @@
 
 using namespace std;
 namespace caffe {
-
+ 
 
     /// --------------------------------
     /// pass params from solver.prototxt to layer, not initialized here.
-    string DeepCompression::prune_method;
+    string DeepCompression::prune_method = "None"; // initialized for caffe test
     string DeepCompression::criteria;
     int DeepCompression::num_once_prune;
     int DeepCompression::prune_interval;
@@ -20,10 +20,11 @@ namespace caffe {
     /// share params between solver and layer, initailized here.
     int DeepCompression::inner_iter = 0;
     int DeepCompression::step_ = -1;
-    int DeepCompression::num_pruned_column[100] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    int DeepCompression::num_pruned_col[100] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
     int DeepCompression::num_pruned_row[100] = {0, 0, 0, 0, 0};
     bool DeepCompression::IN_TEST = false;
     bool DeepCompression::IN_RETRAIN = false;
+    bool DeepCompression::IF_prune_finished[100] = {0, 0, 0, 0, 0};
     /// --------------------------------
     
     
