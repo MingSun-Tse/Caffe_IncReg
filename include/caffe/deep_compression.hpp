@@ -27,6 +27,7 @@ public:
     static float cpower;
     static int prune_begin_iter;
     static int iter_size;
+    static float score_decay;
      
     /// share params between solver and layer
     static bool IN_TEST;

@@ -39,6 +39,7 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     this->weight_backup.resize(count);
     this->history_prob.resize(num_col, 1);
     DeepCompression::history_prob[this->layer_index].resize(count, 1);
+    this->history_score.resize(num_col, 0);
 
     /// Pruning state info
     this->num_pruned_col = 0;
@@ -51,8 +52,6 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     this->candidate_window.resize(DeepCompression::window_size, -1);
 
     this->drop_column_masks.resize(count, 1);
-    
-    this->history_score.resize(num_col, 0);
     this->history_diff.resize(count, 0);
     this->history_weight.resize(count, 0);
 
@@ -113,9 +112,7 @@ void ConvolutionLayer<Dtype>::TaylorPrune(const vector<Blob<Dtype>*>& top) {
     }
 }
     
-    
-    
-    
+
 template <typename Dtype> 
 void ConvolutionLayer<Dtype>::ProbPrune() {
     Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
@@ -131,22 +128,27 @@ void ConvolutionLayer<Dtype>::ProbPrune() {
     const Dtype cgamma = DeepCompression::cgamma;
     const Dtype cpower = DeepCompression::cpower;
     
+    
+    /// Calculate history score
+    typedef std::pair<Dtype, int> mypair;
+    vector<mypair> col_score(num_col);
+    for (int j = 0; j < num_col; ++j) {
+        col_score[j].second = j; /// index
+        int score = 0;
+        for (int i = 0; i < num_row; ++i) {
+            score += fabs(muweight[i * num_col +j]);
+        }
+        this->history_score[j] = DeepCompression::score_decay * this->history_score[j] + score;
+        col_score[j].first = this->history_score[j];
+        if (this->IF_col_pruned[j]) { col_score[j].first = INT_MAX; } /// make the pruned columns "float" up
+    }
+    sort(col_score.begin(), col_score.end());
+    
     /// Recover the best columns, according to some probabilities
     Dtype p_recover;
     caffe_rng_uniform(1, (Dtype)0, (Dtype)1, &p_recover);
     if (pow(rgamma + 0.00027 * DeepCompression::step_, rpower) > p_recover * iter_size) {
-        typedef std::pair<Dtype, int> mypair;
-        vector<mypair> col_score(num_col);
-        for (int j = 0; j < num_col; ++j) {
-            col_score[j].second = j; /// index
-            col_score[j].first = 0;  /// score
-            for (int i = 0; i < num_row; ++i) {
-                col_score[j].first += fabs(muweight[i * num_col +j]);
-            }
-            if (this->IF_col_pruned[j]) { col_score[j].first = INT_MAX; } /// make the pruned columns "float" up
-        } 
-        sort(col_score.begin(), col_score.end());
-        
+
         /// Print and check
         cout << "recover prob: " << layer_name << "  step: " << DeepCompression::step_ << endl;
         cout << " score: ";   for (int j = 0; j < SHOW_NUM; ++j) { cout << col_score[j].first  << " "; }
@@ -170,17 +172,6 @@ void ConvolutionLayer<Dtype>::ProbPrune() {
     /// if ((DeepCompression::step_ - 1) % DeepCompression::prune_interval == 0) {  
     if (pow(cgamma + 0.0008 * DeepCompression::step_, cpower) > p_prune * iter_size) { 
     /// if (std::min(Dtype(DeepCompression::learning_speed), (Dtype)0.004) * 4 > p_prune) {  
-        typedef std::pair<Dtype, int> mypair;
-        vector<mypair> col_score(num_col);
-        for (int j = 0; j < num_col; ++j) {
-            col_score[j].second = j; /// index
-            col_score[j].first = 0;  /// score
-            for (int i = 0; i < num_row; ++i) {
-                col_score[j].first += fabs(muweight[i * num_col +j]);
-            }
-            if (this->IF_col_pruned[j]) { col_score[j].first = INT_MAX; } /// make the pruned columns "float" up
-        }
-        sort(col_score.begin(), col_score.end());
     
         /// Print and check
         cout << "update prob: " << layer_name << " step: " << DeepCompression::step_ << endl;
@@ -208,32 +199,6 @@ void ConvolutionLayer<Dtype>::ProbPrune() {
         } 
     }
 
-    /// Once the pruning ratio reached, set all the masks of non-zero prob to 1 and adjust their weights.
-    /// Get into here ONLY ONCE.
-    if (DeepCompression::num_pruned_col[this->layer_index] >= num_col_to_prune) {
-        /// Print and check
-        typedef std::pair<Dtype, int> mypair;
-        vector<mypair> col_score(num_col);
-        for (int j = 0; j < num_col; ++j) {
-            col_score[j].second = j; /// index
-            col_score[j].first = 0;  /// score
-            for (int i = 0; i < num_row; ++i) {
-                col_score[j].first += fabs(muweight[i * num_col +j]);
-            }
-        }
-        sort(col_score.begin(), col_score.end());
-        cout << "last time score: ";         for (int j = 0; j < num_col; ++j) { cout << col_score[j].first << " "; }
-        cout << "\nlast time column: ";      for (int j = 0; j < num_col; ++j) { cout << col_score[j].second << " "; }
-        cout << "\nlast time probability: "; for (int j = 0; j < num_col; ++j) { cout << DeepCompression::history_prob[this->layer_index][col_score[j].second] << " "; }
-        cout << "\n";
-        
-        for (int i = 0; i < count; ++i) {
-            if (DeepCompression::history_prob[this->layer_index][i % num_col] > 0) {
-                muweight[i] *= DeepCompression::history_prob[this->layer_index][i % num_col];
-                DeepCompression::history_prob[this->layer_index][i % num_col] = 1;
-            }
-        }
-    }
     
     /// With probability updated, generate masks
     Dtype rands[num_col];
@@ -262,7 +227,21 @@ void ConvolutionLayer<Dtype>::ProbPrune() {
     for (int i = 0; i < count; ++i) { muweight[i] *= this->masks_[i]; } /// do pruning
 
 }
-
+template <typename Dtype> 
+void ConvolutionLayer<Dtype>::CleanWorkForPP() {
+    /// Once the pruning ratio reached, set all the masks of non-zero prob to 1 and adjust their weights.
+    /// Get into here ONLY ONCE.
+    const int count = this->blobs_[0]->count();
+    const int num_row = this->blobs_[0]->shape()[0];
+    const int num_col = count / num_row;
+    Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
+    for (int i = 0; i < count; ++i) {
+        if (DeepCompression::history_prob[this->layer_index][i % num_col] > 0) {
+            muweight[i] *= DeepCompression::history_prob[this->layer_index][i % num_col];
+            DeepCompression::history_prob[this->layer_index][i % num_col] = 1;
+        }
+    }
+}
 
 template <typename Dtype> 
 void ConvolutionLayer<Dtype>::UpdateNumPrunedRow() {
@@ -274,10 +253,6 @@ void ConvolutionLayer<Dtype>::UpdateNumPrunedRow() {
     const int filter_area_next_layer = DeepCompression::filter_area[this->layer_index+1]; 
     const int num_col = count / num_row;
     
-    /// cout << num_row << " " << DeepCompression::group[this->layer_index + 1] 
-                    /// << " " << filter_area_next_layer
-                    /// << " " << endl;
-    if (this->layer_index != 3) { return; }
     cout << "conv" << this->layer_index + 1 << " in UpdateNumPrunedRow" << endl;
     for (int i = 0; i < num_row; ++i) {
         if (!this->IF_row_pruned[i]) {
@@ -316,7 +291,7 @@ void ConvolutionLayer<Dtype>::UpdateNumPrunedCol() {
     const int filter_area = this->blobs_[0]->shape()[2] * this->blobs_[0]->shape()[3];
     const int num_col = count / num_row;
     
-    //cout << "conv" << this->layer_index+1 << " in UpdateNumPrunedCol" << endl;
+    cout << "conv" << this->layer_index+1 << " in UpdateNumPrunedCol" << endl;
     for (int j = 0; j < num_col; ++j) {
         if (!(this->IF_col_pruned[j]) && DeepCompression::IF_row_pruned[this->layer_index - 1][j / filter_area]) {
             for (int i = 0; i < num_row; ++i) { 
@@ -327,7 +302,7 @@ void ConvolutionLayer<Dtype>::UpdateNumPrunedCol() {
             DeepCompression::IF_col_pruned[this->layer_index][j] = true;
             ++ this->num_pruned_col;
             ++ DeepCompression::num_pruned_col[this->layer_index];
-            //cout << "conv" << this->layer_index+1 << " prune a col succeed: " << j << endl;
+            cout << "conv" << this->layer_index+1 << " prune a col succeed: " << j << endl;
         }
     }
     

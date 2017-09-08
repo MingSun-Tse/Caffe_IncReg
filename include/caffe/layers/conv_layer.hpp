@@ -81,6 +81,7 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
   virtual void FilterPrune(); // WANGHUAN
   virtual void TaylorPrune(const vector<Blob<Dtype>*>& top);
   virtual void ProbPrune();
+  virtual void CleanWorkForPP();
   virtual void UpdateNumPrunedRow(); // WANGHUAN
   virtual void UpdateNumPrunedCol(); // WANGHUAN
   virtual void PruneSetUp(const PruneParameter& prune_param); // WANGHUAN

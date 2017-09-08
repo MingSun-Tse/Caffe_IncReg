@@ -242,7 +242,7 @@ message SolverParameter {
   
   
   // -----------------------------------------
-  // WANGHUAN: hyper-parameters of APP
+  // WANGHUAN: hyper-parameters of APP (max index = 55)
   // pruning
   optional string prune_method = 41 [default = "None"];
   optional string criteria = 42 [default = "L1-norm"];
@@ -253,12 +253,13 @@ message SolverParameter {
   optional float rpower = 49; 
   optional float cgamma = 50; // compression
   optional float cpower = 51;
+  // optional float score_decay = 56 [default = 0];
 
   // decrease weight decay
   optional string dwd_mode = 44 [default = "None"];
   optional int32 dwd_begin_iter = 45;
   optional int32 dwd_end_iter = 46;
-  optional float wd_end = 47;
+  optional float wd_end = 47; 
   optional int32 dwd_step = 54;
   // -----------------------------------------
   

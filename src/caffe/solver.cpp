@@ -64,6 +64,7 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   DeepCompression::cpower = param_.cpower(); 
   DeepCompression::prune_begin_iter = param_.prune_begin_iter();
   DeepCompression::iter_size = param_.iter_size();
+  // DeepCompression::score_decay = param_.score_decay();
   // ------------------------------------------
 
   CHECK_GE(param_.average_loss(), 1) << "average_loss should be non-negative.";

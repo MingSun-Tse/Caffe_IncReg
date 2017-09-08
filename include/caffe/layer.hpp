@@ -99,6 +99,7 @@ class Layer {
   Dtype pruned_ratio;
   Dtype delta;
   bool IF_restore;
+  vector<Dtype> history_score;
 
   vector<Dtype> weight_backup;
   vector<bool> IF_col_pruned;
@@ -107,7 +108,6 @@ class Layer {
   vector<int> random_col_perm;
   vector<int> candidate_window;
   vector<bool> drop_column_masks;
-  vector<Dtype> history_score;
   vector<Dtype> history_diff;
   vector<Dtype> history_weight; 
   vector<Dtype> history_prob;

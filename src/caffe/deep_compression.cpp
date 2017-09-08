@@ -16,6 +16,7 @@ namespace caffe {
     float DeepCompression::cpower;
     int DeepCompression::prune_begin_iter;
     int DeepCompression::iter_size;
+    float DeepCompression::score_decay = 0.9;
     
     /// share params between solver and layer, initailized here.
     int DeepCompression::inner_iter = 0;
