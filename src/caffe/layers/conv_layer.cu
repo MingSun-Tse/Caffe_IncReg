@@ -1,7 +1,7 @@
 #include <vector>
 #include "caffe/layers/conv_layer.hpp"
 #include "caffe/deep_compression.hpp"
-#define SHOW_INTERVAL 1
+#define SHOW_INTERVAL 10
 
 using namespace std;
 namespace caffe {
