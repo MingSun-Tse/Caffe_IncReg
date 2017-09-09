@@ -393,6 +393,9 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask(float ratio) {
     DeepCompression::num_pruned_col[this->layer_index] = this->num_pruned_col;
     DeepCompression::num_pruned_row[this->layer_index] = this->num_pruned_row;
     this->pruned_ratio = 1 - (1 - this->num_pruned_col * 1.0 / num_col) * (1 - this->num_pruned_row * 1.0 / num_row);
+    if (this->pruned_ratio >= this->prune_ratio) {
+        DeepCompression::IF_prune_finished[this->layer_index] = true;
+    }
     LOG(INFO) << "    Masks restored, num_pruned_col = " << this->num_pruned_col
               << "  num_pruned_row = " << this->num_pruned_row
               << "  pruned_ratio = " << this->pruned_ratio

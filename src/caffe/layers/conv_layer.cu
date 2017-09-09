@@ -44,7 +44,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             this->pruned_ratio = 1 - (1 - this->num_pruned_col * 1.0 / num_col) * (1 - this->num_pruned_row * 1.0 / num_row);
             if (!DeepCompression::IF_prune_finished[this->layer_index]) {
                 if (this->pruned_ratio >= this->prune_ratio) {
-                    CleanWorkForPP(); // last time, do some clean work
+                    if (DeepCompression::prune_method == "PP") { CleanWorkForPP(); } // last time, do some clean work
                     DeepCompression::IF_prune_finished[this->layer_index] = true;
                     cout << layer_name << " prune finished!" 
                          << "  step: " << DeepCompression::step_ 
