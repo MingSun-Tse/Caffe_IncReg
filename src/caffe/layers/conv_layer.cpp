@@ -103,7 +103,7 @@ void ConvolutionLayer<Dtype>::TaylorPrune(const vector<Blob<Dtype>*>& top) {
         for (int i = 0; i < num_once_prune; ++i) {
             const int c = fm_score[i].second;
             for (int j = 0; j < num_col; ++j) {
-                muweight[c * num_col + j] = 0;
+                muweight[c * num_col + j] = 0; /// Seems don't work
                 this->masks_[c * num_col + j] = 0;
             }
             this->IF_row_pruned[c] = true;

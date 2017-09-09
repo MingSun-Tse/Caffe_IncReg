@@ -88,7 +88,12 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 if ((DeepCompression::step_ - 1) % DeepCompression::prune_interval == 0) { FilterPrune(); }    
             } else if (DeepCompression::prune_method == "PP") {
                 ProbPrune();
+            }  else if (DeepCompression::prune_method == "TP") {
+                for (int i = 0; i < count; ++i) {
+                    muweight[i] *= this->masks_[i]; 
+                }  // explictly prune, because seems TP is wrong somewhere.
             }
+            
         }   
     } else {
         if (DeepCompression::prune_method == "PP") {
