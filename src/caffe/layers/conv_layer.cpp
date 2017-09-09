@@ -120,7 +120,6 @@ void ConvolutionLayer<Dtype>::ProbPrune() {
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
     const string layer_name = this->layer_param_.name();
-    const int num_col_to_prune  = ceil( this->prune_ratio                * num_col); /// true pruning goal
     const int num_col_to_prune_ = ceil((this->prune_ratio + this->delta) * num_col); /// a little bit higher goal
     const int iter_size = DeepCompression::iter_size;
     const Dtype rgamma = DeepCompression::rgamma;
@@ -359,43 +358,6 @@ void ConvolutionLayer<Dtype>::compute_output_shape() {
   }
 }
 
-///// Prune
-//template <typename Dtype>
-//void ConvolutionLayer<Dtype>::ComputeBlobMask(float ratio) {
-///    int count = this->blobs_[0]->count();
-///    this->masks_.resize(count);
-///    this->indices_.resize(count);
-///    this->centroids_.resize(NUM_OF_WEIGHT_BUCKET);
-//
-//
-///    const Dtype *weight = this->blobs_[0]->cpu_data();
-///    vector<Dtype> sort_weight(count);
-///    for (int i = 0; i < count; i++)
-///        sort_weight[i] = fabs(weight[i]);
-///    sort(sort_weight.begin(), sort_weight.end());  /// sort in ascending order
-///    int index = (int) (count * ratio); /// ratio: the ratio to cut off
-///    Dtype thr; /// threshold
-///    Dtype *muweight = this->blobs_[0]->mutable_cpu_data();
-///    float rat = 0; /// non-zero weight counter, for calculating sparsity
-///    if (index > 0) {
-///        thr = sort_weight[index - 1];
-///        cout << "cpu conv layer - Conv Threshold: " << thr << "  " << ratio << endl;
-///        for (int i = 0; i < count; i++) {
-///            this->masks_[i] = (fabs(muweight[i]) > thr)? 1 : 0;
-///            muweight[i] *= this->masks_[i];
-///            rat += (1 - this->masks_[i]);
-///        }
-///    } else {
-///        std::cout << "wanghuan test: There is no weights in this layer" << endl;
-///    }
-///    cout << "sparsity: " << rat / count << endl;
-///    /// Layer<Dtype>::kmeans_cluster(this->indices_, this->centroids_, muweight, count, this->masks_, NUM_OF_WEIGHT_BUCKET, 1000);
-/////    for (int i = 0; i < 40; ++i) {
-/////        cout << this->masks_[i] << endl;
-/////    }
-//}
-
-
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::ComputeBlobMask(float ratio) {
     const int count = this->blobs_[0]->count();
@@ -435,34 +397,6 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask(float ratio) {
 }
 
 
-///// Re-initialize the small weights of pruned model
-//template <typename Dtype>
-//void ConvolutionLayer<Dtype>::ComputeBlobMask(float ratio) {
-///    int count = this->blobs_[0]->count();
-///    Dtype *muweight = this->blobs_[0]->mutable_cpu_data();
-///    for (int i = 0; i < count; i++) {
-///        if (fabs(muweight[i]) < 1e-30)
-///            /// muweight[i] = ConvolutionLayer<Dtype>::normal_random();
-///            muweight[i] = 0;
-///    }
-//}
-
-
-///// Retrain pruned model -- sth wrong with this
-//template <typename Dtype>
-//void ConvolutionLayer<Dtype>::ComputeBlobMask(float ratio) {
-///        int count = this->blobs_[0]->count();
-///        this->masks_.resize(count);
-///        const Dtype *weight = this->blobs_[0]->cpu_data();
-///        for (int i = 0; i < count; i++) {
-///            this->masks_[i] = (fabs(weight[i]) < 1e-30) ? 0 : 1;
-///            cout << weight[i] << "  ";
-///            cout << this->masks_[i] << "  ";
-///        }
-///        cout << endl;
-///    }
-    
-
 template <typename Dtype>
 Dtype ConvolutionLayer<Dtype>::normal_random() {
     static Dtype V1, V2, S;
@@ -485,37 +419,13 @@ Dtype ConvolutionLayer<Dtype>::normal_random() {
 }
 
 
-//template <typename Dtype>
-//Dtype ConvolutionLayer<Dtype>::normal_random() {
-///    Dtype x = 0;
-///    int i;
-///    for(i = 0; i < NSUM; i++) {
-///        x += (Dtype)rand() / RAND_MAX;
-///    }
-///    x -= NSUM / 2.0;
-///    x /= sqrt(NSUM / 12.0);
-///    return x/100.0;
-//}
-
-
-
-
-
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   const Dtype* weight = this->blobs_[0]->cpu_data();
-  /// std::cout << "bottom.size = " << bottom.size() << endl;
-  /// bottom.size() 是指底层有多少层，例如在deepid中有的有两层（待验证）
   for (int i = 0; i < bottom.size(); ++i) {
     const Dtype* bottom_data = bottom[i]->cpu_data();
-    Dtype* top_data = top[i]->mutable_cpu_data(); /// 初始化默认是0
-
-///     std::cout << "num_ = " << this->num_
-///              << "; bottom_dim_ = " << this->bottom_dim_
-///              << "; top_dim_ = " << this->top_dim_ << std::endl;
-///     /// num_指的是batch_size; bottom_dim_是输入的特征图的大小; top_dim_是输出的特征图大小
-///     /// caffe中是把数据做了im2col
+    Dtype* top_data = top[i]->mutable_cpu_data(); 
 
     for (int n = 0; n < this->num_; ++n) {
       this->forward_cpu_gemm(bottom_data + n * this->bottom_dim_, weight,
@@ -526,12 +436,6 @@ void ConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
         this->forward_cpu_bias(top_data + n * this->top_dim_, bias);
       }
     }
-
-///    std::cout << "After forwarding, top_data is:" << std::endl;
-///    for (int i = 0; i < this->top_dim_; i++ )
-///        std::cout << *(top_data+i) << " ";
-///    std::cout << std::endl;
-
   }
 }
 

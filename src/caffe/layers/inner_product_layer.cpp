@@ -3,10 +3,6 @@
 #include "caffe/layers/inner_product_layer.hpp"
 #include "caffe/deep_compression.hpp"
 
-
-
-
-
 namespace caffe {
 using namespace std;
 
@@ -88,16 +84,6 @@ template <typename Dtype>
 void InnerProductLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
 
-    // -------------------------------------
-    // added by wanghuan for deep compression
-    Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
-    int count = this->blobs_[0]->count();
-    for (int i=0; i<count; i++ )
-        if (this->masks_[i])
-            muweight[i] = this->centroids_[this->indices_[i]];
-    // -------------------------------------
-
-
   const Dtype* bottom_data = bottom[0]->cpu_data();
   Dtype* top_data = top[0]->mutable_cpu_data();
   const Dtype* weight = this->blobs_[0]->cpu_data();
@@ -116,8 +102,6 @@ void InnerProductLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
     const vector<bool>& propagate_down,
     const vector<Blob<Dtype>*>& bottom) {
 
-  int count = this->blobs_[0]->count(); // added by wanghuan for deep compression
-
   if (this->param_propagate_down_[0]) {
     const Dtype* top_diff = top[0]->cpu_diff();
     const Dtype* bottom_data = bottom[0]->cpu_data();
@@ -133,23 +117,6 @@ void InnerProductLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
           (Dtype)1., top_diff, bottom_data,
           (Dtype)1., this->blobs_[0]->mutable_cpu_diff());
     }
-
-    // added by wanghuan for deep compression
-    Dtype* weight_diff = this->blobs_[0]->mutable_cpu_diff();
-    vector<Dtype> tmpDiff(NUM_OF_WEIGHT_BUCKET, 0);
-    vector<int> freq(NUM_OF_WEIGHT_BUCKET, 0);
-    for (int j=0; j<count; j++){
-        if (this->masks_[j]) {
-            tmpDiff[this->indices_[j]] += weight_diff[j];
-            freq[this->indices_[j]]++;
-        }
-    }
-    for (int j=0; j<count; j++){
-      if (this->masks_[j])
-          weight_diff[j] = tmpDiff[this->indices_[j]] / freq[this->indices_[j]];
-      else
-          weight_diff[j] = (Dtype)0;
-    } // added done
 
   }
 
@@ -218,14 +185,6 @@ void InnerProductLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
 //    Layer<Dtype>::kmeans_cluster(this->indices_, this->centroids_, muweight, count, this->masks_, NUM_OF_WEIGHT_BUCKET, 1000);
 //}
 
-template <typename Dtype>
-void InnerProductLayer<Dtype>::ComputeBlobMask(float ratio) {
-    int count = this->blobs_[0]->count();
-    this->masks_.resize(count);
-    for (int i = 0; i < count; ++i) {
-        this->masks_[i] = 1;  // In structured pruning, we focus on conv layers, not pruning fc layers.
-    }
-}
 
 #ifdef CPU_ONLY
 STUB_GPU(InnerProductLayer);
