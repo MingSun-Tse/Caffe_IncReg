@@ -107,7 +107,9 @@ void ConvolutionLayer<Dtype>::TaylorPrune(const vector<Blob<Dtype>*>& top) {
                 this->masks_[c * num_col + j] = 0;
             }
             this->IF_row_pruned[c] = true;
+            DeepCompression::IF_row_pruned[this->layer_index][c] = true;
             ++ this->num_pruned_row;
+            ++ DeepCompression::num_pruned_row[this->layer_index];
         }
     }
 }
@@ -133,7 +135,7 @@ void ConvolutionLayer<Dtype>::ProbPrune() {
     vector<mypair> col_score(num_col);
     for (int j = 0; j < num_col; ++j) {
         col_score[j].second = j; /// index
-        int score = 0;
+        Dtype score = 0;
         for (int i = 0; i < num_row; ++i) {
             score += fabs(muweight[i * num_col +j]);
         }
@@ -190,7 +192,9 @@ void ConvolutionLayer<Dtype>::ProbPrune() {
             if (DeepCompression::history_prob[this->layer_index][col_of_rank_j] == 0) {
                 ++ DeepCompression::num_pruned_col[this->layer_index];
                 ++ this->num_pruned_col;
-                this->IF_col_pruned[col_of_rank_j] = true; 
+                this->IF_col_pruned[col_of_rank_j] = true;
+                DeepCompression::IF_col_pruned[this->layer_index][col_of_rank_j] = true;
+                
                 for (int i = 0; i < num_row; ++i) { 
                     muweight[i * num_col + col_of_rank_j] = 0; 
                 } /// once pruned, zero out weights
