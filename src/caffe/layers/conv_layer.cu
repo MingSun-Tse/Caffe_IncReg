@@ -39,8 +39,8 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     
     if (this->phase_ == 0) {
         if (IF_mask) {
-            UpdateNumPrunedRow();
-            UpdateNumPrunedCol();
+            // UpdateNumPrunedRow();
+            // UpdateNumPrunedCol();
             this->pruned_ratio = 1 - (1 - this->num_pruned_col * 1.0 / num_col) * (1 - this->num_pruned_row * 1.0 / num_row);
             if (!DeepCompression::IF_prune_finished[this->layer_index]) {
                 if (this->pruned_ratio >= this->prune_ratio) {
