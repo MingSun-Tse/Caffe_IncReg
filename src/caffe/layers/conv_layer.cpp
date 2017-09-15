@@ -43,7 +43,7 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     APP::num_pruned_row.push_back(0);
     APP::IF_row_pruned.push_back( vector<bool>(num_row, false) );
     APP::IF_col_pruned.push_back( vector<bool>(num_col, false) );
-    APP::history_prob.push_back( vector<float>(num_col, false) );
+    APP::history_prob.push_back( vector<float>(num_col, 1) );
     APP::IF_prune_finished.push_back(false);
     
     APP::filter_area.push_back(this->blobs_[0]->shape()[2] * this->blobs_[0]->shape()[3]);
@@ -187,8 +187,8 @@ void ConvolutionLayer<Dtype>::ProbPrune() {
         cout << "\n";
     
         /// Calculate functioning probability of each weight
-        const Dtype AA = 0.05; 
-        const Dtype aa = 0.0041;
+        const Dtype AA = 0.5; 
+        const Dtype aa = 0.041;
         const Dtype alpha = -log(aa/AA) / (num_col_to_prune_ - APP::num_pruned_col[this->layer_index] - 1);  /// adjust alpha according to the remainder of cloumns
         for (int j = 0; j < num_col_to_prune_ - APP::num_pruned_col[this->layer_index]; ++j) {               /// note the range of j: only undermine those not-good-enough columns
             const int col_of_rank_j = col_score[j].second;
