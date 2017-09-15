@@ -22,24 +22,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const bool IF_prune       = APP::prune_method != "None";
     const bool IF_enough_iter = (APP::step_ - 1) >= APP::prune_begin_iter;
     const bool IF_pruned      = this->pruned_ratio > 0;
-    const bool IF_mask        = IF_prune && (IF_enough_iter || IF_pruned) ;
-
-    
-    /// Check -------------------------------------------
-    /**
-    if (!APP::IN_TEST && this->layer_index == 0) {
-        for (int j = 0; j < num_col; ++j) { muweight[1  * num_col + j] = 0; }
-        for (int j = 0; j < num_col; ++j) { muweight[3  * num_col + j] = 0; }
-        for (int j = 0; j < num_col; ++j) { muweight[12 * num_col + j] = 0; }
-        for (int j = 0; j < num_col; ++j) { muweight[16 * num_col + j] = 0; }
-        for (int j = 0; j < num_col; ++j) { muweight[24 * num_col + j] = 0; }
-        for (int j = 0; j < num_col; ++j) { muweight[27 * num_col + j] = 0; }
-        /// for (int j = 0; j < num_col; ++j) { muweight[31 * num_col + j] = 0; }
-        /// for (int j = 0; j < num_col; ++j) { muweight[37 * num_col + j] = 0; }
-        /// for (int j = 0; j < num_col; ++j) { muweight[42 * num_col + j] = 0; }
-    }
-    */
-    /// -------------------------------------------------
+    const bool IF_mask        = IF_prune && (IF_enough_iter || IF_pruned);
     
     if (this->phase_ == TRAIN) {
         if (IF_mask) {
@@ -91,7 +74,14 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                         << "Error: if 'FP' is used, 'prune_interval' must be set.";
                 if ((APP::step_ - 1) % APP::prune_interval == 0) { FilterPrune(); }    
             } else if (APP::prune_method == "PP") {
-                ProbPrune();
+                bool IF_hppf = true; /// IF_higher_priority_prune_finished 
+                for (int i = 0; i <= APP::layer_cnt[0]; ++i) {
+                    if (APP::priority[i] < APP::priority[this->layer_index] && !APP::IF_prune_finished[i]) {
+                        IF_hppf = false;
+                        break;
+                    }
+                }
+                if (IF_hppf) { ProbPrune(); }
             }  else if (APP::prune_method == "TP") {
                 for (int i = 0; i < count; ++i) {
                     muweight[i] *= this->masks_[i]; 
