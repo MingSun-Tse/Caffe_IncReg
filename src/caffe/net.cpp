@@ -20,7 +20,7 @@
 #include "caffe/util/upgrade_proto.hpp"
 
 #include "caffe/test/test_caffe_main.hpp"
-#include "caffe/deep_compression.hpp"
+#include "caffe/adaptive_probabilistic_pruning.hpp"
 
 
 namespace caffe {
@@ -806,9 +806,8 @@ void Net<Dtype>::CopyTrainedLayersFrom(const NetParameter& param) {
     
     // ---------------------------------------------------------------------------------------------
     // WANGHUAN, restore masks
-    if (DeepCompression::prune_method != "None" && phase_ == 0 && target_blobs.size()) {
+    if (APP::prune_method != "None" && phase_ == TRAIN && target_blobs.size()) {
         LOG(INFO) << "Going to restore masks from binproto file, current layer: " << source_layer_name;
-        DeepCompression::IN_RETRAIN = true;
         layers_[target_layer_id]->ComputeBlobMask(RATIO);
     }
     // ---------------------------------------------------------------------------------------------
@@ -866,9 +865,8 @@ void Net<Dtype>::CopyTrainedLayersFromHDF5(const string trained_filename) {
         
     // ---------------------------------------------------------------------------------------------
     // WANGHUAN, restore masks
-    if (DeepCompression::prune_method != "None" && phase_ == 0 && target_blobs.size()) {
+    if (APP::prune_method != "None" && phase_ == TRAIN && target_blobs.size()) {
         LOG(INFO) << "Going to restore masks from H5 file, current layer: " << source_layer_name;
-        DeepCompression::IN_RETRAIN = true;
         layers_[target_layer_id]->ComputeBlobMask(RATIO);
     }
     // ---------------------------------------------------------------------------------------------

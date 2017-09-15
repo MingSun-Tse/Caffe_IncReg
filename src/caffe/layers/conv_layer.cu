@@ -1,6 +1,6 @@
 #include <vector>
 #include "caffe/layers/conv_layer.hpp"
-#include "caffe/deep_compression.hpp"
+#include "caffe/adaptive_probabilistic_pruning.hpp"
 #define SHOW_INTERVAL 10
 
 using namespace std;
@@ -16,14 +16,18 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
     const string layer_name = this->layer_param_.name();
-    if (this->layer_index > DeepCompression::max_layer_index) { DeepCompression::max_layer_index = this->layer_index; }
-    const bool IF_mask = DeepCompression::prune_method != "None" && (DeepCompression::IN_RETRAIN 
-                               || (DeepCompression::step_ - 1) >= DeepCompression::prune_begin_iter);
     this->IF_restore = false;
+    
+    /// IF_mask
+    const bool IF_prune       = APP::prune_method != "None";
+    const bool IF_enough_iter = (APP::step_ - 1) >= APP::prune_begin_iter;
+    const bool IF_pruned      = this->pruned_ratio > 0;
+    const bool IF_mask        = IF_prune && (IF_enough_iter || IF_pruned) ;
+
     
     /// Check -------------------------------------------
     /**
-    if (!DeepCompression::IN_TEST && this->layer_index == 0) {
+    if (!APP::IN_TEST && this->layer_index == 0) {
         for (int j = 0; j < num_col; ++j) { muweight[1  * num_col + j] = 0; }
         for (int j = 0; j < num_col; ++j) { muweight[3  * num_col + j] = 0; }
         for (int j = 0; j < num_col; ++j) { muweight[12 * num_col + j] = 0; }
@@ -37,24 +41,24 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     */
     /// -------------------------------------------------
     
-    if (this->phase_ == 0) {
+    if (this->phase_ == TRAIN) {
         if (IF_mask) {
             // UpdateNumPrunedRow();
             // UpdateNumPrunedCol();
             this->pruned_ratio = 1 - (1 - this->num_pruned_col * 1.0 / num_col) * (1 - this->num_pruned_row * 1.0 / num_row);
-            if (!DeepCompression::IF_prune_finished[this->layer_index]) {
+            if (!APP::IF_prune_finished[this->layer_index]) {
                 if (this->pruned_ratio >= this->prune_ratio) {
-                    if (DeepCompression::prune_method == "PP") { CleanWorkForPP(); } // last time, do some clean work
-                    DeepCompression::IF_prune_finished[this->layer_index] = true;
+                    if (APP::prune_method == "PP") { CleanWorkForPP(); } // last time, do some clean work
+                    APP::IF_prune_finished[this->layer_index] = true;
                     cout << layer_name << " prune finished!" 
-                         << "  step: " << DeepCompression::step_ 
+                         << "  step: " << APP::step_ 
                          << "  pruned_ratio: " << this->pruned_ratio << endl;
                 }
             }
         }
         
         /// Print and check
-        if (DeepCompression::prune_method != "None" && this->layer_index < 5 && DeepCompression::inner_iter == 0) {
+        if (APP::prune_method != "None" && this->layer_index < 5 && APP::inner_iter == 0) {
             cout << layer_name << "  IF_mask: " << IF_mask 
                  << "  pruned_ratio: " << this->pruned_ratio
                  << "  prune_ratio: " << this->prune_ratio 
@@ -63,7 +67,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
         
         /// Print and check (before pruning)
-        if (this->layer_index == 1 && DeepCompression::step_ % SHOW_INTERVAL == 0 && DeepCompression::inner_iter == 0) {
+        if (this->layer_index == 1 && APP::step_ % SHOW_INTERVAL == 0 && APP::inner_iter == 0) {
             /// cout.setf(std::ios::left);
             cout.width(5);  cout << "Index" << "   ";
             cout.width(18); cout << "WeightBeforeMasked" << "   ";
@@ -74,21 +78,21 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 cout.width(2);  cout << i+1 << "   ";
                 cout.width(18); cout << muweight[i] << "   ";
                 cout.width(4);  cout << this->masks_[i] << "   ";
-                cout.width(4);  cout << DeepCompression::history_prob[this->layer_index][i] << endl;
+                cout.width(4);  cout << APP::history_prob[this->layer_index][i] << endl;
             }
         }
 
         /// Update masks and apply masks
         if (IF_mask && this->pruned_ratio < this->prune_ratio) {
-            if (DeepCompression::prune_method == "Prune" && DeepCompression::criteria == "L2-norm") { 
+            if (APP::prune_method == "Prune" && APP::criteria == "L2-norm") { 
                 /// UpdateMasks(); 
-            } else if (DeepCompression::prune_method == "FP") {
-                CHECK_GE(DeepCompression::prune_interval, 1)
+            } else if (APP::prune_method == "FP") {
+                CHECK_GE(APP::prune_interval, 1)
                         << "Error: if 'FP' is used, 'prune_interval' must be set.";
-                if ((DeepCompression::step_ - 1) % DeepCompression::prune_interval == 0) { FilterPrune(); }    
-            } else if (DeepCompression::prune_method == "PP") {
+                if ((APP::step_ - 1) % APP::prune_interval == 0) { FilterPrune(); }    
+            } else if (APP::prune_method == "PP") {
                 ProbPrune();
-            }  else if (DeepCompression::prune_method == "TP") {
+            }  else if (APP::prune_method == "TP") {
                 for (int i = 0; i < count; ++i) {
                     muweight[i] *= this->masks_[i]; 
                 }  // explictly prune, because seems TP is wrong somewhere.
@@ -96,11 +100,11 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             
         }   
     } else {
-        if (DeepCompression::prune_method == "PP") {
+        if (APP::prune_method == "PP") {
             Dtype rands[num_col];
             caffe_rng_uniform(num_col, (Dtype)0, (Dtype)1, rands);
             for (int i = 0; i < count; ++i) {
-                this->masks_[i] = rands[i % num_col] < DeepCompression::history_prob[this->layer_index][i % num_col] ? 1 : 0; /// geerate masks
+                this->masks_[i] = rands[i % num_col] < APP::history_prob[this->layer_index][i % num_col] ? 1 : 0; /// geerate masks
             }              
             for (int i = 0; i < count; ++i) { this->weight_backup[i] = muweight[i]; } /// backup weights
             this->IF_restore = true;
@@ -128,7 +132,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     /// Print feature map to check --------
     /// If row 3 and 8 are pruned in previous layer, then channel 3 and 8 will be only biases in this layer's feature map.
     /**
-    if (!DeepCompression::IN_TEST && this->layer_index == 0) {
+    if (!APP::IN_TEST && this->layer_index == 0) {
         cout << "bottom.size(): " << bottom.size() << endl;
         for (int i = 0; i < bottom.size(); ++i) {
             const Dtype* top_data = top[i]->cpu_data();
@@ -230,7 +234,7 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     /// UpdateDiffs(); /// update second diff and so on
 
     /// Print and check
-    if (this->layer_index == 1 && DeepCompression::step_ % SHOW_INTERVAL == 0) {
+    if (this->layer_index == 1 && APP::step_ % SHOW_INTERVAL == 0) {
         cout.width(5);  cout << "Index" << "   ";
         cout.width(16); cout << "DiffBeforeMasked" << "   ";
         cout.width(4);  cout << "Mask" << "   ";
@@ -240,22 +244,24 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
             cout.width(2);  cout << i+1 << "   ";
             cout.width(16); cout << muweight_diff[i] << "   ";
             cout.width(4);  cout << this->masks_[i] << "   ";
-            cout.width(4);  cout << DeepCompression::history_prob[this->layer_index][i] << endl;
+            cout.width(4);  cout << APP::history_prob[this->layer_index][i] << endl;
         }
     }
 
-    /// Apply masks to diff
-    const bool IF_mask = DeepCompression::prune_method != "None" && (DeepCompression::IN_RETRAIN 
-                               || (DeepCompression::step_ - 1) >= DeepCompression::prune_begin_iter);
+    /// IF_mask
+    const bool IF_prune       = APP::prune_method != "None";
+    const bool IF_enough_iter = (APP::step_ - 1) >= APP::prune_begin_iter;
+    const bool IF_pruned      = this->pruned_ratio > 0;
+    const bool IF_mask        = IF_prune && (IF_enough_iter || IF_pruned) ;
     if (IF_mask) {
         for (int j = 0; j < count; ++j) { muweight_diff[j] *= this->masks_[j]; }
         if (this->pruned_ratio < this->prune_ratio) {
-            if (DeepCompression::prune_method == "Prune" && DeepCompression::criteria == "diff") {
+            if (APP::prune_method == "Prune" && APP::criteria == "diff") {
                 /// UpdateMasks(); 
-            } else if (DeepCompression::prune_method == "TP") {
-                CHECK_GE(DeepCompression::prune_interval, 1)
+            } else if (APP::prune_method == "TP") {
+                CHECK_GE(APP::prune_interval, 1)
                     << "Error: if 'TP' is used, 'prune_interval' must be set.";
-                if ((DeepCompression::step_ - 1) % DeepCompression::prune_interval == 0) { TaylorPrune(top); }
+                if ((APP::step_ - 1) % APP::prune_interval == 0) { TaylorPrune(top); }
             }
         }
     }

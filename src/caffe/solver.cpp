@@ -8,7 +8,7 @@
 #include "caffe/util/hdf5.hpp"
 #include "caffe/util/io.hpp"
 #include "caffe/util/upgrade_proto.hpp"
-#include "caffe/deep_compression.hpp"
+#include "caffe/adaptive_probabilistic_pruning.hpp"
 
 namespace caffe {
 
@@ -54,17 +54,18 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   
   // ------------------------------------------
   // WANGHUAN, copy prune params
-  DeepCompression::prune_method = param_.prune_method();
-  DeepCompression::criteria = param_.criteria();
-  DeepCompression::num_once_prune = param_.num_once_prune();
-  DeepCompression::prune_interval = param_.prune_interval();
-  DeepCompression::rgamma = param_.rgamma();
-  DeepCompression::rpower = param_.rpower();
-  DeepCompression::cgamma = param_.cgamma();
-  DeepCompression::cpower = param_.cpower(); 
-  DeepCompression::prune_begin_iter = param_.prune_begin_iter();
-  DeepCompression::iter_size = param_.iter_size();
-  // DeepCompression::score_decay = param_.score_decay();
+  APP::prune_method = param_.prune_method();
+  APP::criteria = param_.criteria();
+  APP::num_once_prune = param_.num_once_prune();
+  APP::prune_interval = param_.prune_interval();
+  APP::rgamma = param_.rgamma();
+  APP::rpower = param_.rpower();
+  APP::cgamma = param_.cgamma();
+  APP::cpower = param_.cpower(); 
+  APP::prune_begin_iter = param_.prune_begin_iter();
+  APP::iter_size = param_.iter_size();
+  
+  // APP::score_decay = param_.score_decay();
   // ------------------------------------------
 
   CHECK_GE(param_.average_loss(), 1) << "average_loss should be non-negative.";
@@ -245,14 +246,14 @@ void Solver<Dtype>::Step(int iters) {
 
     /// ----------------------------------------------------------------------
     /// WANGHUAN added, for iterative pruning
-    DeepCompression::step_ = iter_ + 1;
-    std::cout << "\n**** Step " << DeepCompression::step_ << " ****" << std::endl;
+    APP::step_ = iter_ + 1;
+    std::cout << "\n**** Step " << APP::step_ << " ****" << std::endl;
     /// ----------------------------------------------------------------------
     
-    DeepCompression::inner_iter = 0;
+    APP::inner_iter = 0;
     for (int i = 0; i < param_.iter_size(); ++i) {
       loss += net_->ForwardBackward();
-      ++ DeepCompression::inner_iter;
+      ++ APP::inner_iter;
     }
 
     loss /= param_.iter_size();
@@ -261,11 +262,11 @@ void Solver<Dtype>::Step(int iters) {
     
     /// ----------------------------------------------------------------------
     /// WANGHUAN, used for Adaptive SPP
-    /// DeepCompression::Delta_loss_history =  DeepCompression::Delta_loss_history * DeepCompression::loss_decay + (smoothed_loss_ - DeepCompression::loss);
-    /// DeepCompression::Delta_loss_history =  smoothed_loss_ - DeepCompression::loss;
-    DeepCompression::learning_speed = DeepCompression::loss - smoothed_loss_;
-    DeepCompression::loss = smoothed_loss_;
-    cout << "learning_speed: " << DeepCompression::learning_speed << endl;
+    /// APP::Delta_loss_history =  APP::Delta_loss_history * APP::loss_decay + (smoothed_loss_ - APP::loss);
+    /// APP::Delta_loss_history =  smoothed_loss_ - APP::loss;
+    APP::learning_speed = APP::loss - smoothed_loss_;
+    APP::loss = smoothed_loss_;
+    cout << "learning_speed: " << APP::learning_speed << endl;
     /// ----------------------------------------------------------------------
 
     if (display) {
@@ -381,11 +382,7 @@ void Solver<Dtype>::TestAll() {
 
 template <typename Dtype>
 void Solver<Dtype>::Test(const int test_net_id) {
-  CHECK(Caffe::root_solver());
-  
-  
-  DeepCompression::IN_TEST = true; // WANGHUAN
-  
+  CHECK(Caffe::root_solver());  
   
   LOG(INFO) << "Iteration " << iter_
             << ", Testing net (#" << test_net_id << ")";
@@ -457,7 +454,6 @@ void Solver<Dtype>::Test(const int test_net_id) {
     LOG(INFO) << "    Test net output #" << i << ": " << output_name << " = "
               << mean_score << loss_msg_stream.str();
   }
-  DeepCompression::IN_TEST = false; // WANGHUAN
 }
 
 template <typename Dtype>

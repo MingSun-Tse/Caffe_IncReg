@@ -1,7 +1,7 @@
 #include <vector>
 #include "caffe/filler.hpp"
 #include "caffe/layers/inner_product_layer.hpp"
-#include "caffe/deep_compression.hpp"
+#include "caffe/adaptive_probabilistic_pruning.hpp"
 
 namespace caffe {
 using namespace std;

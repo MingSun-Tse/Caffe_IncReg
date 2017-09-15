@@ -7,7 +7,7 @@
 #include "caffe/util/upgrade_proto.hpp"
 #include "caffe/util/math_functions.hpp"
 #include <numeric>
-#include "caffe/deep_compression.hpp"
+#include "caffe/adaptive_probabilistic_pruning.hpp"
 #include <cmath>
 #include <algorithm>
 #include <fstream>
@@ -202,8 +202,8 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             current_wd = weight_decay * (1 - (1 - this->param_.wd_end()) / (end - begin) * tmp_iter);
 
           } else if (this->param_.dwd_mode() == "adaptive") {
-            const int num_pruned = *std::max_element(DeepCompression::num_pruned_col, DeepCompression::num_pruned_col + 100); // 9 is the size, TODO: replace it using vector
-            const int num_to_prune = DeepCompression::max_num_column_to_prune;
+            const int num_pruned = *std::max_element(APP::num_pruned_col.begin(), APP::num_pruned_col.end()); // 9 is the size, TODO: replace it using vector
+            const int num_to_prune = APP::max_num_column_to_prune;
             current_wd = weight_decay * (1 - (1 - this->param_.wd_end()) / num_to_prune * num_pruned);
           }
       }
@@ -311,7 +311,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
 
           // update diff
           int conv_index = 3;      
-          local_decay = net_params_weight_decay[param_id] * (weight_decay -  DeepCompression::num_pruned_col[conv_index] * 1.5e-6);
+          local_decay = net_params_weight_decay[param_id] * (weight_decay -  APP::num_pruned_col[conv_index] * 1.5e-6);
           for (int i = 0; i < count; ++i) {     
               int sign = 0;
               if (weight[i] >0) sign = 1;
@@ -327,14 +327,14 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                        net_params[param_id]->mutable_gpu_diff());
                        
         const Dtype* weight = net_params[param_id]->cpu_data();
-        const Dtype col_reg = DeepCompression::col_reg;
+        const Dtype col_reg = APP::col_reg;
         const int count = net_params[param_id]->count();
         const int num_filter = net_params[param_id]->shape()[0];
         const int num_col = count / num_filter;
 
         const vector<int>& shape = net_params[param_id]->shape();
         if (shape.size() != 4) { return; } // do not reg biases and fc layer
-        if (DeepCompression::num_pruned_col[param_id / 2] >= num_col * DeepCompression::PruneRate[param_id / 2]) { return; }
+        if (APP::num_pruned_col[param_id / 2] >= num_col * APP::prune_ratio[param_id / 2]) { return; }
       
         Dtype* sqrted_energy = (Dtype*) malloc (sizeof(Dtype*) * count); // demoninator of SSL reg
         for (int j = 0; j < num_col; ++j) {
@@ -368,7 +368,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                        net_params[param_id]->mutable_gpu_diff());    
         
         
-        if (this->iter_ < DeepCompression::when_to_col_reg) { return; }// if iter < when_to_col_reg, do not apply column reg
+        if (this->iter_ < APP::when_to_col_reg) { return; }// if iter < when_to_col_reg, do not apply column reg
         const vector<int>& shape = net_params[param_id]->shape();
         if (shape.size() != 4) { return; } // do not reg biases and fc layers
         
@@ -376,8 +376,8 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         const int count = net_params[param_id]->count();
         const int num_filter = net_params[param_id]->shape()[0];
         const int num_col = count / num_filter;
-        const int num_col_to_prune = int(num_col * (DeepCompression::PruneRate[param_id / 2] + 0.05)); // 0.05 is a margin 
-        if (DeepCompression::num_pruned_col[param_id / 2] >= num_col_to_prune) { return; }
+        const int num_col_to_prune = int(num_col * (APP::prune_ratio[param_id / 2] + 0.05)); // 0.05 is a margin 
+        if (APP::num_pruned_col[param_id / 2] >= num_col_to_prune) { return; }
         
         // calculate column score as well as denominator of SSL reg    
         typedef std::pair<Dtype, int> mypair;
@@ -472,10 +472,10 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
       } else if (regularization_type == "SSL+Diff") {
         // wanghuan, reg decays with the number of pruned column
         int conv_index = 3;
-        int num_pruned_column = DeepCompression::num_pruned_col[conv_index];
+        int num_pruned_column = APP::num_pruned_col[conv_index];
         local_decay = net_params_weight_decay[param_id] * (weight_decay -  num_pruned_column * 6.5e-6);
-        const Dtype COL_REG = (num_pruned_column >= 800 * DeepCompression::PruneRate[conv_index]) ? 0 : DeepCompression::col_reg; // - num_pruned_column * 4.83e-6;
-        const Dtype DIFF_REG = (num_pruned_column >= 800 * DeepCompression::PruneRate[conv_index]) ? 0 : DeepCompression::diff_reg;
+        const Dtype COL_REG = (num_pruned_column >= 800 * APP::prune_ratio[conv_index]) ? 0 : APP::col_reg; // - num_pruned_column * 4.83e-6;
+        const Dtype DIFF_REG = (num_pruned_column >= 800 * APP::prune_ratio[conv_index]) ? 0 : APP::diff_reg;
         
         // add weight decay, weight decay still used
         caffe_gpu_axpy(net_params[param_id]->count(),

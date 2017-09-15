@@ -1,11 +1,10 @@
 #include <algorithm>
 #include <vector>
-
 #include "caffe/filler.hpp"
 #include "caffe/layers/base_conv_layer.hpp"
 #include "caffe/util/im2col.hpp"
 #include "caffe/util/math_functions.hpp"
-#include "caffe/deep_compression.hpp"
+#include "caffe/adaptive_probabilistic_pruning.hpp"
 
 namespace caffe {
 template <typename Dtype>
@@ -185,9 +184,8 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   this->param_propagate_down_.resize(this->blobs_.size(), true);
   
   /// WANGHUAN
-  if (DeepCompression::prune_method != "None") {
-    this->PruneSetUp(this->layer_param_.prune_param());
-  }
+  this->PruneSetUp(this->layer_param_.prune_param());
+  
 }
 
 template <typename Dtype>

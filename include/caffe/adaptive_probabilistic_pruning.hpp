@@ -1,8 +1,9 @@
-#ifndef DEEP_COMPRESSION_HPP_
-#define DEEP_COMPRESSION_HPP_
+#ifndef ADAPTIVE_PROBABILISTIC_PRUNING_HPP_
+#define ADAPTIVE_PROBABILISTIC_PRUNING_HPP_
 
 #include <string>
 #include <vector>
+#include <map>
 #define NUM_OF_WEIGHT_BUCKET 2
 #define RATIO 0.5
 
@@ -10,10 +11,10 @@
 namespace caffe {
 using namespace std;
 
-class DeepCompression {
+class APP {
 public:
-     DeepCompression() {};
-    ~DeepCompression() {};
+     APP() {};
+    ~APP() {};
 
     /// --------------------------------
     /// pass params from solver.prototxt to layer
@@ -28,19 +29,31 @@ public:
     static int prune_begin_iter;
     static int iter_size;
     static float score_decay;
-     
-    /// share params between solver and layer
-    static bool IN_TEST;
-    static bool IN_RETRAIN;
-    static int inner_iter;
-    static int num_pruned_col[100];
-    static int num_pruned_row[100];
-    static int step_;
-    static bool IF_prune_finished[100];
-    /// --------------------------------
     
-    static float PruneRate[100];
+    static int inner_iter;
+    static int step_;
+    
+    static map<string, int> layer_index[2]; /// 2 for TRAIN and TEST stage
+    static int layer_cnt[2];
+    
+    static vector<int> num_pruned_col;
+    static vector<int> num_pruned_row;
+    static vector<vector<bool> > IF_row_pruned;
+    static vector<vector<bool> > IF_col_pruned;
+    static vector<vector<float> > history_prob;
+    static vector<bool> IF_prune_finished;
+    static vector<float> prune_ratio;
+    static vector<float> delta;
+    static vector<float> pruned_ratio;
+    
+    static vector<int> filter_area;
+    static vector<int> group;
+    static vector<int> priority;
+    
+    
 
+
+    /// --------------------------------
     static int window_size;  
     static float score_decay_rate;
     static bool use_score_decay;
@@ -63,18 +76,12 @@ public:
     static float loss_decay;
     static float Delta_loss_history;
     static float learning_speed;
+
     
-    // history_prob
-    static vector<float> history_prob[100];
-    
-    static vector<bool> IF_row_pruned[100]; // used in "pfilter" 
-    static vector<bool> IF_col_pruned[100]; // used in "pfilter" 
-    static int max_layer_index;
-    static int filter_area[100];
-    static int group[100];
+
     
 }; 
 
 }
 
-#endif  // CAFFE_NET_HPP_
+#endif

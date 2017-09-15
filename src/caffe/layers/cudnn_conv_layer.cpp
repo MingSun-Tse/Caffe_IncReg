@@ -4,9 +4,7 @@
 #include <math.h>
 #include <stdlib.h> // rand() and srand()
 #include <time.h>
-
-
-#include "caffe/layers/cudnn_conv_layer.hpp"
+#include "caffe/adaptive_probabilistic_pruning.hpp"
 
 namespace caffe {
 

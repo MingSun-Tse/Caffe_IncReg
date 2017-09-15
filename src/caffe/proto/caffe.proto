@@ -269,8 +269,9 @@ message SolverParameter {
 message PruneParameter{
   optional float prune_ratio = 1 [default = 0];
   optional float delta = 2 [default = 0];
+  optional int32 priority = 3 [default = 0];
 }
-
+ 
 
 
 // A message that stores the solver snapshots

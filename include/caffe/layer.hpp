@@ -106,11 +106,7 @@ class Layer {
   vector<bool> IF_row_pruned;
   
   vector<int> random_col_perm;
-  vector<int> candidate_window;
-  vector<bool> drop_column_masks;
   vector<Dtype> history_diff;
-  vector<Dtype> history_weight; 
-  vector<Dtype> history_prob;
   
 
   /**
