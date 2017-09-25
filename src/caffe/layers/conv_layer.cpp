@@ -219,7 +219,6 @@ void ConvolutionLayer<Dtype>::ProbPrune() {
         } 
     }
 
-    
     /// With probability updated, generate masks
     Dtype rands[num_col];
     caffe_rng_uniform(num_col, (Dtype)0, (Dtype)1, rands);
@@ -228,7 +227,6 @@ void ConvolutionLayer<Dtype>::ProbPrune() {
     }              
     for (int i = 0; i < count; ++i) { this->weight_backup[i] = muweight[i]; }
     this->IF_restore = true;
-    
     /// Print and check (before pruning)
     if (this->layer_index == 1 && APP::step_ % SHOW_INTERVAL == 0) {
         /// cout.setf(std::ios::left);
@@ -245,7 +243,6 @@ void ConvolutionLayer<Dtype>::ProbPrune() {
         }
     }
     for (int i = 0; i < count; ++i) { muweight[i] *= this->masks_[i]; } /// do pruning
-
 }
 template <typename Dtype> 
 void ConvolutionLayer<Dtype>::CleanWorkForPP() {
