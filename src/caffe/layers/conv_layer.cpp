@@ -50,6 +50,18 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     APP::group.push_back(this->group_);
     APP::priority.push_back(prune_param.priority());
     
+    /// Weight and Diff Log
+    const int num_log = 50;
+    Dtype rands[num_log];
+    caffe_rng_uniform(num_log, (Dtype)0, (Dtype)(num_col - 1), rands);
+    APP::log_index.push_back( vector<int>(num_log) );
+    for (int i = 0; i < num_log; ++i) {
+        APP::log_index[this->layer_index][i] = int(rands[i]);
+    }
+    APP::log_weight.push_back( vector<vector<float> >(num_log) );
+    APP::log_diff.push_back( vector<vector<float> >(num_log) );
+    
+    
     /// Pruning state info
     this->num_pruned_weight = 0; // lagecy
     this->num_pruned_col = 0;
@@ -187,8 +199,8 @@ void ConvolutionLayer<Dtype>::ProbPrune() {
         cout << "\n";
     
         /// Calculate functioning probability of each weight
-        const Dtype AA = 0.5; 
-        const Dtype aa = 0.041;
+        const Dtype AA = 0.05; 
+        const Dtype aa = 0.0041;
         const Dtype alpha = -log(aa/AA) / (num_col_to_prune_ - APP::num_pruned_col[this->layer_index] - 1);  /// adjust alpha according to the remainder of cloumns
         for (int j = 0; j < num_col_to_prune_ - APP::num_pruned_col[this->layer_index]; ++j) {               /// note the range of j: only undermine those not-good-enough columns
             const int col_of_rank_j = col_score[j].second;

@@ -50,7 +50,9 @@ public:
     static vector<int> group;
     static vector<int> priority;
     
-    
+    static vector<vector<vector<float> > > log_weight;
+    static vector<vector<vector<float> > > log_diff;
+    static vector<vector<int> > log_index;
 
 
     /// --------------------------------

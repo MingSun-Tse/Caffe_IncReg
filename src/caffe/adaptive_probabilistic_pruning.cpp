@@ -41,6 +41,9 @@ namespace caffe {
     vector<int> APP::group;
     vector<int> APP::priority;
     
+    vector<vector<vector<float> > > APP::log_weight;
+    vector<vector<vector<float> > > APP::log_diff;
+    vector<vector<int> > APP::log_index;
     /// --------------------------------
     
     // use window proposal or score decay ----- legacy

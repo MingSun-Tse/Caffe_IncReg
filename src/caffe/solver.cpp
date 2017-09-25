@@ -9,6 +9,7 @@
 #include "caffe/util/io.hpp"
 #include "caffe/util/upgrade_proto.hpp"
 #include "caffe/adaptive_probabilistic_pruning.hpp"
+#include <ctime>
 
 namespace caffe {
 
@@ -112,7 +113,7 @@ void Solver<Dtype>::InitTrainNet() {
   }
   if (param_.has_net()) {
     LOG_IF(INFO, Caffe::root_solver())
-        << "wanghuan test: Creating training net from net file: " << param_.net();
+        << "Creating training net from net file: " << param_.net();
     ReadNetParamsFromTextFileOrDie(param_.net(), &net_param); // 读入网络结构
   }
   // Set the correct NetState.  We start with the solver defaults (lowest
@@ -348,6 +349,7 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   }
   if (requested_early_exit_) {
     LOG(INFO) << "Optimization stopped early.";
+    Logshot();
     return;
   }
   // After the optimization is done, run an additional train and test pass to
@@ -368,6 +370,7 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   if (param_.test_interval() && iter_ % param_.test_interval() == 0) {
     TestAll();
   }
+  Logshot();
   LOG(INFO) << "Optimization Done.";
 }
 
@@ -378,6 +381,7 @@ void Solver<Dtype>::TestAll() {
        ++test_net_id) {
     Test(test_net_id);
   }
+  
 }
 
 template <typename Dtype>
@@ -473,6 +477,77 @@ void Solver<Dtype>::Snapshot() {
 
   SnapshotSolverState(model_filename);
 }
+
+template <typename Dtype>
+void Solver<Dtype>::Logshot() {
+    const time_t t = time(NULL);
+    struct tm* ctime = localtime(&t);
+    ostringstream TIME;
+    TIME << 1900 + ctime->tm_year;
+    if (ctime->tm_mon < 9) { TIME << 0; }     
+    TIME << 1 + ctime->tm_mon
+         << ctime->tm_mday
+         << "-"
+         << ctime->tm_hour
+         << ctime->tm_min;
+    
+    const string i_tmp = param_.snapshot_prefix() + TIME.str() + "_log_index.txt";
+    const string w_tmp = param_.snapshot_prefix() + TIME.str() + "_log_weight.txt";
+    const string d_tmp = param_.snapshot_prefix() + TIME.str() + "_log_diff.txt";
+    const char* ii = i_tmp.c_str(); 
+    const char* ww = w_tmp.c_str(); 
+    const char* dd = d_tmp.c_str(); 
+    ofstream log_i(ii, ofstream::app);
+    ofstream log_w(ww, ofstream::app); 
+    ofstream log_d(dd, ofstream::app);
+    
+    vector<vector<vector<float> > >::iterator it_l; /// it_layer
+    vector<vector<float> >::iterator it_w; /// it_weight
+    vector<float>::iterator it_i; /// it_iter
+    vector<vector<int> >::iterator it_il;
+    vector<int>::iterator it_iw;
+
+    if (!log_i.is_open()) { 
+        cout << "Error: opening file failed: " << ii << endl; 
+    } else {
+        for (it_il = APP::log_index.begin(); it_il != APP::log_index.end(); ++it_il) {
+            for (it_iw = (*it_il).begin(); it_iw != (*it_il).end(); ++it_iw) {
+                log_i << *it_iw << " ";
+            }
+            log_i << "\n";
+        }
+    }
+                
+    if (!log_w.is_open()) { 
+        cout << "Error: opening file failed: " << ww << endl; 
+    } else {
+        for (it_l = APP::log_weight.begin(); it_l != APP::log_weight.end(); ++it_l) {
+            for (it_w = (*it_l).begin(); it_w != (*it_l).end(); ++it_w) {
+                for (it_i = (*it_w).begin(); it_i != (*it_w).end(); ++it_i) {
+                    log_w << *it_i << " ";
+                }
+                log_w << "\n";
+            }
+            log_w << "\n";
+        }
+    }
+
+    if (!log_d.is_open()) { 
+        cout << "Error: opening file failed: " << dd << endl; 
+    } else {
+        for (it_l = APP::log_diff.begin(); it_l != APP::log_diff.end(); ++it_l) {
+            for (it_w = (*it_l).begin(); it_w != (*it_l).end(); ++it_w) {
+                for (it_i = (*it_w).begin(); it_i != (*it_w).end(); ++it_i) {
+                    log_d << *it_i << " ";
+                }
+                log_d << "\n";
+            }
+            log_d << "\n";
+        }
+    }
+
+}
+
 
 template <typename Dtype>
 void Solver<Dtype>::CheckSnapshotWritePermissions() {

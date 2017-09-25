@@ -88,7 +88,20 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 }  // explictly prune, because seems TP is wrong somewhere.
             }
             
-        }   
+        }  
+        bool IF_log = true;
+        if (IF_log) {
+            const int num_log = APP::log_index[this->layer_index].size();
+            for (int i = 0; i < num_log; ++i) {
+                const int index = APP::log_index[this->layer_index][i];
+                Dtype sum = 0;
+                for (int i = 0; i < num_row; ++i) {
+                    sum += fabs(muweight[i * num_col + index]);
+                }
+                sum /= num_row;
+                APP::log_weight[this->layer_index][i].push_back(sum);
+            }
+        }
     } else {
         if (APP::prune_method == "PP") {
             Dtype rands[num_col];
@@ -101,6 +114,9 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             for (int i = 0; i < count; ++i) { muweight[i] *= this->masks_[i]; } /// do pruning
         }
     }
+    
+
+    
   /// ------------------------------------------------------
     const Dtype* weight = this->blobs_[0]->gpu_data();
     for (int i = 0; i < bottom.size(); ++i) {
@@ -220,7 +236,9 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
 /// ADDED BY WANGHUAN ------------------------------------------
     Dtype* muweight_diff = this->blobs_[0]->mutable_cpu_diff();      
     const int count = this->blobs_[0]->count();
-
+    const int num_row = this->blobs_[0]->shape()[0];
+    const int num_col = count / num_row;
+    
     /// UpdateDiffs(); /// update second diff and so on
 
     /// Print and check
@@ -237,6 +255,22 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
             cout.width(4);  cout << APP::history_prob[this->layer_index][i] << endl;
         }
     }
+    
+    /// Diff log
+    bool IF_log = true;
+    if (IF_log) {
+        const int num_log = APP::log_index[this->layer_index].size();
+        for (int i = 0; i < num_log; ++i) {
+            const int index = APP::log_index[this->layer_index][i];
+            Dtype sum = 0;
+            for (int r = 0; r < num_row; ++r) {
+                sum += fabs(muweight_diff[r * num_col + index]);
+            }
+            sum /= num_row;
+            APP::log_diff[this->layer_index][i].push_back(sum);
+        }
+    }
+    
 
     /// IF_mask
     const bool IF_prune       = APP::prune_method != "None";
@@ -255,6 +289,8 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
             }
         }
     }
+    
+
 
 /// ------------------------------------------------------------- 
   
