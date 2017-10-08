@@ -67,6 +67,7 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   APP::iter_size = param_.iter_size();
   
   // APP::score_decay = param_.score_decay();
+  APP::snapshot_prefix = param_.snapshot_prefix();
   // ------------------------------------------
 
   CHECK_GE(param_.average_loss(), 1) << "average_loss should be non-negative.";
@@ -319,6 +320,8 @@ void Solver<Dtype>::Step(int iters) {
   }
 }
 
+
+
 template <typename Dtype>
 void Solver<Dtype>::Solve(const char* resume_file) {
   CHECK(Caffe::root_solver());
@@ -348,8 +351,9 @@ void Solver<Dtype>::Solve(const char* resume_file) {
     Snapshot();
   }
   if (requested_early_exit_) {
-    LOG(INFO) << "Optimization stopped early.";
     Logshot();
+    if (APP::prune_method.substr(0, 2) == "PP") { PruneStateShot(); }
+    LOG(INFO) << "Optimization stopped early.";
     return;
   }
   // After the optimization is done, run an additional train and test pass to
@@ -371,6 +375,7 @@ void Solver<Dtype>::Solve(const char* resume_file) {
     TestAll();
   }
   Logshot();
+  if (APP::prune_method.substr(0, 2) == "PP") { PruneStateShot(); }
   LOG(INFO) << "Optimization Done.";
 }
 
@@ -476,6 +481,30 @@ void Solver<Dtype>::Snapshot() {
   }
 
   SnapshotSolverState(model_filename);
+}
+
+template <typename Dtype>
+void Solver<Dtype>::PruneStateShot() {
+    map<string, int>::iterator it_m;
+    for (it_m = APP::layer_index[0].begin(); it_m != APP::layer_index[0].end(); ++it_m) {
+        const char* outfile = (param_.snapshot_prefix() + "prob_" + it_m->first + ".txt").c_str();
+        if (!access(outfile, 0)) { 
+            /// outfile has already existed
+            remove(outfile);
+        } 
+        ofstream prob(outfile, ofstream::app);
+        if (!prob.is_open()) {
+            cout << "Error: opening prob file failed: " << prob << endl; 
+        } else {
+            prob << iter_ << "\n"; 
+            vector<float> pr = APP::history_prob[it_m->second];
+            vector<float>::iterator it;
+            for (it = pr.begin(); it != pr.end(); ++it) {
+                prob << *it << " ";
+            }
+        }    
+    }
+    cout << "Save prune prob done!" << endl;
 }
 
 template <typename Dtype>

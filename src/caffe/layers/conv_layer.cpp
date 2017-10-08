@@ -29,6 +29,9 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     }
     if (this->phase_ == TEST) { return; }
     
+    const bool IF_retrain = true; /// multi-GPU, here occur bugs.
+    if (IF_retrain) { return; }
+    
     /// Note: the varibales below can ONLY be used in training.
     /// set up prune parameters
     this->prune_ratio = prune_param.prune_ratio();
@@ -256,6 +259,7 @@ void ConvolutionLayer<Dtype>::CleanWorkForPP() {
         if (APP::history_prob[this->layer_index][i % num_col] > 0) {
             muweight[i] *= APP::history_prob[this->layer_index][i % num_col];
             APP::history_prob[this->layer_index][i % num_col] = 1;
+            this->masks_[i] = 1;
         }
     }
 }
@@ -409,6 +413,26 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask(float ratio) {
     this->pruned_ratio = 1 - (1 - this->num_pruned_col * 1.0 / num_col) * (1 - this->num_pruned_row * 1.0 / num_row);
     if (this->pruned_ratio >= this->prune_ratio) {
         APP::IF_prune_finished[this->layer_index] = true;
+    } else if (APP::prune_method.substr(0, 2) == "PP") { 
+        // Restore pruning prob
+        const string infile = APP::snapshot_prefix + "prob_" + layer_name + ".txt";
+        ifstream prob;
+        prob.open(infile.data());
+        string line;
+        vector<float> pr;
+        if (!prob.is_open()) {
+            cout << "Error: opening file failed when restoring prune state: " << infile << endl; 
+        } else {
+            getline(prob, line); /// the first line is iteration
+            while (getline(prob, line, ' ')) {
+                pr.push_back(atof(line.c_str()));
+            }
+            assert(pr.size() == APP::history_prob[this->layer_index].size());
+            for (int i = 0; i < pr.size(); ++i) {
+                APP::history_prob[this->layer_index][i] = pr[i];
+            }
+            cout << "Prune Prob Restored!" << endl;
+        }
     }
     LOG(INFO) << "    Masks restored, num_pruned_col = " << this->num_pruned_col
               << "  num_pruned_row = " << this->num_pruned_row

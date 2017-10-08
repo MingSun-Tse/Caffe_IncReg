@@ -53,6 +53,7 @@ public:
     static vector<vector<vector<float> > > log_weight;
     static vector<vector<vector<float> > > log_diff;
     static vector<vector<int> > log_index;
+    static string snapshot_prefix;
 
 
     /// --------------------------------

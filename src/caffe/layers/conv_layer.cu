@@ -11,6 +11,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
           
     /// ADDED BY WANGHUAN -----------------------------------
+    /*
     Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
     const int count = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
@@ -115,7 +116,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
     }
     
-
+    */
     
   /// ------------------------------------------------------
     const Dtype* weight = this->blobs_[0]->gpu_data();
@@ -252,7 +253,7 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
             cout.width(2);  cout << i+1 << "   ";
             cout.width(16); cout << muweight_diff[i] << "   ";
             cout.width(4);  cout << this->masks_[i] << "   ";
-            cout.width(4);  cout << APP::history_prob[this->layer_index][i] << endl;
+            /// cout.width(4);  cout << APP::history_prob[this->layer_index][i] << endl; /// TODO: debug
         }
     }
     
