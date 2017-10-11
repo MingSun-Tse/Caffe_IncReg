@@ -19,7 +19,7 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     this->masks_.resize(count, 1);
     this->weight_backup.resize(count);
     
-    cout << "00" << endl;
+
     /// Get layer_index
     const string layer_name = this->layer_param_.name();
     const int phase = this->phase_;
@@ -28,12 +28,7 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
         this->layer_index = APP::layer_cnt[phase];
         ++ APP::layer_cnt[phase];
     }
-    if (this->phase_ == TEST) { return; }
-    
-    // const bool IF_retrain = true; /// multi-GPU, here occur bugs.
-    // if (IF_retrain) { return; }
-    
-    cout << "01" << endl;
+    if (this->phase_ == TEST) { return; }   
     
     /// Note: the varibales below can ONLY be used in training.
     /// set up prune parameters
@@ -43,8 +38,6 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     APP::prune_ratio.push_back(prune_param.prune_ratio());
     APP::delta.push_back(prune_param.delta());
     APP::pruned_ratio.push_back(0);
-    
-    cout << "02" << endl;
     
     /// info shared among different layers
     APP::num_pruned_col.push_back(0);
@@ -57,8 +50,8 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     APP::filter_area.push_back(this->blobs_[0]->shape()[2] * this->blobs_[0]->shape()[3]);
     APP::group.push_back(this->group_);
     APP::priority.push_back(prune_param.priority());
-    
-    cout << "03" << endl; 
+   
+   
     /// Weight and Diff Log
     const int num_log = 50;
     Dtype rands[num_log];
@@ -70,7 +63,7 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     APP::log_weight.push_back( vector<vector<float> >(num_log) );
     APP::log_diff.push_back( vector<vector<float> >(num_log) );
     
-    cout << "04" << endl;
+
     /// Pruning state info
     this->num_pruned_weight = 0; // lagecy
     this->num_pruned_col = 0;
@@ -186,9 +179,9 @@ void ConvolutionLayer<Dtype>::ProbPrune() {
         for (int j = num_col_to_prune_ - APP::num_pruned_col[this->layer_index] - 1; 
                  j < num_col - APP::num_pruned_col[this->layer_index]; ++j) {
             const int col_of_rank_j = col_score[j].second;
-            cout << "recover col: " << col_of_rank_j 
-                 << "  its prob: " << APP::history_prob[this->layer_index][col_of_rank_j] 
-                 << "  step: " << APP::step_ << endl;
+            //cout << "recover col: " << col_of_rank_j 
+                 //<< "  its prob: " << APP::history_prob[this->layer_index][col_of_rank_j] 
+                 //<< "  step: " << APP::step_ << endl;
             APP::history_prob[this->layer_index][col_of_rank_j] = 1;
         }
     }

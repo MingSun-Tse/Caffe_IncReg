@@ -253,7 +253,7 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
             cout.width(2);  cout << i+1 << "   ";
             cout.width(16); cout << muweight_diff[i] << "   ";
             cout.width(4);  cout << this->masks_[i] << "   ";
-            /// cout.width(4);  cout << APP::history_prob[this->layer_index][i] << endl; /// TODO: debug
+            cout.width(4);  cout << APP::history_prob[this->layer_index][i] << endl;
         }
     }
     
