@@ -222,8 +222,6 @@ void Solver<Dtype>::Step(int iters) {
   int average_loss = this->param_.average_loss();
   losses_.clear();
   smoothed_loss_ = 0;
-  
-  
 
   while (iter_ < stop_iter) {
     // zero-init the params
@@ -250,6 +248,12 @@ void Solver<Dtype>::Step(int iters) {
     /// WANGHUAN added, for iterative pruning
     APP::step_ = iter_ + 1;
     std::cout << "\n**** Step " << APP::step_ << " ****" << std::endl;
+    
+    if (APP::IF_eswpf) {
+        cout << "all layer prune finish: " << iter_ << endl;
+        requested_early_exit_ = true;
+        break;
+    }
     /// ----------------------------------------------------------------------
     
     APP::inner_iter = 0;
@@ -340,9 +344,6 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   // should be given, and we will just provide dummy vecs.
   int start_iter = iter_;
   Step(param_.max_iter() - iter_);
-    /*
-     * 注意
-     */
 
   // If we haven't already, save a snapshot after optimization, unless
   // overridden by setting snapshot_after_train := false

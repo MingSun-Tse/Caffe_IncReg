@@ -32,6 +32,7 @@ public:
     
     static int inner_iter;
     static int step_;
+    static bool IF_eswpf; /// if early stop when prune finish
     
     static map<string, int> layer_index[2]; /// 2 for TRAIN and TEST stage
     static int layer_cnt[2];

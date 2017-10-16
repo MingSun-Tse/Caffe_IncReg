@@ -17,10 +17,12 @@ namespace caffe {
     int APP::prune_begin_iter;
     int APP::iter_size;
     float APP::score_decay = 0;
+
     
     /// info shared between solver and layer, initailized here.
     int APP::inner_iter = 0;
     int APP::step_ = -1;
+    bool APP::IF_eswpf = false; /// if early stop when prune finish
     
     /// info shared among layers
     map<string, int> APP::layer_index[2];

@@ -34,6 +34,17 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 if (this->pruned_ratio >= this->prune_ratio) {
                     if (APP::prune_method == "PP") { CleanWorkForPP(); } // last time, do some clean work
                     APP::IF_prune_finished[this->layer_index] = true;
+                    
+                    vector<bool>::iterator it;
+                    bool IF_alpf = true; /// if all layer prune finish
+                    for (it = APP::IF_prune_finished.begin(); it != APP::IF_prune_finished.end(); ++it) {
+                        if (!*it) {
+                            IF_alpf = false;
+                            break;
+                        }
+                    }
+                    if (IF_alpf) { APP::IF_eswpf = true; }
+                    
                     cout << layer_name << " prune finished!" 
                          << "  step: " << APP::step_ 
                          << "  pruned_ratio: " << this->pruned_ratio << endl;
