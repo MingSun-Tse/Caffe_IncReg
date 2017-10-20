@@ -167,7 +167,7 @@ void ConvolutionLayer<Dtype>::ProbPrune() {
     /// Recover the best columns, according to some probabilities
     Dtype p_recover;
     caffe_rng_uniform(1, (Dtype)0, (Dtype)1, &p_recover);
-    if (pow(rgamma + 0.00027 * APP::step_, rpower) > p_recover * iter_size) {
+    if (rgamma > 0 && pow(rgamma + 0.00027 * APP::step_, rpower) > p_recover * iter_size) {
 
         /// Print and check
         cout << "recover prob: " << layer_name << "  step: " << APP::step_ << endl;
