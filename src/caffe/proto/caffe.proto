@@ -250,10 +250,10 @@ message SolverParameter {
   optional int32 num_once_prune = 52 [default = 1]; // how many columns/rows to prune per time
   optional int32 prune_interval = 53; // how often to prune
   optional float rgamma = 48; // recover
-  optional float rpower = 49; 
+  // optional float rpower = 49; 
   optional float cgamma = 50; // compression
-  optional float cpower = 51;
-  // optional float score_decay = 56 [default = 0];
+  // optional float cpower = 51;
+  optional float AA = 55 [default = 0.05]; // AA of PP
 
   // decrease weight decay
   optional string dwd_mode = 44 [default = "None"];

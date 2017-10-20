@@ -29,6 +29,7 @@ public:
     static int prune_begin_iter;
     static int iter_size;
     static float score_decay;
+    static float AA;
     
     static int inner_iter;
     static int step_;

@@ -60,9 +60,9 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   APP::num_once_prune = param_.num_once_prune();
   APP::prune_interval = param_.prune_interval();
   APP::rgamma = param_.rgamma();
-  APP::rpower = param_.rpower();
+  APP::rpower = -1.3; //param_.rpower();
   APP::cgamma = param_.cgamma();
-  APP::cpower = param_.cpower(); 
+  APP::cpower = -1.2; //param_.cpower(); 
   APP::prune_begin_iter = param_.prune_begin_iter();
   APP::iter_size = param_.iter_size();
   

@@ -17,6 +17,7 @@ namespace caffe {
     int APP::prune_begin_iter;
     int APP::iter_size;
     float APP::score_decay = 0;
+    float APP::AA; 
 
     
     /// info shared between solver and layer, initailized here.
