@@ -43,7 +43,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                             break;
                         }
                     }
-                    if (IF_alpf) { APP::IF_eswpf = true; }
+                    if (IF_alpf) { APP::IF_eswpf = true; } /// early stop when prune finish
                     
                     cout << layer_name << " prune finished!" 
                          << "  step: " << APP::step_ 
@@ -62,8 +62,9 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
         
         /// Print and check (before pruning)
-        if (this->layer_index == 1 && APP::step_ % SHOW_INTERVAL == 0 && APP::inner_iter == 0) {
+        if (this->layer_index == 8 && APP::step_ % SHOW_INTERVAL == 0 && APP::inner_iter == 0) {
             /// cout.setf(std::ios::left);
+            cout << "---- " << layer_name << " ----" << endl;
             cout.width(5);  cout << "Index" << "   ";
             cout.width(18); cout << "WeightBeforeMasked" << "   ";
             cout.width(4);  cout << "Mask" << "   ";
@@ -87,7 +88,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 if ((APP::step_ - 1) % APP::prune_interval == 0) { FilterPrune(); }    
             } else if (APP::prune_method == "PP") {
                 bool IF_hppf = true; /// IF_higher_priority_prune_finished 
-                for (int i = 0; i <= APP::layer_cnt[0]; ++i) {
+                for (int i = 0; i < APP::IF_prune_finished.size(); ++i) {
                     if (APP::priority[i] < APP::priority[this->layer_index] && !APP::IF_prune_finished[i]) {
                         IF_hppf = false;
                         break;

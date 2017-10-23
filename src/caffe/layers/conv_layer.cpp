@@ -28,6 +28,7 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
         this->layer_index = APP::layer_cnt[phase];
         ++ APP::layer_cnt[phase];
     }
+    cout << "layer cnt: " << APP::layer_cnt[phase] << endl;
     if (this->phase_ == TEST) { return; }   
     
     /// Note: the varibales below can ONLY be used in training.
@@ -46,6 +47,7 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     APP::IF_col_pruned.push_back( vector<bool>(num_col, false) );
     APP::history_prob.push_back( vector<float>(num_col, 1) );
     APP::IF_prune_finished.push_back(false);
+    cout << "PruneSetUp: " << layer_name  << " its layer_index: " << this->layer_index << endl;
     
     APP::filter_area.push_back(this->blobs_[0]->shape()[2] * this->blobs_[0]->shape()[3]);
     APP::group.push_back(this->group_);

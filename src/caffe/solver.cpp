@@ -65,6 +65,7 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   APP::cpower = -1.2; //param_.cpower(); 
   APP::prune_begin_iter = param_.prune_begin_iter();
   APP::iter_size = param_.iter_size();
+  APP::AA = param_.aa();
   
   // APP::score_decay = param_.score_decay();
   APP::snapshot_prefix = param_.snapshot_prefix();
