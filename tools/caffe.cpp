@@ -14,7 +14,6 @@ namespace bp = boost::python;
 #include "boost/algorithm/string.hpp"
 #include "caffe/caffe.hpp"
 #include "caffe/util/signal_handler.h"
-#include "caffe/deep_compression.hpp"
 
 using caffe::Blob;
 using caffe::Caffe;
