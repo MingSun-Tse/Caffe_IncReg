@@ -88,6 +88,40 @@ cv::Mat ReadImageToCVMat(const string& filename,
   return cv_img;
 }
 
+cv::Mat ReadImageToCVMat(const string& filename, 
+    const int height, const int width, const int shorter_side, const bool is_color, const bool bicubic) {
+    CHECK(shorter_side > 0) << "The shorter_side of image should be larger than 0. Please check your parameter.";
+    
+    int cv_read_flag = is_color ? CV_LOAD_IMAGE_COLOR : CV_LOAD_IMAGE_GRAYSCALE;
+    cv::Mat cv_img_origin = cv::imread(filename, cv_read_flag);
+    if (!cv_img_origin.data) {
+        LOG(ERROR) << "Could not open or find file " << filename;
+        return cv_img_origin;
+    }
+    
+    // Scale the image to make its shorter side = `short_side`
+    const float scale_factor = float(shorter_side) / std::min(cv_img_origin.rows, cv_img_origin.cols);
+    int new_height, new_width;
+    if (cv_img_origin.rows >= cv_img_origin.cols) {
+        new_width  = shorter_side;
+        new_height = round(scale_factor * cv_img_origin.rows);
+    } else {
+        new_height = shorter_side;
+        new_width  = round(scale_factor * cv_img_origin.cols);
+    }
+    
+    // Resize, can choose to use cubic interpolation
+    cv::Mat cv_img;
+    if (bicubic) {
+      cv::resize(cv_img_origin, cv_img, cv::Size(new_width, new_height), 0, 0, cv::INTER_CUBIC);
+    } else{
+      cv::resize(cv_img_origin, cv_img, cv::Size(new_width, new_height));
+    }
+
+    return cv_img;
+    
+}
+
 cv::Mat ReadImageToCVMat(const string& filename,
     const int height, const int width) {
   return ReadImageToCVMat(filename, height, width, true);

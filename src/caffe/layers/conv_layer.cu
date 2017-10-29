@@ -256,6 +256,7 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
 
     /// Print and check
     if (this->layer_index == 1 && APP::step_ % SHOW_INTERVAL == 0 && APP::inner_iter == 0) {
+        cout << "---- " << this->layer_param_.name() << " ----" << endl;
         cout.width(5);  cout << "Index" << "   ";
         cout.width(16); cout << "DiffBeforeMasked" << "   ";
         cout.width(4);  cout << "Mask" << "   ";
