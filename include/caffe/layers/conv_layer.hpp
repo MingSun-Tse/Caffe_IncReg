@@ -80,10 +80,14 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
   virtual void ComputeBlobMask(float ratio); // WANGHUAN
   virtual void FilterPrune(); // WANGHUAN
   virtual void TaylorPrune(const vector<Blob<Dtype>*>& top);
-  virtual void ProbPrune();
+  virtual void ProbPruneCol();
+  virtual void ProbPruneRow();
   virtual void CleanWorkForPP();
   virtual void UpdateNumPrunedRow(); // WANGHUAN
   virtual void UpdateNumPrunedCol(); // WANGHUAN
+  virtual bool IF_alpf();
+  virtual bool IF_hppf();
+  virtual void Print(const int& L, char mode);
   virtual void PruneSetUp(const PruneParameter& prune_param); // WANGHUAN
   virtual Dtype normal_random();
 

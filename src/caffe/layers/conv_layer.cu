@@ -2,6 +2,7 @@
 #include "caffe/layers/conv_layer.hpp"
 #include "caffe/adaptive_probabilistic_pruning.hpp"
 #define SHOW_INTERVAL 10
+#define SHOW_NUM_LAYER 5
 
 using namespace std;
 namespace caffe {
@@ -11,98 +12,79 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
           
     /// ADDED BY WANGHUAN -----------------------------------
-    
     Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
     const int count = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
     const string layer_name = this->layer_param_.name();
+    const string mthd = APP::prune_method;
     const int L = APP::layer_index[layer_name];
     this->IF_restore = false;
     
+    
     /// IF_mask
-    const bool IF_prune       = APP::prune_method != "None";
+    const bool IF_prune       = mthd != "None";
     const bool IF_enough_iter = (APP::step_ - 1) >= APP::prune_begin_iter;
     const bool IF_pruned      = APP::pruned_ratio[L] > 0;
     this->IF_mask             = IF_prune && (IF_enough_iter || IF_pruned);
     
+    
     if (this->phase_ == TRAIN) {
         if (this->IF_mask) {
-            // UpdateNumPrunedRow();
-            // UpdateNumPrunedCol();
-            APP::pruned_ratio[L] = 1 - (1 - APP::num_pruned_col[L] * 1.0 / num_col) * (1 - APP::num_pruned_row[L] * 1.0 / num_row);
-            if (!APP::IF_prune_finished[L]) {
+            // UpdateNumPrunedRow/Col, to then calculate pruned_ratio
+            if ((mthd == "PPc" || mthd == "CP") && L != APP::layer_cnt-1) {
+                if (APP::step_ - 1 - APP::iter_prune_finished[L + 1] <= 1) {
+                    UpdateNumPrunedRow();
+                }
+            } else if ((mthd == "PPr" || mthd == "FP" || mthd == "TP") && L != 0) {
+                UpdateNumPrunedCol();
+            }
+            APP::pruned_ratio[L] = 1 - (1 - APP::num_pruned_col[L] * 1.0 / num_col) 
+                                     * (1 - APP::num_pruned_row[L] * 1.0 / num_row);
+            
+            // Given pruned_ratio, determine whether prune has finished
+            // Get into here ONLY once
+            if (APP::iter_prune_finished[L] == INT_MAX) {
                 if (APP::pruned_ratio[L] >= APP::prune_ratio[L]) {
-                    if (APP::prune_method == "PP") { CleanWorkForPP(); } // last time, do some clean work
-                    APP::IF_prune_finished[L] = true;
-                    
-                    vector<bool>::iterator it;
-                    bool IF_alpf = true; /// if all layer prune finish
-                    for (it = APP::IF_prune_finished.begin(); it != APP::IF_prune_finished.end(); ++it) {
-                        if (!*it) {
-                            IF_alpf = false;
-                            break;
-                        }
-                    }
-                    if (IF_alpf) { APP::IF_eswpf = true; } /// early stop when prune finish
-                    
+                    if (mthd.substr(0, 2) == "PP") { CleanWorkForPP(); } /// last time, do some clean work
+                    APP::iter_prune_finished[L] = APP::step_ - 1;
                     cout << layer_name << " prune finished!" 
                          << "  step: " << APP::step_ 
-                         << "  pruned_ratio: " << this->pruned_ratio << endl;
+                         << "  pruned_ratio: " << APP::pruned_ratio[L] << endl;
                 }
             }
         }
         
-        /// Print and check
-        if (APP::prune_method != "None" && L < 5 && APP::inner_iter == 0) {
+        // Print and check
+        if (mthd != "None" && L < SHOW_NUM_LAYER && APP::inner_iter == 0) {
             cout << layer_name << "  IF_mask: " << this->IF_mask 
                  << "  pruned_ratio: " << APP::pruned_ratio[L]
-                 << "  prune_ratio: " << APP::prune_ratio[L]
+                 << "  prune_ratio: "  << APP::prune_ratio[L]
                  << "  num_pruned_col: " << APP::num_pruned_col[L]
                  << "  num_pruned_row: " << APP::num_pruned_row[L] << endl;
         }
-        
-        /// Print and check (before pruning)
         if (L == 8 && APP::step_ % SHOW_INTERVAL == 0 && APP::inner_iter == 0) {
-            /// cout.setf(std::ios::left);
-            cout << "---- " << layer_name << " ----" << endl;
-            cout.width(5);  cout << "Index" << "   ";
-            cout.width(18); cout << "WeightBeforeMasked" << "   ";
-            cout.width(4);  cout << "Mask" << "   ";
-            cout.width(4);  cout << "Prob" << endl;
-            for (int i = 0; i < 20; ++i) {
-                cout.width(3);  cout << "#";
-                cout.width(2);  cout << i+1 << "   ";
-                cout.width(18); cout << muweight[i] << "   ";
-                cout.width(4);  cout << APP::masks[L][i] << "   ";
-                cout.width(4);  cout << APP::history_prob[L][i] << endl;
-            }
+            Print(L, 'f');
         }
 
-        /// Update masks and apply masks
+        // Update masks and apply masks
         if (this->IF_mask && APP::pruned_ratio[L] < APP::prune_ratio[L]) {
-            if (APP::prune_method == "Prune" && APP::criteria == "L2-norm") { 
+            if (mthd == "Prune" && APP::criteria == "L2-norm") { 
                 /// UpdateMasks(); 
-            } else if (APP::prune_method == "FP") {
-                CHECK_GE(APP::prune_interval, 1)
-                        << "Error: if 'FP' is used, 'prune_interval' must be set.";
-                if ((APP::step_ - 1) % APP::prune_interval == 0) { FilterPrune(); }    
-            } else if (APP::prune_method == "PP") {
-                bool IF_hppf = true; /// IF_higher_priority_prune_finished 
-                for (int i = 0; i < APP::IF_prune_finished.size(); ++i) {
-                    if (APP::priority[i] < APP::priority[L] && !APP::IF_prune_finished[i]) {
-                        IF_hppf = false;
-                        break;
-                    }
-                }
-                if (IF_hppf) { ProbPrune(); }
-            }  else if (APP::prune_method == "TP") {
+            } else if (mthd == "FP" && (APP::step_ - 1) % APP::prune_interval == 0) {
+                FilterPrune(); 
+            } else if (mthd == "PPc" && IF_hppf()) {
+                ProbPruneCol();
+            } else if (mthd == "PPr" && IF_hppf()) {
+                ProbPruneRow();
+            }  else if (mthd == "TP") {
                 for (int i = 0; i < count; ++i) {
                     muweight[i] *= APP::masks[L][i]; 
-                }  // explictly prune, because seems TP is wrong somewhere.
+                }  /// explictly prune, because seems TP is wrong somewhere.
             }
-            
-        }  
+        }
+        
+        // Weight logging
         if (APP::num_log) {
             const int num_log = APP::log_index[L].size();
             for (int k = 0; k < num_log; ++k) {
@@ -116,25 +98,23 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             }
         }
     } else {
-        if (APP::prune_method == "PP") {
+        if (this->IF_mask && APP::pruned_ratio[L] < APP::prune_ratio[L] && mthd == "PP") {
             Dtype rands[num_col];
             caffe_rng_uniform(num_col, (Dtype)0, (Dtype)1, rands);
             for (int i = 0; i < count; ++i) {
-                APP::masks[L][i] = rands[i % num_col] < APP::history_prob[L][i % num_col] ? 1 : 0; /// geerate masks
+                APP::masks[L][i] = rands[i % num_col] < APP::history_prob[L][i % num_col] ? 1 : 0; /// generate masks
             }              
             for (int i = 0; i < count; ++i) { 
                 this->weight_backup[i] = muweight[i]; /// backup weights
             } 
             this->IF_restore = true;
             for (int i = 0; i < count; ++i) { 
-                muweight[i] *= APP::masks[L][i]; /// do pruning
+                muweight[i] *= APP::masks[L][i]; /// apply masks
             } 
         }
     }
-    
-    
-    
   /// ------------------------------------------------------
+  
     const Dtype* weight = this->blobs_[0]->gpu_data();
     for (int i = 0; i < bottom.size(); ++i) {
         const Dtype* bottom_data = bottom[i]->gpu_data();
@@ -256,23 +236,10 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
     const int L = APP::layer_index[this->layer_param_.name()];
-    
-    /// UpdateDiffs(); /// update second diff and so on
 
     /// Print and check
     if (L == 1 && APP::step_ % SHOW_INTERVAL == 0 && APP::inner_iter == 0) {
-        cout << "---- " << this->layer_param_.name() << " ----" << endl;
-        cout.width(5);  cout << "Index" << "   ";
-        cout.width(16); cout << "DiffBeforeMasked" << "   ";
-        cout.width(4);  cout << "Mask" << "   ";
-        cout.width(4);  cout << "Prob" << endl;
-        for (int i = 0; i < 20; ++i) {
-            cout.width(3);  cout << "#";
-            cout.width(2);  cout << i+1 << "   ";
-            cout.width(16); cout << muweight_diff[i] << "   ";
-            cout.width(4);  cout << APP::masks[L][i] << "   ";
-            cout.width(4);  cout << APP::history_prob[L][i] << endl;
-        }
+        Print(L, 'b');
     }
     
     /// Diff log
@@ -289,24 +256,17 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
         }
     }
     
-
     if (this->IF_mask) {
         for (int j = 0; j < count; ++j) { 
             muweight_diff[j] *= APP::masks[L][j]; 
         }
         if (APP::pruned_ratio[L] < APP::prune_ratio[L]) {
             if (APP::prune_method == "Prune" && APP::criteria == "diff") {
-                /// UpdateMasks(); 
-            } else if (APP::prune_method == "TP") {
-                CHECK_GE(APP::prune_interval, 1)
-                    << "Error: if 'TP' is used, 'prune_interval' must be set.";
-                if ((APP::step_ - 1) % APP::prune_interval == 0) { TaylorPrune(top); }
+            } else if (APP::prune_method == "TP" && (APP::step_ - 1) % APP::prune_interval == 0) {
+                TaylorPrune(top);
             }
         }
     }
-    
-
-
 /// ------------------------------------------------------------- 
   
   

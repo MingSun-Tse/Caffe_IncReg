@@ -44,14 +44,16 @@ public:
     static vector<int> priority;
     
     
-    static vector<int> num_pruned_col;
-    static vector<int> num_pruned_row;
+    
+    static vector<float> num_pruned_col;
+    static vector<int>   num_pruned_row;
+    static vector<int>   pruned_rows;
     static vector<vector<bool> > masks;
     static vector<vector<bool> > IF_row_pruned;
-    static vector<vector<bool> > IF_col_pruned;
+    static vector<vector<vector<bool> > > IF_col_pruned;
     static vector<vector<float> > history_prob;
     static vector<vector<float> > history_score;
-    static vector<bool> IF_prune_finished;
+    static vector<int> iter_prune_finished;
     static vector<float> prune_ratio;
     static vector<float> delta;
     static vector<float> pruned_ratio;

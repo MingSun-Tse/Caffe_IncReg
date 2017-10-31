@@ -32,15 +32,17 @@ namespace caffe {
     vector<int> APP::group;
     vector<int> APP::priority;
     
+    
     // 2.2 Pruning state (key)
-    vector<int> APP::num_pruned_col;
-    vector<int> APP::num_pruned_row;
+    vector<float> APP::num_pruned_col;
+    vector<int>   APP::num_pruned_row;
+    vector<int>   APP::pruned_rows;
     vector<vector<bool> > APP::masks;
     vector<vector<bool> > APP::IF_row_pruned;
-    vector<vector<bool> > APP::IF_col_pruned;
+    vector<vector<vector<bool> > > APP::IF_col_pruned;
     vector<vector<float> > APP::history_prob;
     vector<vector<float> > APP::history_score;    
-    vector<bool> APP::IF_prune_finished;
+    vector<int> APP::iter_prune_finished;
     vector<float> APP::prune_ratio;
     vector<float> APP::delta;
     vector<float> APP::pruned_ratio;

@@ -225,7 +225,7 @@ int train() {
     solver_param.set_device_id(gpus[0]);
     Caffe::SetDevice(gpus[0]);
     Caffe::set_mode(Caffe::GPU);
-    Caffe::set_solver_count(gpus.size());
+    Caffe::set_solver_count(gpus.size()); 
   }
 
   caffe::SignalHandler signal_handler(
