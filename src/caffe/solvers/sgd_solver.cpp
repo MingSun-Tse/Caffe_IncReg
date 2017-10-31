@@ -116,7 +116,7 @@ void SGDSolver<Dtype>::ClipGradients() {
 
 template <typename Dtype>
 void SGDSolver<Dtype>::ApplyUpdate() {
-  CHECK(Caffe::root_solver());
+  CHECK(Caffe::root_solver()); /// 更新梯度是由主solver来做的
   Dtype rate = GetLearningRate();
   if (this->param_.display() && this->iter_ % this->param_.display() == 0) {
     LOG(INFO) << "Iteration " << this->iter_ << ", lr = " << rate;
@@ -185,10 +185,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
       CHECK_GE(this->param_.wd_end(), 0) << "Error: wd_end must be in [0, 1]";
       CHECK_LE(this->param_.wd_end(), 1) << "Error: wd_end must be in [0, 1]";
       
-      const int begin = this->param_.dwd_begin_iter();
-      // const int end   = this->param_.dwd_end_iter();
-      // cout << "begin: " << this->param_.dwd_begin_iter() << "  " << end << endl; //???
-      
+      const int begin = this->param_.dwd_begin_iter();      
       if (this->iter_ >= begin) {
           if (this->param_.dwd_mode() == "linearly") {
             const int end   = this->param_.dwd_end_iter();
@@ -586,7 +583,6 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
 }
 
 
-
 #ifndef CPU_ONLY
 template <typename Dtype>
 void sgd_update_gpu(int N, Dtype* g, Dtype* h, Dtype momentum,
@@ -722,6 +718,8 @@ void SGDSolver<Dtype>::RestoreSolverStateFromBinaryProto(
   SolverState state;
   ReadProtoFromBinaryFile(state_file, &state);
   this->iter_ = state.iter();
+  std::cout << " -- restore proto -- " << std::endl;
+  
   if (state.has_learned_net()) {
     NetParameter net_param;
     ReadNetParamsFromBinaryFileOrDie(state.learned_net().c_str(), &net_param);

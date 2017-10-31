@@ -5,8 +5,8 @@ namespace caffe {
  
 
     /// --------------------------------
-    /// pass params from solver.prototxt to layer, not initialized here.
-    string APP::prune_method = "None"; // initialized for caffe test, which has no solver but this info is still needed in layer.
+    // 1.1 Params passed from solver to layer, not initialized here
+    string APP::prune_method = "None"; /// initialized for caffe test, which has no solver but this info is still needed in layer.
     string APP::criteria;
     int APP::num_once_prune;
     int APP::prune_interval;
@@ -19,31 +19,35 @@ namespace caffe {
     float APP::score_decay = 0;
     float APP::AA; 
 
-    
-    /// info shared between solver and layer, initailized here.
+    // 1.2 Info shared between solver and layer, initailized here
     int APP::inner_iter = 0;
     int APP::step_ = -1;
     bool APP::IF_eswpf = false; /// if early stop when prune finish
     
-    /// info shared among layers
-    map<string, int> APP::layer_index[2];
-    int APP::layer_cnt[2] = {0, 0};
     
+    // 2.1 Info shared among layers
+    map<string, int> APP::layer_index;
+    int APP::layer_cnt = 0; /// the number of conv layer
+    vector<int> APP::filter_area;
+    vector<int> APP::group;
+    vector<int> APP::priority;
+    
+    // 2.2 Pruning state (key)
     vector<int> APP::num_pruned_col;
     vector<int> APP::num_pruned_row;
+    vector<vector<bool> > APP::masks;
     vector<vector<bool> > APP::IF_row_pruned;
     vector<vector<bool> > APP::IF_col_pruned;
     vector<vector<float> > APP::history_prob;
+    vector<vector<float> > APP::history_score;    
     vector<bool> APP::IF_prune_finished;
     vector<float> APP::prune_ratio;
     vector<float> APP::delta;
     vector<float> APP::pruned_ratio;
     
     
-    vector<int> APP::filter_area;
-    vector<int> APP::group;
-    vector<int> APP::priority;
-    
+    // 3. Logging
+    int APP::num_log;
     vector<vector<vector<float> > > APP::log_weight;
     vector<vector<vector<float> > > APP::log_diff;
     vector<vector<int> > APP::log_index;

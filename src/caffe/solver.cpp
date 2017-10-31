@@ -236,10 +236,13 @@ void Solver<Dtype>::Step(int iters) {
         break;
       }
     }
-    // cout << "call_backs_.size(): " << callbacks_.size() << endl; // WANGHUAN, 0, why?
+    
+    // 分发参数
+    std::cout << "call_backs_.size(): " << callbacks_.size() << std::endl; /// WANGHUAN
     for (int i = 0; i < callbacks_.size(); ++i) {
       callbacks_[i]->on_start();
     }
+    
     const bool display = param_.display() && iter_ % param_.display() == 0;
     net_->set_debug_info(display && param_.debug_info());
     // accumulate the loss and gradient
@@ -260,7 +263,7 @@ void Solver<Dtype>::Step(int iters) {
     APP::inner_iter = 0;
     for (int i = 0; i < param_.iter_size(); ++i) {
       loss += net_->ForwardBackward();
-      ++ APP::inner_iter;
+      ++ APP::inner_iter; /// WANGHUAN
     }
 
     loss /= param_.iter_size();
@@ -299,9 +302,12 @@ void Solver<Dtype>::Step(int iters) {
         }
       }
     }
+    
+    // 归约梯度，在Update之前，而在Update中有`Iteration, lr`的logging，合理解释了log中就只有一处这个logging
     for (int i = 0; i < callbacks_.size(); ++i) {
       callbacks_[i]->on_gradients_ready();
     }
+    
     ApplyUpdate(); /// Virtual Function
 
     // Increment the internal iter_ counter -- its value should always indicate
@@ -353,7 +359,7 @@ void Solver<Dtype>::Solve(const char* resume_file) {
     Snapshot();
   }
   if (requested_early_exit_) {
-    Logshot();
+    if (APP::num_log) { Logshot(); }
     if (APP::prune_method.substr(0, 2) == "PP") { PruneStateShot(); }
     LOG(INFO) << "Optimization stopped early.";
     return;
@@ -376,7 +382,7 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   if (param_.test_interval() && iter_ % param_.test_interval() == 0) {
     TestAll();
   }
-  Logshot();
+  if (APP::num_log) { Logshot(); }
   if (APP::prune_method.substr(0, 2) == "PP") { PruneStateShot(); }
   LOG(INFO) << "Optimization Done.";
 }
@@ -487,26 +493,26 @@ void Solver<Dtype>::Snapshot() {
 
 template <typename Dtype>
 void Solver<Dtype>::PruneStateShot() {
-    map<string, int>::iterator it_m;
-    for (it_m = APP::layer_index[0].begin(); it_m != APP::layer_index[0].end(); ++it_m) {
-        const char* outfile = (param_.snapshot_prefix() + "prob_" + it_m->first + ".txt").c_str();
-        if (!access(outfile, 0)) { 
-            /// outfile has already existed
-            remove(outfile);
-        } 
-        ofstream prob(outfile, ofstream::app);
-        if (!prob.is_open()) {
-            cout << "Error: opening prob file failed: " << prob << endl; 
-        } else {
-            prob << iter_ << "\n"; 
-            vector<float> pr = APP::history_prob[it_m->second];
-            vector<float>::iterator it;
-            for (it = pr.begin(); it != pr.end(); ++it) {
-                prob << *it << " ";
-            }
-        }    
-    }
-    cout << "Save prune prob done!" << endl;
+    // map<string, int>::iterator it_m;
+    // for (it_m = APP::layer_index.begin(); it_m != APP::layer_index[0].end(); ++it_m) {
+        // const char* outfile = (param_.snapshot_prefix() + "prob_" + it_m->first + ".txt").c_str();
+        // if (!access(outfile, 0)) { 
+            // /// outfile has already existed
+            // remove(outfile);
+        // } 
+        // ofstream prob(outfile, ofstream::app);
+        // if (!prob.is_open()) {
+            // cout << "Error: opening prob file failed: " << prob << endl; 
+        // } else {
+            // prob << iter_ << "\n"; 
+            // vector<float> pr = APP::history_prob[it_m->second];
+            // vector<float>::iterator it;
+            // for (it = pr.begin(); it != pr.end(); ++it) {
+                // prob << *it << " ";
+            // }
+        // }    
+    // }
+    // cout << "Save prune prob done!" << endl;
 }
 
 template <typename Dtype>

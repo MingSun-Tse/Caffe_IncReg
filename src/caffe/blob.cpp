@@ -168,7 +168,7 @@ void Blob<Dtype>::Update() {
     // perform computation on GPU
     caffe_gpu_axpy<Dtype>(count_, Dtype(-1),
         static_cast<const Dtype*>(diff_->gpu_data()),
-        static_cast<Dtype*>(data_->mutable_gpu_data()));
+        static_cast<Dtype*>(data_->mutable_gpu_data())); /// w = w - dw, where dw = history_diff, which has counted momentum and regularization
 #else
     NO_GPU;
 #endif

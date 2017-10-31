@@ -16,74 +16,63 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     const int count   = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
-    this->masks_.resize(count, 1);
     this->weight_backup.resize(count);
     
 
     /// Get layer_index
     const string layer_name = this->layer_param_.name();
-    const int phase = this->phase_;
-    if (APP::layer_index[phase].count(layer_name) == 0) {
-        APP::layer_index[phase][layer_name] = APP::layer_cnt[phase];
-        this->layer_index = APP::layer_cnt[phase];
-        ++ APP::layer_cnt[phase];
-    }
-    cout << "layer cnt: " << APP::layer_cnt[phase] << endl;
-    if (this->phase_ == TEST) { return; }   
+    if (this->phase_ == TRAIN) {
+        if (APP::layer_index.count(layer_name) == 0) {
+            APP::layer_index[layer_name] = APP::layer_cnt;
+            ++ APP::layer_cnt;
+            cout << "A new layer registered: " << layer_name 
+                 << "  Total #layer: " << APP::layer_cnt << endl;
+        }
+    } else { return; }
+    const int L = APP::layer_index[layer_name];
+    const string mthd = APP::prune_method;
+    cout << "PruneSetUp: " << layer_name  
+         << "  its layer_index: " << L
+         << "  Total #layer: " << APP::layer_cnt << endl;
     
-    /// Note: the varibales below can ONLY be used in training.
-    /// set up prune parameters
-    this->prune_ratio = prune_param.prune_ratio();
-    this->delta = prune_param.delta();
-    this->pruned_ratio = 0;
+    
+    // Note: the varibales below can ONLY be used in training.
+    // Note: These varibales will be called for every GPU, whereas since we use `layer_index` to index, so it doesn't matter.
+    // Set up prune parameters
     APP::prune_ratio.push_back(prune_param.prune_ratio());
     APP::delta.push_back(prune_param.delta());
     APP::pruned_ratio.push_back(0);
     
-    /// info shared among different layers
+    
+    // Info shared among different layers
+    // Pruning state
     APP::num_pruned_col.push_back(0);
     APP::num_pruned_row.push_back(0);
+    APP::masks.push_back( vector<bool>(count, 1) );
     APP::IF_row_pruned.push_back( vector<bool>(num_row, false) );
     APP::IF_col_pruned.push_back( vector<bool>(num_col, false) );
     APP::history_prob.push_back( vector<float>(num_col, 1) );
+    APP::history_score.push_back( vector<float>(num_col, 0) );
     APP::IF_prune_finished.push_back(false);
-    cout << "PruneSetUp: " << layer_name  << " its layer_index: " << this->layer_index << endl;
-    
     APP::filter_area.push_back(this->blobs_[0]->shape()[2] * this->blobs_[0]->shape()[3]);
     APP::group.push_back(this->group_);
     APP::priority.push_back(prune_param.priority());
-   
-   
-    /// Weight and Diff Log
-    const int num_log = 50;
-    Dtype rands[num_log];
-    caffe_rng_uniform(num_log, (Dtype)0, (Dtype)(num_col - 1), rands);
-    APP::log_index.push_back( vector<int>(num_log) );
-    for (int i = 0; i < num_log; ++i) {
-        APP::log_index[this->layer_index][i] = int(rands[i]);
+
+    
+    // Logging
+    if (APP::num_log) {
+        const int num_log = APP::num_log;
+        Dtype rands[num_log];
+        caffe_rng_uniform(num_log, (Dtype)0, (Dtype)(num_col - 1), rands);
+        APP::log_index.push_back( vector<int>(num_log) );
+        for (int i = 0; i < num_log; ++i) {
+            APP::log_index[this->layer_index][i] = int(rands[i]);
+        }
+        APP::log_weight.push_back( vector<vector<float> >(num_log) );
+        APP::log_diff.push_back( vector<vector<float> >(num_log) );
     }
-    APP::log_weight.push_back( vector<vector<float> >(num_log) );
-    APP::log_diff.push_back( vector<vector<float> >(num_log) );
-    
 
-    /// Pruning state info
-    this->num_pruned_weight = 0; // lagecy
-    this->num_pruned_col = 0;
-    this->num_pruned_row = 0;
-    this->IF_col_pruned.resize(num_col, false);
-    this->IF_row_pruned.resize(num_row, false);
-    this->history_score.resize(num_col, 0);
-
-    this->history_diff.resize(count, 0);
-    this->blobs_[0]->mutable_cpu_second_diff = new Dtype[count];
-    for (int i = 0; i < count; ++i) {
-        this->blobs_[0]->mutable_cpu_second_diff[i] = 0;
-    } // legacy
-    
-    if (num_col * this->prune_ratio > APP::max_num_column_to_prune) {
-        APP::max_num_column_to_prune = num_col * this->prune_ratio;
-    } // legacy
-    cout << "=== Masks etc. Initialized." << endl;
+    cout << "=== Masks etc. Initialized\n" << endl;
 }
 
 template <typename Dtype> 
@@ -267,7 +256,7 @@ void ConvolutionLayer<Dtype>::CleanWorkForPP() {
 
 template <typename Dtype> 
 void ConvolutionLayer<Dtype>::UpdateNumPrunedRow() {
-    if (this->layer_index == APP::layer_cnt[0] || APP::IF_prune_finished[this->layer_index + 1]) { return; }
+    if (this->layer_index == APP::layer_cnt || APP::IF_prune_finished[this->layer_index + 1]) { return; }
     
     Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
     const int count = this->blobs_[0]->count();
@@ -388,32 +377,34 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask(float ratio) {
     const int num_col = count / num_row;
     const Dtype *weight = this->blobs_[0]->cpu_data();
     const string layer_name = this->layer_param_.name();
+    const int L = APP::layer_index[layer_name];
 
     for (int j = 0; j < num_col; ++j) {
         Dtype sum = 0;
         for (int i = 0; i < num_row; ++i) { sum += fabs(weight[i * num_col + j]); }
-        if (sum == 0) { 
-            ++ this->num_pruned_col;
-            this->IF_col_pruned[j] = true;
-            APP::IF_col_pruned[this->layer_index][j] = true;
-            for (int i = 0; i < num_row; ++i) { this->masks_[i * num_col + j] = 0; }
+        if (sum == 0) {
+            ++ APP::num_pruned_col[L];
+            APP::IF_col_pruned[L][j] = true;
+            for (int i = 0; i < num_row; ++i) { 
+                APP::masks[L][i * num_col + j] = 0;
+            }
         }
-    } 
+    }
+    
     for (int i = 0; i < num_row; ++i) { 
         Dtype sum = 0;
         for (int j = 0; j < num_col; ++j) { sum += fabs(weight[i * num_col + j]); }
         if (sum == 0) {
-            ++ this->num_pruned_row;
-            this->IF_row_pruned[i] = true;
-            APP::IF_row_pruned[this->layer_index][i] = true;
-            for (int j = 0; j < num_col; ++j) { this->masks_[i * num_col + j] = 0; }
+            ++ APP::num_pruned_row[L];
+            APP::IF_row_pruned[L][i] = true;
+            for (int j = 0; j < num_col; ++j) {
+                APP::masks[L][i * num_col + j] = 0;
+            }
         }
     }
-    APP::num_pruned_col[this->layer_index] = this->num_pruned_col;
-    APP::num_pruned_row[this->layer_index] = this->num_pruned_row;
-    this->pruned_ratio = 1 - (1 - this->num_pruned_col * 1.0 / num_col) * (1 - this->num_pruned_row * 1.0 / num_row);
-    if (this->pruned_ratio >= this->prune_ratio) {
-        APP::IF_prune_finished[this->layer_index] = true;
+    APP::pruned_ratio[L] = 1 - (1 - APP::num_pruned_col[L] * 1.0 / num_col) * (1 - APP::num_pruned_row[L] * 1.0 / num_row);
+    if (APP::pruned_ratio[L] >= APP::prune_ratio[L]) {
+        APP::IF_prune_finished[L] = true;
     } else if (APP::prune_method.substr(0, 2) == "PP") { 
         // Restore pruning prob
         const string infile = APP::snapshot_prefix + "prob_" + layer_name + ".txt";
@@ -428,17 +419,17 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask(float ratio) {
             while (getline(prob, line, ' ')) {
                 pr.push_back(atof(line.c_str()));
             }
-            assert(pr.size() == APP::history_prob[this->layer_index].size());
+            assert(pr.size() == APP::history_prob[L].size());
             for (int i = 0; i < pr.size(); ++i) {
-                APP::history_prob[this->layer_index][i] = pr[i];
+                APP::history_prob[L][i] = pr[i];
             }
             cout << "Prune Prob Restored!" << endl;
         }
     }
-    LOG(INFO) << "    Masks restored, num_pruned_col = " << this->num_pruned_col
-              << "  num_pruned_row = " << this->num_pruned_row
-              << "  pruned_ratio = " << this->pruned_ratio
-              << "  prune_ratio = " << this->prune_ratio;
+    LOG(INFO) << "    Masks restored, num_pruned_col = " << APP::num_pruned_col[L]
+              << "  num_pruned_row = " << APP::num_pruned_row[L]
+              << "  pruned_ratio = " << APP::pruned_ratio[L]
+              << "  prune_ratio = " << APP::prune_ratio[L];
 }
 
 

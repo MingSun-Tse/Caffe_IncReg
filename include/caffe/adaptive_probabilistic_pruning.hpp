@@ -31,34 +31,39 @@ public:
     static float score_decay;
     static float AA;
     
+    
     static int inner_iter;
     static int step_;
     static bool IF_eswpf; /// if early stop when prune finish
     
-    static map<string, int> layer_index[2]; /// 2 for TRAIN and TEST stage
-    static int layer_cnt[2];
+    
+    static map<string, int> layer_index;
+    static int layer_cnt;
+    static vector<int> filter_area;
+    static vector<int> group;
+    static vector<int> priority;
+    
     
     static vector<int> num_pruned_col;
     static vector<int> num_pruned_row;
+    static vector<vector<bool> > masks;
     static vector<vector<bool> > IF_row_pruned;
     static vector<vector<bool> > IF_col_pruned;
     static vector<vector<float> > history_prob;
+    static vector<vector<float> > history_score;
     static vector<bool> IF_prune_finished;
     static vector<float> prune_ratio;
     static vector<float> delta;
     static vector<float> pruned_ratio;
     
-    static vector<int> filter_area;
-    static vector<int> group;
-    static vector<int> priority;
     
+    static int num_log;
     static vector<vector<vector<float> > > log_weight;
     static vector<vector<vector<float> > > log_diff;
     static vector<vector<int> > log_index;
     static string snapshot_prefix;
-
-
     /// --------------------------------
+    
     static int window_size;  
     static float score_decay_rate;
     static bool use_score_decay;
