@@ -30,6 +30,7 @@ public:
     static int iter_size;
     static float score_decay;
     static float AA;
+    static float speedup;
     
     
     static int inner_iter;
@@ -57,6 +58,7 @@ public:
     static vector<float> prune_ratio;
     static vector<float> delta;
     static vector<float> pruned_ratio;
+    static vector<int> GFLOPs;
     
     
     static int num_log;

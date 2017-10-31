@@ -17,7 +17,8 @@ namespace caffe {
     int APP::prune_begin_iter;
     int APP::iter_size;
     float APP::score_decay = 0;
-    float APP::AA; 
+    float APP::AA;
+    float APP::speedup = 4;
 
     // 1.2 Info shared between solver and layer, initailized here
     int APP::inner_iter = 0;
@@ -46,6 +47,7 @@ namespace caffe {
     vector<float> APP::prune_ratio;
     vector<float> APP::delta;
     vector<float> APP::pruned_ratio;
+    vector<int> APP::GFLOPs;
     
     
     // 3. Logging

@@ -251,9 +251,16 @@ void Solver<Dtype>::Step(int iters) {
     /// ----------------------------------------------------------------------
     /// WANGHUAN added, for iterative pruning
     APP::step_ = iter_ + 1;
-    std::cout << "\n**** Step " << APP::step_ << " ****" << std::endl;
-    
-    if (APP::IF_eswpf) {
+    Dtype GFLOPs_left = 0;
+    Dtype GFLOPs_origin = 0;
+    for (int i = 0; i < APP::layer_cnt; ++i) {
+        GFLOPs_left   += APP::GFLOPs[i] * (1 - APP::pruned_ratio[i]);
+        GFLOPs_origin += APP::GFLOPs[i];
+    }
+    const bool IF_target_speedup_achieved = (GFLOPs_origin / GFLOPs_left >= APP::speedup);
+    std::cout << "\n**** Step " << APP::step_ << ": " << GFLOPs_origin / GFLOPs_left << " ****" << std::endl;
+    cout << APP::GFLOPs[1] << endl;
+    if (APP::IF_eswpf || IF_target_speedup_achieved) {
         cout << "all layer prune finish: " << iter_ << endl;
         requested_early_exit_ = true;
         break;

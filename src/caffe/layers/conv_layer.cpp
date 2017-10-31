@@ -41,7 +41,8 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     APP::prune_ratio.push_back(prune_param.prune_ratio());
     APP::delta.push_back(prune_param.delta());
     APP::pruned_ratio.push_back(0);
-    
+    APP::GFLOPs.push_back(this->blobs_[0]->shape()[0] * this->blobs_[0]->shape()[1] 
+                        * this->blobs_[0]->shape()[2] * this->blobs_[0]->shape()[3]); /// further calculated in `net.cpp`, after layer SetUp
     
     // Info shared among different layers
     // Pruning state

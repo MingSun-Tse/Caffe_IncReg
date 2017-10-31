@@ -168,6 +168,23 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
       blob_loss_weights_[top_id_vecs_[layer_id][top_id]] = layer->loss(top_id);
       LOG_IF(INFO, Caffe::root_solver())
           << "Top shape: " << top_vecs_[layer_id][top_id]->shape_string();
+      /// --------------------------------------------------------------------
+      /// GFLOPs
+      if (phase_ == TRAIN && APP::layer_index.count(layer_param.name())) {
+          const int L = APP::layer_index[layer_param.name()];
+          APP::GFLOPs[L] *= (top_vecs_[layer_id][top_id]->shape()[2] * top_vecs_[layer_id][top_id]->shape()[3]);                           
+          // std::cout << this->blobs_[0]->shape()[0]
+                    // << " " << this->blobs_[0]->shape()[1]
+                    // << " " << this->blobs_[0]->shape()[2]
+                    // << " " << this->blobs_[0]->shape()[3] << std::endl;
+                    
+          // std::cout << top_vecs_[layer_id][top_id]->shape()[0]
+                    // << " " << top_vecs_[layer_id][top_id]->shape()[1]
+                    // << " " << top_vecs_[layer_id][top_id]->shape()[2]
+                    // << " " << top_vecs_[layer_id][top_id]->shape()[3] << std::endl;
+      }
+      /// --------------------------------------------------------------------
+      
       if (layer->loss(top_id)) {
         LOG_IF(INFO, Caffe::root_solver())
             << "    with loss weight " << layer->loss(top_id);
