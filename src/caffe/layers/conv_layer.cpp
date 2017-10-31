@@ -91,7 +91,7 @@ bool ConvolutionLayer<Dtype>::IF_hppf() {
     bool IF_hppf = true;
     const int L = APP::layer_index[this->layer_param_.name()];
     for (int i = 0; i < APP::layer_cnt; ++i) {
-        if (APP::priority[i] < APP::priority[L] && APP::iter_prune_finished[i] != INT_MAX) {
+        if (APP::priority[i] < APP::priority[L] && APP::iter_prune_finished[i] == INT_MAX) {
             IF_hppf = false;
             break;
         }
@@ -105,7 +105,7 @@ bool ConvolutionLayer<Dtype>::IF_alpf() {
     /** IF_all_layer_prune_finished
     */
     bool IF_alpf = true;
-    for (int i = 0; i < APP::iter_prune_finished.size(); ++i) {
+    for (int i = 0; i < APP::layer_cnt; ++i) {
         if (APP::iter_prune_finished[i] == INT_MAX) {
             IF_alpf = false;
             break;
@@ -471,7 +471,7 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask(float ratio) {
     Dtype num_pruned_col = 0;
     int   num_pruned_row = 0;
 
-    // column
+    // Column
     for (int j = 0; j < num_col; ++j) {
         for (int g = 0; g < group; ++g) {
             Dtype sum = 0;
@@ -479,16 +479,16 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask(float ratio) {
                 sum += fabs(weight[i * num_col + j]); 
             }
             if (sum == 0) { 
-                num_pruned_col += 1.0 / group;
+                num_pruned_col += 1.0 / group; /// note that num_pruned_row is always integer while num_pruned_col can be non-integer.
                 APP::IF_col_pruned[L][j][g] = true;
                 for (int i = g * num_row_per_g; i < (g+1) * num_row_per_g; ++i) { 
-                    this->masks_[i * num_col + j] = 0; 
+                    APP::masks[L][i * num_col + j] = 0; 
                 }
             }
         }
     }
     
-    // row
+    // Row
     for (int i = 0; i < num_row; ++i) { 
         Dtype sum = 0;
         for (int j = 0; j < num_col; ++j) { 
@@ -498,13 +498,15 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask(float ratio) {
             ++ num_pruned_row;
             APP::IF_row_pruned[L][i] = true;
             for (int j = 0; j < num_col; ++j) { 
-                this->masks_[i * num_col + j] = 0; 
+                APP::masks[L][i * num_col + j] = 0; 
             }
         }
     }
+    
     APP::num_pruned_col[L] = num_pruned_col;
     APP::num_pruned_row[L] = num_pruned_row;
-    APP::pruned_ratio[L] = 1 - (1 - APP::num_pruned_col[L] / num_col) * (1 - APP::num_pruned_row[L] * 1.0 / num_row);
+    APP::pruned_ratio[L] = 1 - (1 - APP::num_pruned_col[L] * 1.0 / num_col) 
+                             * (1 - APP::num_pruned_row[L] * 1.0 / num_row);
     if (APP::pruned_ratio[L] >= APP::prune_ratio[L]) {
         APP::iter_prune_finished[L] = APP::step_ - 1; // To check multi-GPU 
     } else if (APP::prune_method.substr(0, 2) == "PP") { 
