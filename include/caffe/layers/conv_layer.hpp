@@ -85,6 +85,7 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
   virtual void CleanWorkForPP();
   virtual void UpdateNumPrunedRow(); // WANGHUAN
   virtual void UpdateNumPrunedCol(); // WANGHUAN
+  virtual void UpdatePrunedRatio();
   virtual bool IF_alpf();
   virtual bool IF_hppf();
   virtual void Print(const int& L, char mode);

@@ -249,7 +249,7 @@ void Solver<Dtype>::Step(int iters) {
     Dtype loss = 0;
 
     /// ----------------------------------------------------------------------
-    /// WANGHUAN added, for iterative pruning
+    // GFLOPs, since it measures the speedup of the whole net, so put it here rather than in layer.
     APP::step_ = iter_ + 1;
     Dtype GFLOPs_left = 0;
     Dtype GFLOPs_origin = 0;
@@ -257,11 +257,13 @@ void Solver<Dtype>::Step(int iters) {
         GFLOPs_left   += APP::GFLOPs[i] * (1 - APP::pruned_ratio[i]);
         GFLOPs_origin += APP::GFLOPs[i];
     }
-    const bool IF_target_speedup_achieved = (GFLOPs_origin / GFLOPs_left >= APP::speedup);
+    APP::IF_speedup_achieved = (GFLOPs_origin / GFLOPs_left >= APP::speedup);
     std::cout << "\n**** Step " << APP::step_ << ": " << GFLOPs_origin / GFLOPs_left << " ****" << std::endl;
-    cout << APP::GFLOPs[1] << endl;
-    if (APP::IF_eswpf || IF_target_speedup_achieved) {
-        cout << "all layer prune finish: " << iter_ << endl;
+    cout << "Total GFLOPs_origin: " << GFLOPs_origin << endl;
+    
+    // Before another forward, judge whether prune could be stopped
+    if (APP::IF_alpf) {
+        cout << "all layer prune finished: " << iter_ << endl;
         requested_early_exit_ = true;
         break;
     }
@@ -500,26 +502,25 @@ void Solver<Dtype>::Snapshot() {
 
 template <typename Dtype>
 void Solver<Dtype>::PruneStateShot() {
-    // map<string, int>::iterator it_m;
-    // for (it_m = APP::layer_index.begin(); it_m != APP::layer_index[0].end(); ++it_m) {
-        // const char* outfile = (param_.snapshot_prefix() + "prob_" + it_m->first + ".txt").c_str();
-        // if (!access(outfile, 0)) { 
-            // /// outfile has already existed
-            // remove(outfile);
-        // } 
-        // ofstream prob(outfile, ofstream::app);
-        // if (!prob.is_open()) {
-            // cout << "Error: opening prob file failed: " << prob << endl; 
-        // } else {
-            // prob << iter_ << "\n"; 
-            // vector<float> pr = APP::history_prob[it_m->second];
-            // vector<float>::iterator it;
-            // for (it = pr.begin(); it != pr.end(); ++it) {
-                // prob << *it << " ";
-            // }
-        // }    
-    // }
-    // cout << "Save prune prob done!" << endl;
+    map<string, int>::iterator it_m;
+    for (it_m = APP::layer_index.begin(); it_m != APP::layer_index.end(); ++it_m) {
+        const char* outfile = (param_.snapshot_prefix() + "prob_snapshot/prob_" + it_m->first + ".txt").c_str();
+        if (!access(outfile, 0)) { /// outfile has already existed
+            remove(outfile);
+        } 
+        ofstream prob(outfile, ofstream::app);
+        if (!prob.is_open()) {
+            cout << "Error: opening prob file failed: " << prob << endl; 
+        } else {
+            prob << iter_ << "\n"; 
+            vector<float> pr = APP::history_prob[it_m->second];
+            vector<float>::iterator it;
+            for (it = pr.begin(); it != pr.end(); ++it) {
+                prob << *it << " ";
+            }
+        }    
+    }
+    cout << "Save prune prob done!" << endl;
 }
 
 template <typename Dtype>

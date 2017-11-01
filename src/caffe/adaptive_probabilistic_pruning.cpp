@@ -1,4 +1,4 @@
-#include "caffe/adaptive_probabilistic_pruning.hpp"
+ #include "caffe/adaptive_probabilistic_pruning.hpp"
 
 using namespace std;
 namespace caffe {
@@ -23,7 +23,8 @@ namespace caffe {
     // 1.2 Info shared between solver and layer, initailized here
     int APP::inner_iter = 0;
     int APP::step_ = -1;
-    bool APP::IF_eswpf = false; /// if early stop when prune finish
+    bool APP::IF_alpf = false; /// if all layer prune finished
+    bool APP::IF_speedup_achieved = false;
     
     
     // 2.1 Info shared among layers
@@ -37,7 +38,7 @@ namespace caffe {
     // 2.2 Pruning state (key)
     vector<float> APP::num_pruned_col;
     vector<int>   APP::num_pruned_row;
-    vector<int>   APP::pruned_rows;
+    vector<int>   APP::pruned_rows; /// used in UpdateNumCol
     vector<vector<bool> > APP::masks;
     vector<vector<bool> > APP::IF_row_pruned;
     vector<vector<vector<bool> > > APP::IF_col_pruned;
@@ -47,6 +48,8 @@ namespace caffe {
     vector<float> APP::prune_ratio;
     vector<float> APP::delta;
     vector<float> APP::pruned_ratio;
+    vector<float> APP::pruned_ratio_col;
+    vector<float> APP::pruned_ratio_row;
     vector<int> APP::GFLOPs;
     
     

@@ -33,9 +33,11 @@ public:
     static float speedup;
     
     
+    
     static int inner_iter;
     static int step_;
-    static bool IF_eswpf; /// if early stop when prune finish
+    static bool IF_alpf; 
+    static bool IF_speedup_achieved;
     
     
     static map<string, int> layer_index;
@@ -58,6 +60,8 @@ public:
     static vector<float> prune_ratio;
     static vector<float> delta;
     static vector<float> pruned_ratio;
+    static vector<float> pruned_ratio_col;
+    static vector<float> pruned_ratio_row;
     static vector<int> GFLOPs;
     
     

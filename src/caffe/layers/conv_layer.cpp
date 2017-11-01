@@ -41,6 +41,8 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     APP::prune_ratio.push_back(prune_param.prune_ratio());
     APP::delta.push_back(prune_param.delta());
     APP::pruned_ratio.push_back(0);
+    APP::pruned_ratio_col.push_back(0);
+    APP::pruned_ratio_row.push_back(0);
     APP::GFLOPs.push_back(this->blobs_[0]->shape()[0] * this->blobs_[0]->shape()[1] 
                         * this->blobs_[0]->shape()[2] * this->blobs_[0]->shape()[3]); /// further calculated in `net.cpp`, after layer SetUp
     
@@ -53,13 +55,10 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     vector<bool> vec_tmp(this->group_, false); /// initialization
     APP::IF_col_pruned.push_back( vector<vector<bool> >(num_col, vec_tmp) );
     
-    if (mthd == "PPc") {
-        APP::history_prob.push_back( vector<float>(num_col, 1) );
-        APP::history_score.push_back( vector<float>(num_col, 0) );
-    } else {
-        APP::history_prob.push_back( vector<float>(num_row, 1) );
-        APP::history_score.push_back( vector<float>(num_row, 0) );
-    }
+    const int num_ = (mthd == "PPr") ? num_row : num_col;
+    APP::history_prob.push_back(  vector<float>(num_, 1) );
+    APP::history_score.push_back( vector<float>(num_, 0) );
+    
     
     // Info shared among layers
     APP::filter_area.push_back(this->blobs_[0]->shape()[2] * this->blobs_[0]->shape()[3]);
@@ -105,14 +104,13 @@ template <typename Dtype>
 bool ConvolutionLayer<Dtype>::IF_alpf() {
     /** IF_all_layer_prune_finished
     */
-    bool IF_alpf = true;
+    APP::IF_alpf = true;
     for (int i = 0; i < APP::layer_cnt; ++i) {
         if (APP::iter_prune_finished[i] == INT_MAX) {
-            IF_alpf = false;
+            APP::IF_alpf = false;
             break;
         }
     }
-    return IF_alpf;
 }
 
 
@@ -156,6 +154,20 @@ void ConvolutionLayer<Dtype>::Print(const int& L, char mode) {
         }
         cout.width(4);  cout << APP::history_prob[L][i] << endl;
     }
+}
+
+
+template <typename Dtype> 
+void ConvolutionLayer<Dtype>::UpdatePrunedRatio() {
+    const int L = APP::layer_index[this->layer_param_.name()];
+    const int count   = this->blobs_[0]->count();
+    const int num_row = this->blobs_[0]->shape()[0];
+    const int num_col = count / num_row;
+    
+    APP::pruned_ratio_col[L] = APP::num_pruned_col[L] / num_col;
+    APP::pruned_ratio_row[L] = APP::num_pruned_row[L] * 1.0 / num_row;
+    APP::pruned_ratio[L] =  (APP::pruned_ratio_col[L] + APP::pruned_ratio_row[L]) 
+                           - APP::pruned_ratio_col[L] * APP::pruned_ratio_row[L];
 }
 
 
@@ -206,6 +218,7 @@ void ConvolutionLayer<Dtype>::TaylorPrune(const vector<Blob<Dtype>*>& top) {
             ++ APP::num_pruned_row[L];
         }
     }
+    
 }
 
 
@@ -241,6 +254,8 @@ void ConvolutionLayer<Dtype>::FilterPrune() {
         APP::pruned_rows.push_back(r);
         ++ APP::num_pruned_row[L];
     }
+    
+    
 } 
 
 template <typename Dtype> 
@@ -406,6 +421,7 @@ void ConvolutionLayer<Dtype>::UpdateNumPrunedRow() {
             }
         }
     }
+    
 }
 
 template <typename Dtype> 
@@ -413,7 +429,7 @@ void ConvolutionLayer<Dtype>::UpdateNumPrunedCol() {
     if (!APP::pruned_rows.size()) { return; }
     
     const int L = APP::layer_index[this->layer_param_.name()];
-    const int count = this->blobs_[0]->count();
+    const int count   = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
     const int num_chl = this->blobs_[0]->shape()[1];
@@ -440,27 +456,11 @@ void ConvolutionLayer<Dtype>::UpdateNumPrunedCol() {
 }
 
 
-
-template <typename Dtype>
-void ConvolutionLayer<Dtype>::compute_output_shape() {
-  const int* kernel_shape_data = this->kernel_shape_.cpu_data();
-  const int* stride_data = this->stride_.cpu_data();
-  const int* pad_data = this->pad_.cpu_data();
-  const int* dilation_data = this->dilation_.cpu_data();
-  this->output_shape_.clear();
-  for (int i = 0; i < this->num_spatial_axes_; ++i) {
-    /// i + 1 to skip channel axis
-    const int input_dim = this->input_shape(i + 1);
-    const int kernel_extent = dilation_data[i] * (kernel_shape_data[i] - 1) + 1;
-    const int output_dim = (input_dim + 2 * pad_data[i] - kernel_extent)
-        / stride_data[i] + 1;
-    this->output_shape_.push_back(output_dim);
-  }
-}
-
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::ComputeBlobMask(float ratio) {
-    const int count = this->blobs_[0]->count();
+    /** Restore pruning state when retrain
+    */
+    const int count   = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
     const Dtype *weight = this->blobs_[0]->cpu_data();
@@ -468,6 +468,7 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask(float ratio) {
     const int L = APP::layer_index[layer_name];
     const int group = APP::group[L];
     const int num_row_per_g = num_row / group;
+    const string mthd = APP::prune_method;
 
     Dtype num_pruned_col = 0;
     int   num_pruned_row = 0;
@@ -477,7 +478,7 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask(float ratio) {
         for (int g = 0; g < group; ++g) {
             Dtype sum = 0;
             for (int i = g * num_row_per_g; i < (g+1) * num_row_per_g; ++i) { 
-                sum += fabs(weight[i * num_col + j]); 
+                sum += fabs(weight[i * num_col + j]);
             }
             if (sum == 0) { 
                 num_pruned_col += 1.0 / group; /// note that num_pruned_row is always integer while num_pruned_col can be non-integer.
@@ -506,19 +507,22 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask(float ratio) {
     
     APP::num_pruned_col[L] = num_pruned_col;
     APP::num_pruned_row[L] = num_pruned_row;
-    APP::pruned_ratio[L] = 1 - (1 - APP::num_pruned_col[L] * 1.0 / num_col) 
-                             * (1 - APP::num_pruned_row[L] * 1.0 / num_row);
-    if (APP::pruned_ratio[L] >= APP::prune_ratio[L]) {
-        APP::iter_prune_finished[L] = APP::step_ - 1; // To check multi-GPU 
+    const Dtype pruned_ratio = (mthd == "PPr" || mthd == "FP" || mthd == "TP") 
+                                    ? APP::pruned_ratio_row[L] : APP::pruned_ratio_col[L];
+    if (pruned_ratio >= APP::prune_ratio[L]) {
+        APP::iter_prune_finished[L] = APP::step_ - 1; /// To check multi-GPU
     } else if (APP::prune_method.substr(0, 2) == "PP") { 
-        // Restore pruning prob
-        const string infile = APP::snapshot_prefix + "prob_" + layer_name + ".txt";
+        // Restore prune prob
+        const string infile = APP::snapshot_prefix + "prob_snapshot/prob_" + layer_name + ".txt";
         ifstream prob;
         prob.open(infile.data());
         string line;
         vector<float> pr;
         if (!prob.is_open()) {
-            cout << "Error: opening file failed when restoring prune state: " << infile << endl; 
+            if (pruned_ratio) {
+                cout << "Error: the layer's prune suspended, while the prune_prob file cannot be opened! " 
+                     << infile << endl;
+            }
         } else {
             getline(prob, line); /// the first line is iteration
             while (getline(prob, line, ' ')) {
@@ -528,13 +532,13 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask(float ratio) {
             for (int i = 0; i < pr.size(); ++i) {
                 APP::history_prob[L][i] = pr[i];
             }
-            cout << "Prune Prob Restored!" << endl;
+            cout << "  Prune Prob Restored!" << endl;
         }
     }
     LOG(INFO) << "    Masks restored, num_pruned_col = " << APP::num_pruned_col[L]
               << "  num_pruned_row = " << APP::num_pruned_row[L]
-              << "  pruned_ratio = " << APP::pruned_ratio[L]
-              << "  prune_ratio = " << APP::prune_ratio[L];
+              << "  pruned_ratio = "   << APP::pruned_ratio[L]
+              << "  prune_ratio = "    << APP::prune_ratio[L];
 }
 
 
@@ -559,6 +563,22 @@ Dtype ConvolutionLayer<Dtype>::normal_random() {
     return X * 0.05;
 }
 
+template <typename Dtype>
+void ConvolutionLayer<Dtype>::compute_output_shape() {
+  const int* kernel_shape_data = this->kernel_shape_.cpu_data();
+  const int* stride_data = this->stride_.cpu_data();
+  const int* pad_data = this->pad_.cpu_data();
+  const int* dilation_data = this->dilation_.cpu_data();
+  this->output_shape_.clear();
+  for (int i = 0; i < this->num_spatial_axes_; ++i) {
+    /// i + 1 to skip channel axis
+    const int input_dim = this->input_shape(i + 1);
+    const int kernel_extent = dilation_data[i] * (kernel_shape_data[i] - 1) + 1;
+    const int output_dim = (input_dim + 2 * pad_data[i] - kernel_extent)
+        / stride_data[i] + 1;
+    this->output_shape_.push_back(output_dim);
+  }
+}
 
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
