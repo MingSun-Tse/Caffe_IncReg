@@ -101,7 +101,7 @@ bool ConvolutionLayer<Dtype>::IF_hppf() {
 
 
 template <typename Dtype>
-bool ConvolutionLayer<Dtype>::IF_alpf() {
+void ConvolutionLayer<Dtype>::IF_alpf() {
     /** IF_all_layer_prune_finished
     */
     APP::IF_alpf = true;
@@ -507,6 +507,7 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask(float ratio) {
     
     APP::num_pruned_col[L] = num_pruned_col;
     APP::num_pruned_row[L] = num_pruned_row;
+    UpdatePrunedRatio();
     const Dtype pruned_ratio = (mthd == "PPr" || mthd == "FP" || mthd == "TP") 
                                     ? APP::pruned_ratio_row[L] : APP::pruned_ratio_col[L];
     if (pruned_ratio >= APP::prune_ratio[L]) {

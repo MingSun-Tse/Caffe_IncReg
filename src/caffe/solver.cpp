@@ -258,7 +258,7 @@ void Solver<Dtype>::Step(int iters) {
         GFLOPs_origin += APP::GFLOPs[i];
     }
     APP::IF_speedup_achieved = (GFLOPs_origin / GFLOPs_left >= APP::speedup);
-    std::cout << "\n**** Step " << APP::step_ << ": " << GFLOPs_origin / GFLOPs_left << " ****" << std::endl;
+    cout << "\n**** Step " << APP::step_ << ": " << GFLOPs_origin / GFLOPs_left << " ****" << endl;
     cout << "Total GFLOPs_origin: " << GFLOPs_origin << endl;
     
     // Before another forward, judge whether prune could be stopped

@@ -71,7 +71,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                  << "  num_pruned_col: " << APP::num_pruned_col[L]
                  << "  num_pruned_row: " << APP::num_pruned_row[L] << endl;
         }
-        if (L == 8 && APP::step_ % SHOW_INTERVAL == 0 && APP::inner_iter == 0) {
+        if (L == 1 && APP::step_ % SHOW_INTERVAL == 0 && APP::inner_iter == 0) {
             Print(L, 'f');
         }
 

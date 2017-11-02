@@ -108,6 +108,7 @@ class Layer {
   
   vector<int> random_col_perm;
   vector<Dtype> history_diff;
+  //const string get_layer_name() { return layer_param_.name(); }
   
 
   /**
