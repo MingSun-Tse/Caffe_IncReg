@@ -77,14 +77,15 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
   virtual inline bool reverse_dimensions() { return false; }
   virtual void compute_output_shape();
-  virtual void ComputeBlobMask(float ratio); // WANGHUAN
-  virtual void FilterPrune(); // WANGHUAN
+  virtual void ComputeBlobMask(); // WANGHUAN
+  virtual void RestorePruneProb(const Dtype& pruned_r);
+  virtual void FilterPrune(); 
   virtual void TaylorPrune(const vector<Blob<Dtype>*>& top);
   virtual void ProbPruneCol();
   virtual void ProbPruneRow();
   virtual void CleanWorkForPP();
-  virtual void UpdateNumPrunedRow(); // WANGHUAN
-  virtual void UpdateNumPrunedCol(); // WANGHUAN
+  virtual void UpdateNumPrunedRow(); 
+  virtual void UpdateNumPrunedCol(); 
   virtual void UpdatePrunedRatio();
   virtual void IF_alpf();
   virtual bool IF_hppf();

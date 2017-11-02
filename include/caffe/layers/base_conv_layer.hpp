@@ -28,7 +28,7 @@ class BaseConvolutionLayer : public Layer<Dtype> {
   virtual inline int MinTopBlobs() const { return 1; }
   virtual inline bool EqualNumBottomTopBlobs() const { return true; }
 
-  virtual void ComputeBlobMask(float ratio) {}   // WANGHUAN
+  virtual void ComputeBlobMask() {}   // WANGHUAN
   virtual void PruneSetUp(const PruneParameter& prune_param) {} // WANGHUAN
 
 

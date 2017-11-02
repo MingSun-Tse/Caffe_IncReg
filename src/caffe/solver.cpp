@@ -249,24 +249,25 @@ void Solver<Dtype>::Step(int iters) {
     Dtype loss = 0;
 
     /// ----------------------------------------------------------------------
-    // GFLOPs, since it measures the speedup of the whole net, so put it here rather than in layer.
-    APP::step_ = iter_ + 1;
-    Dtype GFLOPs_left = 0;
-    Dtype GFLOPs_origin = 0;
-    for (int i = 0; i < APP::layer_cnt; ++i) {
-        GFLOPs_left   += APP::GFLOPs[i] * (1 - APP::pruned_ratio[i]);
-        GFLOPs_origin += APP::GFLOPs[i];
-    }
-    APP::IF_speedup_achieved = (GFLOPs_origin / GFLOPs_left >= APP::speedup);
-    cout << "\n**** Step " << APP::step_ << ": " << GFLOPs_origin / GFLOPs_left << " ****" << endl;
-    cout << "Total GFLOPs_origin: " << GFLOPs_origin << endl;
-    
     // Before another forward, judge whether prune could be stopped
     if (APP::IF_alpf) {
         cout << "all layer prune finished: " << iter_ << endl;
         requested_early_exit_ = true;
         break;
     }
+
+    // GFLOPs, since it measures the speedup of the whole net, so put it here rather than in layer.
+    Dtype GFLOPs_left   = 0;
+    Dtype GFLOPs_origin = 0;
+    for (int i = 0; i < APP::layer_cnt; ++i) {
+        GFLOPs_left   += APP::GFLOPs[i] * (1 - APP::pruned_ratio[i]);
+        GFLOPs_origin += APP::GFLOPs[i];
+    }
+    APP::IF_speedup_achieved = (GFLOPs_origin / GFLOPs_left >= APP::speedup);
+    
+    APP::step_ = iter_ + 1;
+    cout << "\n**** Step " << APP::step_ << ": " << GFLOPs_origin / GFLOPs_left << " ****" << endl;
+    cout << "Total GFLOPs_origin: " << GFLOPs_origin << endl;
     /// ----------------------------------------------------------------------
     
     APP::inner_iter = 0;

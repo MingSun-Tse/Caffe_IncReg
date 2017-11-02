@@ -457,7 +457,7 @@ void ConvolutionLayer<Dtype>::UpdateNumPrunedCol() {
 
 
 template <typename Dtype>
-void ConvolutionLayer<Dtype>::ComputeBlobMask(float ratio) {
+void ConvolutionLayer<Dtype>::ComputeBlobMask() {
     /** Restore pruning state when retrain
     */
     const int count   = this->blobs_[0]->count();
@@ -508,32 +508,23 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask(float ratio) {
     APP::num_pruned_col[L] = num_pruned_col;
     APP::num_pruned_row[L] = num_pruned_row;
     UpdatePrunedRatio();
-    const Dtype pruned_ratio = (mthd == "PPr" || mthd == "FP" || mthd == "TP") 
-                                    ? APP::pruned_ratio_row[L] : APP::pruned_ratio_col[L];
-    if (pruned_ratio >= APP::prune_ratio[L]) {
+
+    // Calculate GFLOPs
+    Dtype GFLOPs_left   = 0;
+    Dtype GFLOPs_origin = 0;
+    for (int i = 0; i < APP::layer_cnt; ++i) {
+        GFLOPs_left   += APP::GFLOPs[i] * (1 - APP::pruned_ratio[i]);
+        GFLOPs_origin += APP::GFLOPs[i];
+    }
+    APP::IF_speedup_achieved = (GFLOPs_origin / GFLOPs_left >= APP::speedup);
+
+    const Dtype pruned_r = (mthd == "PPr" || mthd == "FP" || mthd == "TP") 
+                                        ? APP::pruned_ratio_row[L] : APP::pruned_ratio_col[L];
+    if (pruned_r >= APP::prune_ratio[L] || APP::IF_speedup_achieved) {
         APP::iter_prune_finished[L] = APP::step_ - 1; /// To check multi-GPU
-    } else if (APP::prune_method.substr(0, 2) == "PP") { 
-        // Restore prune prob
-        const string infile = APP::snapshot_prefix + "prob_snapshot/prob_" + layer_name + ".txt";
-        ifstream prob;
-        prob.open(infile.data());
-        string line;
-        vector<float> pr;
-        if (!prob.is_open()) {
-            if (pruned_ratio) {
-                cout << "Error: the layer's prune suspended, while the prune_prob file cannot be opened! " 
-                     << infile << endl;
-            }
-        } else {
-            getline(prob, line); /// the first line is iteration
-            while (getline(prob, line, ' ')) {
-                pr.push_back(atof(line.c_str()));
-            }
-            assert(pr.size() == APP::history_prob[L].size());
-            for (int i = 0; i < pr.size(); ++i) {
-                APP::history_prob[L][i] = pr[i];
-            }
-            cout << "  Prune Prob Restored!" << endl;
+    } else { 
+        if (APP::prune_method.substr(0, 2) == "PP") {
+            RestorePruneProb(pruned_r);
         }
     }
     LOG(INFO) << "    Masks restored, num_pruned_col = " << APP::num_pruned_col[L]
@@ -542,6 +533,34 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask(float ratio) {
               << "  prune_ratio = "    << APP::prune_ratio[L];
 }
 
+template <typename Dtype>
+void ConvolutionLayer<Dtype>::RestorePruneProb(const Dtype& pruned_r) {
+    const string layer_name = this->layer_param_.name();
+    const int L = APP::layer_index[layer_name];    
+    
+    const string infile = APP::snapshot_prefix + "prob_snapshot/prob_" + layer_name + ".txt"; /// TODO: paramaters check
+    ifstream prob;
+    prob.open(infile.data());
+    string line;
+    vector<float> pr;
+    if (!prob.is_open()) {
+        if (pruned_r) {
+            cout << "Error, failed to restore prune_prob: the prune_prob file cannot be opened! " 
+                 << infile << endl;
+        }
+    } else {
+        getline(prob, line); /// the first line is iteration
+        while (getline(prob, line, ' ')) {
+            pr.push_back(atof(line.c_str()));
+        }
+        assert(pr.size() == APP::history_prob[L].size());
+        for (int i = 0; i < pr.size(); ++i) {
+            APP::history_prob[L][i] = pr[i];
+        }
+        cout << "  Prune Prob Restored!" << endl;
+    }
+
+}
 
 template <typename Dtype>
 Dtype ConvolutionLayer<Dtype>::normal_random() {

@@ -60,7 +60,7 @@ namespace caffe {
     vector<vector<int> > APP::log_index;
     string APP::snapshot_prefix;
     /// --------------------------------
-    
+
     // use window proposal or score decay ----- legacy
     int APP::window_size = 40;
     bool APP::use_score_decay = true;

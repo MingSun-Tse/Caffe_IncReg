@@ -61,7 +61,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
   FilterNet(in_param, &filtered_param);
   LOG_IF(INFO, Caffe::root_solver())
       << "Initializing net from parameters: " << std::endl
-      << filtered_param.DebugString();  // print the network parameters
+      << filtered_param.DebugString();  /// print the network parameters
 
 
   // Create a copy of filtered_param with splits added where necessary.
@@ -106,7 +106,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
     } else {
       layers_.push_back(LayerRegistry<Dtype>::CreateLayer(layer_param));
     }
-    layer_names_.push_back(layer_param.name()); // 在layer SetUp的时候得到每一层的名字
+    layer_names_.push_back(layer_param.name()); /// 在layer SetUp的时候得到每一层的名字
     LOG_IF(INFO, Caffe::root_solver())
         << "Creating Layer " << layer_param.name();
     bool need_backward = false;
@@ -825,7 +825,7 @@ void Net<Dtype>::CopyTrainedLayersFrom(const NetParameter& param) {
     // WANGHUAN, restore masks
     if (APP::prune_method != "None" && phase_ == TRAIN && target_blobs.size()) {
         LOG(INFO) << "Going to restore masks from binproto file, current layer: " << source_layer_name;
-        layers_[target_layer_id]->ComputeBlobMask(RATIO);
+        layers_[target_layer_id]->ComputeBlobMask();
     }
     // ---------------------------------------------------------------------------------------------
   }
@@ -884,7 +884,7 @@ void Net<Dtype>::CopyTrainedLayersFromHDF5(const string trained_filename) {
     // WANGHUAN, restore masks
     if (APP::prune_method != "None" && phase_ == TRAIN && target_blobs.size()) {
         LOG(INFO) << "Going to restore masks from H5 file, current layer: " << source_layer_name;
-        layers_[target_layer_id]->ComputeBlobMask(RATIO);
+        layers_[target_layer_id]->ComputeBlobMask();
     }
     // ---------------------------------------------------------------------------------------------
     
