@@ -254,6 +254,8 @@ message SolverParameter {
   optional float cgamma = 50; // compression
   // optional float cpower = 51;
   optional float AA = 55 [default = 0.05]; // AA of PP
+  optional float speedup = 56 [default = 4];
+  optional bool IF_update_row_col = 57 [default = true];
 
   // decrease weight decay
   optional string dwd_mode = 44 [default = "None"];

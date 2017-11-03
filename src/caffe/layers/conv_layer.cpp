@@ -137,7 +137,7 @@ void ConvolutionLayer<Dtype>::Print(const int& L, char mode) {
     cout.width(length); cout << content << "   ";
     cout.width(4);  cout << "Mask" << "   ";
     cout.width(4);  cout << "Prob" << endl;
-    for (int i = 0; i < 20; ++i) {
+    for (int i = 0; i < SHOW_NUM; ++i) {
         cout.width(3);  
         if (IF_prune_row) {
             cout << "r";
@@ -338,7 +338,7 @@ void ConvolutionLayer<Dtype>::ProbPruneCol() {
                     APP::IF_col_pruned[L][col_of_rank_j][g] = true;
                 }
                 for (int i = 0; i < num_row; ++i) { 
-                    muweight[i * num_col + col_of_rank_j] = 0; 
+                    muweight[i * num_col + col_of_rank_j] = 0;
                 } /// once pruned, zero out weights
             }
         } 
@@ -484,7 +484,10 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask() {
                 num_pruned_col += 1.0 / group; /// note that num_pruned_row is always integer while num_pruned_col can be non-integer.
                 APP::IF_col_pruned[L][j][g] = true;
                 for (int i = g * num_row_per_g; i < (g+1) * num_row_per_g; ++i) { 
-                    APP::masks[L][i * num_col + j] = 0; 
+                    APP::masks[L][i * num_col + j] = 0;
+                }
+                if (mthd == "PPc") {
+                    APP::history_prob[L][j] = 0; /// TODO: count group;
                 }
             }
         }
@@ -502,26 +505,21 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask() {
             for (int j = 0; j < num_col; ++j) { 
                 APP::masks[L][i * num_col + j] = 0; 
             }
+            if (mthd == "PPr") {
+                APP::history_prob[L][i] = 0; /// TODO: count group;
+            }
         }
+        
     }
     
     APP::num_pruned_col[L] = num_pruned_col;
     APP::num_pruned_row[L] = num_pruned_row;
     UpdatePrunedRatio();
-
-    // Calculate GFLOPs
-    Dtype GFLOPs_left   = 0;
-    Dtype GFLOPs_origin = 0;
-    for (int i = 0; i < APP::layer_cnt; ++i) {
-        GFLOPs_left   += APP::GFLOPs[i] * (1 - APP::pruned_ratio[i]);
-        GFLOPs_origin += APP::GFLOPs[i];
-    }
-    APP::IF_speedup_achieved = (GFLOPs_origin / GFLOPs_left >= APP::speedup);
-
     const Dtype pruned_r = (mthd == "PPr" || mthd == "FP" || mthd == "TP") 
                                         ? APP::pruned_ratio_row[L] : APP::pruned_ratio_col[L];
-    if (pruned_r >= APP::prune_ratio[L] || APP::IF_speedup_achieved) {
-        APP::iter_prune_finished[L] = APP::step_ - 1; /// To check multi-GPU
+    if (pruned_r >= APP::prune_ratio[L]) {
+        APP::iter_prune_finished[L] = -1; /// To check multi-GPU
+        cout << layer_name << "prune finshed" << endl;
     } else { 
         if (APP::prune_method.substr(0, 2) == "PP") {
             RestorePruneProb(pruned_r);

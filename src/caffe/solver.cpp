@@ -66,6 +66,8 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   APP::prune_begin_iter = param_.prune_begin_iter();
   APP::iter_size = param_.iter_size();
   APP::AA = param_.aa();
+  APP::speedup = param_.speedup();
+  APP::IF_update_row_col = param.if_update_row_col();
   
   // APP::score_decay = param_.score_decay();
   APP::snapshot_prefix = param_.snapshot_prefix();
@@ -266,7 +268,7 @@ void Solver<Dtype>::Step(int iters) {
     APP::IF_speedup_achieved = (GFLOPs_origin / GFLOPs_left >= APP::speedup);
     
     APP::step_ = iter_ + 1;
-    cout << "\n**** Step " << APP::step_ << ": " << GFLOPs_origin / GFLOPs_left << " ****" << endl;
+    cout << "\n**** Step " << APP::step_ << ": " << GFLOPs_origin / GFLOPs_left << "/" << APP::speedup << " ****" << endl;
     cout << "Total GFLOPs_origin: " << GFLOPs_origin << endl;
     /// ----------------------------------------------------------------------
     
@@ -356,6 +358,22 @@ void Solver<Dtype>::Solve(const char* resume_file) {
     LOG(INFO) << "Restoring previous solver status from " << resume_file;
     Restore(resume_file);
   }
+  
+
+  // After restore, calculate GFLOPs and determine whether the prune finished
+  Dtype GFLOPs_left   = 0;
+  Dtype GFLOPs_origin = 0;
+  for (int i = 0; i < APP::layer_cnt; ++i) {
+      GFLOPs_left   += APP::GFLOPs[i] * (1 - APP::pruned_ratio[i]);
+      GFLOPs_origin += APP::GFLOPs[i];
+  }
+  APP::IF_speedup_achieved = (GFLOPs_origin / GFLOPs_left >= APP::speedup);
+  if (APP::IF_speedup_achieved) {
+    for (int i = 0; i < APP::layer_index.size(); ++i) {
+        APP::iter_prune_finished[i] = -1; 
+    }
+  }
+  
 
   // For a network that is trained by the solver, no bottom or top vecs
   // should be given, and we will just provide dummy vecs.

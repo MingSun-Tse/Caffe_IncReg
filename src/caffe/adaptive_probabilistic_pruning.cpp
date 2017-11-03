@@ -18,7 +18,8 @@ namespace caffe {
     int APP::iter_size;
     float APP::score_decay = 0;
     float APP::AA;
-    float APP::speedup = 4;
+    float APP::speedup;
+    bool APP::IF_update_row_col;
 
     // 1.2 Info shared between solver and layer, initailized here
     int APP::inner_iter = 0;

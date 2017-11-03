@@ -32,15 +32,17 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     if (this->phase_ == TRAIN) {
         if (this->IF_mask) {
             
-            // UpdateNumPrunedRow/Col
-            // Note that, UpdateNumPrunedRow/Col before pruning, 
-            // so that when calculating score, the zombie weights will not be counted.
-            if ((mthd == "PPc" || mthd == "CP") && L != APP::layer_cnt-1) {
-                if (APP::step_ - 1 - APP::iter_prune_finished[L + 1] <= 1) {
-                    UpdateNumPrunedRow();
+            if (APP::IF_update_row_col) {
+                // UpdateNumPrunedRow/Col
+                // Note that, UpdateNumPrunedRow/Col before pruning, 
+                // so that when calculating score, the zombie weights will not be counted.
+                if ((mthd == "PPc" || mthd == "CP") && L != APP::layer_cnt-1) {
+                    if (APP::step_ - 1 - APP::iter_prune_finished[L + 1] <= 1) {
+                        UpdateNumPrunedRow();
+                    }
+                } else if ((mthd == "PPr" || mthd == "FP" || mthd == "TP") && L != 0) {
+                    UpdateNumPrunedCol();
                 }
-            } else if ((mthd == "PPr" || mthd == "FP" || mthd == "TP") && L != 0) {
-                UpdateNumPrunedCol();
             }
             UpdatePrunedRatio();
             
@@ -106,7 +108,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             }
         }
     } else {
-        if (this->IF_mask && APP::iter_prune_finished[L] == INT_MAX && mthd == "PP") {
+        if (this->IF_mask && APP::iter_prune_finished[L] == INT_MAX && mthd.substr(0, 2) == "PP") {
             Dtype rands[num_col];
             caffe_rng_uniform(num_col, (Dtype)0, (Dtype)1, rands);
             for (int i = 0; i < count; ++i) {

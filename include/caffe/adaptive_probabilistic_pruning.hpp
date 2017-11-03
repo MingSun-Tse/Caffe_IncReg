@@ -31,6 +31,7 @@ public:
     static float score_decay;
     static float AA;
     static float speedup;
+    static bool IF_update_row_col;
     
     
     
