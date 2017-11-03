@@ -200,7 +200,7 @@ void ConvolutionLayer<Dtype>::TaylorPrune(const vector<Blob<Dtype>*>& top) {
             }
         }
         for (int c = 0; c < num_c; ++c) {
-            if (this->IF_row_pruned[c]) {
+            if (APP::IF_row_pruned[L][c]) {
                 fm_score[c].first = INT_MAX;
             }
         }
@@ -214,9 +214,12 @@ void ConvolutionLayer<Dtype>::TaylorPrune(const vector<Blob<Dtype>*>& top) {
                 APP::masks[L][c * num_col + j] = 0;
             }
             APP::IF_row_pruned[L][c] = true;
-            // APP::pruned_rows.push_back(c); // To check if right
             ++ APP::num_pruned_row[L];
+            if (L != APP::layer_cnt - 1) {
+                APP::pruned_rows.push_back(c);
+            }
         }
+
     }
     
 }
@@ -234,7 +237,7 @@ void ConvolutionLayer<Dtype>::FilterPrune() {
     vector<mypair> row_score(num_row);
     for (int i = 0; i < num_row; ++i) {
         row_score[i].second = i; /// index 
-        if (this->IF_row_pruned[i]) { 
+        if (APP::IF_row_pruned[L][i]) { 
             row_score[i].first = INT_MAX; /// make those pruned row "float" up
             continue;
         } 
@@ -251,9 +254,13 @@ void ConvolutionLayer<Dtype>::FilterPrune() {
             APP::masks[L][r * num_col + j] = 0;
         }
         APP::IF_row_pruned[L][r] = true;
-        APP::pruned_rows.push_back(r);
         ++ APP::num_pruned_row[L];
+        if (L != APP::layer_cnt - 1) {
+            APP::pruned_rows.push_back(r);
+        }  
     }
+    
+
     
     
 } 

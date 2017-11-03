@@ -66,33 +66,40 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
         
         // Print and check
-        if (mthd != "None" && L < SHOW_NUM_LAYER && APP::inner_iter == 0) {
-            cout << layer_name << "  IF_mask: " << this->IF_mask 
-                 << "  pruned_ratio: " << APP::pruned_ratio[L]
-                 << "  prune_ratio: "  << APP::prune_ratio[L]
-                 << "  num_pruned_col: " << APP::num_pruned_col[L]
-                 << "  num_pruned_row: " << APP::num_pruned_row[L] << endl;
-        }
         if (L == 1 && APP::step_ % SHOW_INTERVAL == 0 && APP::inner_iter == 0) {
             Print(L, 'f');
         }
 
         // Update masks and apply masks
         if (this->IF_mask && APP::iter_prune_finished[L] == INT_MAX) {
-            if (mthd == "Prune" && APP::criteria == "L2-norm") { 
-                /// UpdateMasks(); 
-            } else if (mthd == "FP" && (APP::step_ - 1) % APP::prune_interval == 0) {
+            if (mthd == "FP" && (APP::step_ - 1) % APP::prune_interval == 0) {
                 FilterPrune(); 
             } else if (mthd == "PPc" && IF_hppf()) {
                 ProbPruneCol();
             } else if (mthd == "PPr" && IF_hppf()) {
                 ProbPruneRow();
             }  else if (mthd == "TP") {
-                for (int i = 0; i < count; ++i) {
-                    muweight[i] *= APP::masks[L][i]; /// explictly prune, because seems TP is wrong somewhere.
-                }  
+                // for (int i = 0; i < count; ++i) {
+                    // muweight[i] *= APP::masks[L][i]; /// explictly prune, because seems TP is wrong somewhere.
+                // }  
             }
         }
+        UpdatePrunedRatio();
+        
+        // Print 
+        if (mthd != "None" && L < SHOW_NUM_LAYER && APP::inner_iter == 0) {
+            cout << layer_name << "  IF_mask: " << this->IF_mask 
+                 << "  pruned_ratio: " << APP::pruned_ratio[L];
+            if (mthd == "PPr" || mthd == "FP" || mthd == "TP") {
+                cout << "  pruned_ratio_col: " << APP::num_pruned_col[L] * 1.0 / num_col << "(" << APP::num_pruned_col[L] << ")"
+                     << "  pruned_ratio_row: " << APP::num_pruned_row[L] * 1.0 / num_row << "(" << APP::num_pruned_row[L] << ")";
+            } else {
+                cout << "  pruned_ratio_row: " << APP::num_pruned_row[L] * 1.0 / num_row << "(" << APP::num_pruned_row[L] << ")"
+                     << "  pruned_ratio_col: " << APP::num_pruned_col[L] * 1.0 / num_col << "(" << APP::num_pruned_col[L] << ")";
+            }
+            cout << "  prune_ratio: "  << APP::prune_ratio[L] << endl;
+        }
+        
         
         // Weight logging
         if (APP::num_log) {
@@ -271,8 +278,7 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
             muweight_diff[j] *= APP::masks[L][j]; 
         }
         if (APP::iter_prune_finished[L] == INT_MAX) {
-            if (APP::prune_method == "Prune" && APP::criteria == "diff") {
-            } else if (APP::prune_method == "TP" && (APP::step_ - 1) % APP::prune_interval == 0) {
+            if (APP::prune_method == "TP" && (APP::step_ - 1) % APP::prune_interval == 0) {
                 TaylorPrune(top);
             }
         }

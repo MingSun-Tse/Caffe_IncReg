@@ -240,7 +240,7 @@ void Solver<Dtype>::Step(int iters) {
     }
     
     // 分发参数
-    std::cout << "call_backs_.size(): " << callbacks_.size() << std::endl; /// WANGHUAN
+    // std::cout << "call_backs_.size(): " << callbacks_.size() << std::endl; /// WANGHUAN
     for (int i = 0; i < callbacks_.size(); ++i) {
       callbacks_[i]->on_start();
     }
