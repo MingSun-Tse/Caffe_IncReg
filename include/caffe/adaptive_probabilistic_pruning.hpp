@@ -30,8 +30,10 @@ public:
     static int iter_size;
     static float score_decay;
     static float AA;
+    static float kk;
     static float speedup;
     static bool IF_update_row_col;
+    static bool IF_eswpf;
     
     
     

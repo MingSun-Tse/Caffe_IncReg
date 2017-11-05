@@ -75,7 +75,11 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             if (mthd == "FP" && (APP::step_ - 1) % APP::prune_interval == 0) {
                 FilterPrune(); 
             } else if (mthd == "PPc" && IF_hppf()) {
-                ProbPruneCol();
+                if (APP::prune_interval) {
+                    ProbPruneCol(APP::prune_interval);
+                } else {
+                    ProbPruneCol();
+                }
             } else if (mthd == "PPr" && IF_hppf()) {
                 ProbPruneRow();
             }  else if (mthd == "TP") {

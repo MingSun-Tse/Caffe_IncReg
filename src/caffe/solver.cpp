@@ -59,15 +59,17 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   APP::criteria = param_.criteria();
   APP::num_once_prune = param_.num_once_prune();
   APP::prune_interval = param_.prune_interval();
-  APP::rgamma = param_.rgamma();
+  APP::rgamma = 30;   //param_.rgamma();
   APP::rpower = -1.3; //param_.rpower();
-  APP::cgamma = param_.cgamma();
+  APP::cgamma = 70;   //param_.cgamma();
   APP::cpower = -1.2; //param_.cpower(); 
   APP::prune_begin_iter = param_.prune_begin_iter();
   APP::iter_size = param_.iter_size();
   APP::AA = param_.aa();
+  APP::kk = param_.kk();
   APP::speedup = param_.speedup();
   APP::IF_update_row_col = param.if_update_row_col();
+  APP::IF_eswpf = param_.if_eswpf(); /// if early stop when prune finished
   
   // APP::score_decay = param_.score_decay();
   APP::snapshot_prefix = param_.snapshot_prefix();
@@ -252,7 +254,7 @@ void Solver<Dtype>::Step(int iters) {
 
     /// ----------------------------------------------------------------------
     // Before another forward, judge whether prune could be stopped
-    if (APP::IF_alpf) {
+    if (APP::IF_alpf && APP::IF_eswpf) {
         cout << "all layer prune finished: " << iter_ << endl;
         requested_early_exit_ = true;
         break;
