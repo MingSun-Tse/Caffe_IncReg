@@ -215,8 +215,14 @@ void ConvolutionLayer<Dtype>::TaylorPrune(const vector<Blob<Dtype>*>& top) {
             }
             APP::IF_row_pruned[L][c] = true;
             ++ APP::num_pruned_row[L];
-            if (L != APP::layer_cnt - 1) {
-                APP::pruned_rows.push_back(c);
+            // if (L != APP::layer_cnt - 1) {
+                // APP::pruned_rows.push_back(c); // in TP paper, they didn't mention update corresponding column, so do not do this.
+            // }
+        }
+        if (L == 1) {
+            for (int i = 0; i < num_row; ++i) {
+                cout << muweight[i*num_col] << " " << endl;
+            
             }
         }
 

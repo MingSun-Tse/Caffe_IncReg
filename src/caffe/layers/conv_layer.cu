@@ -36,13 +36,13 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 // UpdateNumPrunedRow/Col
                 // Note that, UpdateNumPrunedRow/Col before pruning, 
                 // so that when calculating score, the zombie weights will not be counted.
-                if ((mthd == "PPc" || mthd == "CP") && L != APP::layer_cnt-1) {
-                    if (APP::step_ - 1 - APP::iter_prune_finished[L + 1] <= 1) {
+                if (mthd == "PPc" && L != APP::layer_cnt-1) {
+                    if (APP::step_-1 - APP::iter_prune_finished[L+1] <= 1) {
                         UpdateNumPrunedRow();
                     }
-                } else if ((mthd == "PPr" || mthd == "FP" || mthd == "TP") && L != 0) {
+                } else if ((mthd == "PPr" || mthd == "FP") && L != 0) {
                     UpdateNumPrunedCol();
-                }
+                } /// Note we don't update column for TP, because their method didn't mention this.
             }
             UpdatePrunedRatio();
             
@@ -65,7 +65,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             }
         }
         
-        // Print and check
+        // Print and check, before update probs
         if (L == 1 && APP::step_ % SHOW_INTERVAL == 0 && APP::inner_iter == 0) {
             Print(L, 'f');
         }
@@ -274,13 +274,13 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     }
     
     if (this->IF_mask) {
-        for (int j = 0; j < count; ++j) { 
-            muweight_diff[j] *= APP::masks[L][j]; 
-        }
         if (APP::iter_prune_finished[L] == INT_MAX) {
             if (APP::prune_method == "TP" && (APP::step_ - 1) % APP::prune_interval == 0) {
                 TaylorPrune(top);
             }
+        }
+        for (int j = 0; j < count; ++j) { 
+            muweight_diff[j] *= APP::masks[L][j]; 
         }
     }
 /// ------------------------------------------------------------- 
