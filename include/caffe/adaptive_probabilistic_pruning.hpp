@@ -65,7 +65,7 @@ public:
     static vector<float> pruned_ratio;
     static vector<float> pruned_ratio_col;
     static vector<float> pruned_ratio_row;
-    static vector<int> GFLOPs;
+    static vector<float> GFLOPs;
     
     
     static int num_log;

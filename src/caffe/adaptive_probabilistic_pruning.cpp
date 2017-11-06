@@ -53,7 +53,7 @@ namespace caffe {
     vector<float> APP::pruned_ratio;
     vector<float> APP::pruned_ratio_col;
     vector<float> APP::pruned_ratio_row;
-    vector<int> APP::GFLOPs;
+    vector<float> APP::GFLOPs;
     
     
     // 3. Logging

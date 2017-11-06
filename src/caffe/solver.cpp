@@ -255,7 +255,7 @@ void Solver<Dtype>::Step(int iters) {
     /// ----------------------------------------------------------------------
     // Before another forward, judge whether prune could be stopped
     if (APP::IF_alpf && APP::IF_eswpf) {
-        cout << "all layer prune finished: " << iter_ << endl;
+        cout << "all layer prune finished: " << iter_ << " -- early stopped." << endl;
         requested_early_exit_ = true;
         break;
     }
