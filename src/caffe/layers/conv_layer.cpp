@@ -414,10 +414,15 @@ void ConvolutionLayer<Dtype>::ProbPruneCol(const int& prune_interval) {
         const Dtype kk = APP::kk;
         const Dtype alpha = log(2/kk) / (num_col_to_prune_ - APP::num_pruned_col[L]);
         const Dtype N1 = -log(kk)/alpha;
+        const Dtype k_ = AA / (num_col_to_prune_ - APP::num_pruned_col[L]); /// linear punishment
+        
         for (int j = 0; j < num_col - APP::num_pruned_col[L]; ++j) {
             
             const int col_of_rank_j = col_score[j].second;
-            const Dtype delta = j < N1 ? AA * exp(-alpha * j) : -AA * exp(-alpha * (2*N1-j)) + 2*kk*AA;
+            Dtype delta = j < N1 ? AA * exp(-alpha * j) : -AA * exp(-alpha * (2*N1-j)) + 2*kk*AA;
+            if (APP::prune_method == "PPc_l") {
+                delta = AA - k_ * j; /// linear punishment
+            }            
             const Dtype old_prob = APP::history_prob[L][col_of_rank_j];
             const Dtype new_prob = std::min(std::max(old_prob - delta, Dtype(0)), Dtype(1));
             APP::history_prob[L][col_of_rank_j] = new_prob;
@@ -456,6 +461,7 @@ void ConvolutionLayer<Dtype>::ProbPruneCol(const int& prune_interval) {
         muweight[i] *= APP::masks[L][i]; 
     }
 }
+
 
 
 template <typename Dtype> 
