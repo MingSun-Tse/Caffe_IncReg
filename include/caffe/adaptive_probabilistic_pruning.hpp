@@ -58,6 +58,7 @@ public:
     static vector<vector<bool> > IF_row_pruned;
     static vector<vector<vector<bool> > > IF_col_pruned;
     static vector<vector<float> > history_prob;
+    static vector<vector<float> > history_reg;
     static vector<vector<float> > history_score;
     static vector<int> iter_prune_finished;
     static vector<float> prune_ratio;

@@ -46,6 +46,7 @@ namespace caffe {
     vector<vector<bool> > APP::IF_row_pruned;
     vector<vector<vector<bool> > > APP::IF_col_pruned;
     vector<vector<float> > APP::history_prob;
+    vector<vector<float> > APP::history_reg;
     vector<vector<float> > APP::history_score;    
     vector<int> APP::iter_prune_finished;
     vector<float> APP::prune_ratio;

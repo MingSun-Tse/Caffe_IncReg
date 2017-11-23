@@ -56,8 +56,9 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     APP::IF_col_pruned.push_back( vector<vector<bool> >(num_col, vec_tmp) );
     
     const int num_ = (mthd == "PPr") ? num_row : num_col;
-    APP::history_prob.push_back(  vector<float>(num_, 1) );
+    APP::history_prob.push_back( vector<float>(num_, 1) );
     APP::history_score.push_back( vector<float>(num_, 0) );
+    APP::history_reg.push_back( vector<float>(num_, 0) );
     
     
     // Info shared among layers
@@ -634,6 +635,37 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask() {
               << "  pruned_ratio = "   << APP::pruned_ratio[L]
               << "  prune_ratio = "    << APP::prune_ratio[L];
 }
+
+template <typename Dtype>
+void ConvolutionLayer<Dtype>::PruneMinimals(const Dtype& threshold) {
+    Dtype* muweight   = this->blobs_[0]->mutable_cpu_data();
+    const int count   = this->blobs_[0]->count();
+    const int num_row = this->blobs_[0]->shape()[0];
+    const int num_col = count / num_row;
+    const int L = APP::layer_index[this->layer_param_.name()];
+    const int group = APP::group[L];
+
+    for (int j = 0; j < num_col; ++j) {    
+        bool IF_all_weights_are_small = true;
+        for (int i = 0; i < num_row; ++i) {
+            if (fabs(muweight[i * num_col + j]) > threshold) {
+                IF_all_weights_are_small = false;
+                break;              
+            }
+        }
+        if (IF_all_weights_are_small) {
+            for (int i = 0; i < num_row; ++i) {
+                muweight[i * num_col + j] = 0;
+                APP::masks[L][i * num_col + j] = 0;
+            }
+            APP::num_pruned_col[L] += 1;
+            for (int g = 0; g < group; ++g) {
+                APP::IF_col_pruned[L][j][g] = true;
+            }
+        }
+    }
+}
+
 
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::RestorePruneProb(const Dtype& pruned_r) {

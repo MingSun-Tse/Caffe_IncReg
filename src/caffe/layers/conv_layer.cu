@@ -36,7 +36,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 // UpdateNumPrunedRow/Col
                 // Note that, UpdateNumPrunedRow/Col before pruning, 
                 // so that when calculating score, the zombie weights will not be counted.
-                if (mthd.substr(0, 3) == "PPc" && L != APP::layer_cnt-1) {
+                if (mthd.substr(0, 3) == "PPc" || mthd == "Reg_Col" && L != APP::layer_cnt-1) {
                     if (APP::step_-1 - APP::iter_prune_finished[L+1] <= 1) {
                         UpdateNumPrunedRow();
                     }
@@ -82,10 +82,8 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 }
             } else if (mthd == "PPr" && IF_hppf()) {
                 ProbPruneRow();
-            }  else if (mthd == "TP") {
-                // for (int i = 0; i < count; ++i) {
-                    // muweight[i] *= APP::masks[L][i]; /// explictly prune, because seems TP is wrong somewhere.
-                // }  
+            } else if (mthd == "Reg_Col") {
+                PruneMinimals(0.8e-4);
             }
         }
         UpdatePrunedRatio();

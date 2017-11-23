@@ -11,6 +11,7 @@
 #include <cmath>
 #include <algorithm>
 #include <fstream>
+#define NUM_SHOW 20
 
 namespace caffe {
 
@@ -265,57 +266,6 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         }
         std::cout << std::endl;
     
-      } else if (regularization_type == "StrColReg") {
-          const Dtype *weight = net_params[param_id]->cpu_data();
-          const int count = net_params[param_id]->count();
-          vector<Dtype> local_decay_StrColReg(count);
-          const int num_filter = net_params[param_id]->shape()[0];
-          const int num_col = count / num_filter;
-          vector<Dtype> abscol(num_filter);
-          vector<Dtype> absvar_col(num_col);
-          vector<Dtype> absmean_col(num_col);
-
-          // compute abs variance for each column
-          for (int j = 0; j < num_col; ++j) {             
-              absmean_col[j] = 0;
-              for (int i = 0; i < num_filter; ++i) {
-                  abscol[i] = fabs(weight[i * num_col + j]);
-                  absmean_col[j] += abscol[i];
-              }
-              absmean_col[j] /= num_filter;
-
-              absvar_col[j] = 0;
-              for (int i = 0; i < num_filter; ++i) {
-                  absvar_col[j] += (abscol[i] - absmean_col[j]) * (abscol[i] - absmean_col[j]);
-              }
-              absvar_col[j] /= num_filter;
-          }
-
-          // Penalty: the further weight is away from its column abs mean, the harsher its penalty is.
-          for (int i = 0; i < num_filter; ++i) {
-              for (int j = 0; j < num_col; ++j) {
-                  Dtype a1 = fabs(weight[i * num_col + j]);
-                  Dtype a2 = absmean_col[j];
-                  if (a1 < 1e-30 || a1 > 1e30 || a2 < 1e-30 || a2 > 1e30) {
-                      local_decay_StrColReg[i * num_col + j] = 0;
-                  } else {
-                      local_decay_StrColReg[i * num_col + j] = a1 - a2; // var: the mean deviation, if some weight deviates further than var, its penalty should be harsher.
-                  }
-                  // std::cout << local_decay_StrColReg[i * num_col + j] << std::endl;
-              }
-          }
-          
-
-          // update diff
-          int conv_index = 3;      
-          local_decay = net_params_weight_decay[param_id] * (weight_decay -  APP::num_pruned_col[conv_index] * 1.5e-6);
-          for (int i = 0; i < count; ++i) {     
-              int sign = 0;
-              if (weight[i] >0) sign = 1;
-              else if (weight[i] < 0) sign = -1;
-              net_params[param_id]->mutable_cpu_diff()[i] += local_decay * (weight[i] + sign * local_decay_StrColReg[i]);
-          }
-          
       } else if (regularization_type == "SSL") {
         // add weight decay, weight decay still used
         caffe_gpu_axpy(net_params[param_id]->count(),
@@ -364,17 +314,28 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                        net_params[param_id]->gpu_data(),
                        net_params[param_id]->mutable_gpu_diff());    
         
-        
-        if (this->iter_ < APP::when_to_col_reg) { return; }// if iter < when_to_col_reg, do not apply column reg
+        const int L = param_id / 2; // TODO: improve
+        bool IF_find_layer_name = false;
+        std::map<string,int>::iterator it;
+        string layer_name;
+        for (it = APP::layer_index.begin(); it != APP::layer_index.end(); ++it) {
+            if (it->second == L) {
+                IF_find_layer_name = true;
+                layer_name = it->first;
+                break;
+            }
+        }
+        if (!IF_find_layer_name) { return; }
         const vector<int>& shape = net_params[param_id]->shape();
-        if (shape.size() != 4) { return; } // do not reg biases and fc layers
+        if (shape.size() != 4) { return; } // do not reg biases and fc layer
+        
         
         const Dtype* weight = net_params[param_id]->cpu_data();
         const int count = net_params[param_id]->count();
         const int num_filter = net_params[param_id]->shape()[0];
         const int num_col = count / num_filter;
-        const int num_col_to_prune = int(num_col * (APP::prune_ratio[param_id / 2] + 0.05)); // 0.05 is a margin 
-        if (APP::num_pruned_col[param_id / 2] >= num_col_to_prune) { return; }
+        const int num_col_to_prune = ceil(num_col * APP::prune_ratio[L]);
+        if (APP::num_pruned_col[L] >= num_col_to_prune) { return; }
         
         // calculate column score as well as denominator of SSL reg    
         typedef std::pair<Dtype, int> mypair;
@@ -382,26 +343,25 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         Dtype* sqrted_energy = (Dtype*) malloc (sizeof(Dtype*) * count); // demoninator of SSL reg
         for (int j = 0; j < num_col; ++j) {
             col_score[j].second = j;
-            col_score[j].first = 0;
+            col_score[j].first  = 0;
             Dtype sum = 0;
             for (int i = 0; i < num_filter; ++i) {
-                sum += weight[i * num_col + j] * weight[i * num_col + j];
                 col_score[j].first += fabs(weight[i * num_col +j]);
+                sum += weight[i*num_col+j] * weight[i*num_col+j];
             }
+            
+            // the denominator of SSL reg
             for (int i = 0; i < num_filter; ++i) {            
-                sqrted_energy[i * num_col + j] = sum < 1e-30 ? 1 : std::sqrt(sum); // If some column is pruned, its "sum" will be very small, "sqrt(sum)" causing nan.
-            }          
+                sqrted_energy[i * num_col + j] = (sum == 0) ? 1 : sqrt(sum);
+            }
+            
+            if (APP::IF_col_pruned[L][j][0]) { // TODO: fix this [0]
+                col_score[j].first = INT_MAX;
+            }
+            
         }
-        const Dtype* sqrted_energy_const =  sqrted_energy;
-        
-        // check sort. without Comparator, seems it works fine. quite odd...
-        //for (int i = 0; i < 15; ++i) {
-        //    std::cout << "before sort, col_score: " << col_score[i].first << " " << col_score[i].second  << std::endl;
-        //}    
-        sort(col_score.begin(), col_score.end()); // in ascending order
-        //for (int i = 0; i < 15; ++i) {
-            //std::cout << "after sort, col_score: " << col_score[i].first << " " << col_score[i].second << std::endl;
-        //}
+        const Dtype* sqrted_energy_const = sqrted_energy;
+        sort(col_score.begin(), col_score.end());
         
         // check order
         /*
@@ -421,35 +381,37 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         */
         
         // compute reg multiplier for those “bad” columns, "good" columns are spared with zero reg.
-        const Dtype AA = 1e-6; // the probability increment at rank 0
-        const Dtype aa = 1e-8; // the probability increment at rank num_col_to_prune
-        const Dtype alpha = -log(aa/AA) / num_col_to_prune;  
-        vector<Dtype> col_reg(count); // reg multiplier for every weight  
-        for (int j = 0; j < num_col; ++j) {  // j: the jth column according to col score ranking (排名第j的列)
-            const int col_of_rank_j = col_score[j].second;         
-            
-            //selective reg
-            history_reg_[param_id/2][col_of_rank_j] = j < num_col_to_prune 
-                                                        ? history_reg_[param_id/2][col_of_rank_j] + AA * exp(-j * alpha)
-                                                        : 0;
-            for (int i = 0; i < num_filter; ++i) {
-                col_reg[i * num_col + col_of_rank_j] = history_reg_[param_id/2][col_of_rank_j];
-                
-                // reg scheme 1
-                // col_reg[i * num_col + col_of_rank_j] = history_reg_[param_id/2][col_of_rank_j] * reg_decay 
-                                                            // + col_reg_base - col_reg_base / num_col_to_prune * jj;
-                
-                // reg scheme 2        
-                // col_reg[i * num_col + col_of_rank_j] = j < num_col_to_prune ? beta * exp(-j * alpha) : 0; // Only reg the worst num_col_to_prune columns                    
-            }     
+        const Dtype AA = APP::AA;
+        const Dtype kk = APP::kk;
+        const Dtype alpha = log(2/kk) / (num_col_to_prune - APP::num_pruned_col[L]);
+        const Dtype N1 = -log(kk)/alpha;
+        vector<Dtype> reg_multiplier(count, -1);
         
-        }          
+        for (int j = 0; j < num_col - APP::num_pruned_col[L]; ++j) {
+            const int col_of_rank_j = col_score[j].second;
+            const Dtype Delta = j < N1 ? AA * exp(-alpha * j) : -AA * exp(-alpha * (2*N1-j)) + 2*kk*AA;
+            const Dtype old_reg = APP::history_reg[L][col_of_rank_j];
+            const Dtype new_reg = std::max(old_reg + Delta, Dtype(0));
+            APP::history_reg[L][col_of_rank_j] = new_reg;
+            for (int i = 0; i < num_filter; ++i) {
+                reg_multiplier[i * num_col + col_of_rank_j] = new_reg;
+            }
+        }
         
         // check reg
-        std::cout << "param_id: " << param_id << std::endl;
-        std::cout << "selective reg for columns: " << std::endl;
-        for (int j = 0; j < 10; ++j) {
-            std::cout << "#" << j+1 << ": " << col_reg[j] << std::endl;
+        
+        char* mthd = new char[strlen(APP::prune_method.c_str()) + 1];
+        strcpy(mthd, APP::prune_method.c_str());
+        strtok(mthd, "_"); // mthd is like "Reg_Col", the first split is `Reg`
+        const char* row_or_col = strtok(NULL, "_");
+        char mark = (strcmp(row_or_col, "Col")) ? 'r' : 'c';
+        const int stride = (strcmp(row_or_col, "Col")) ? num_col : 1;
+        
+        if (APP::step_ % 20 == 0) {
+            std::cout << layer_name << "  selective regs: " << std::endl;
+            for (int j = 0; j < NUM_SHOW; ++j) {
+                std::cout << mark << j << ": " << reg_multiplier[j * stride] << std::endl;
+            }
         }
         
         // add SelectiveReg
@@ -460,112 +422,11 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                   scaled_weight); // degug here
                 
         for (int i = 0; i < count; ++i) {
-            net_params[param_id]->mutable_cpu_diff()[i] += col_reg[i] * scaled_weight[i];
+            net_params[param_id]->mutable_cpu_diff()[i] += reg_multiplier[i] * scaled_weight[i];
         }
             
         free(scaled_weight);
         free(sqrted_energy);
-        
-      } else if (regularization_type == "SSL+Diff") {
-        // wanghuan, reg decays with the number of pruned column
-        int conv_index = 3;
-        int num_pruned_column = APP::num_pruned_col[conv_index];
-        local_decay = net_params_weight_decay[param_id] * (weight_decay -  num_pruned_column * 6.5e-6);
-        const Dtype COL_REG = (num_pruned_column >= 800 * APP::prune_ratio[conv_index]) ? 0 : APP::col_reg; // - num_pruned_column * 4.83e-6;
-        const Dtype DIFF_REG = (num_pruned_column >= 800 * APP::prune_ratio[conv_index]) ? 0 : APP::diff_reg;
-        
-        // add weight decay, weight decay still used
-        caffe_gpu_axpy(net_params[param_id]->count(),
-                       local_decay,
-                       net_params[param_id]->gpu_data(),
-                       net_params[param_id]->mutable_gpu_diff());    
-         
-        // **** TODO **** 
-        // without this "if", there will be “nan” error, why?
-        if (param_id % 2 || param_id == 6) { return; } // do not reg biases and fc layer
-        
-        const Dtype* weight = net_params[param_id]->cpu_data();    
-        const Dtype* weight_diff = net_params[param_id]->cpu_diff();        
-        const int count = net_params[param_id]->count();
-        const int num_filter = net_params[param_id]->shape()[0];
-        const int num_col = count / num_filter;
-        
-        // add SSL reg
-        Dtype* sqrted_energy =  new Dtype[count]; // demoninator of SSL reg        
-        for (int j = 0; j < num_col; ++j) {
-          Dtype sum1 = 0;
-          for (int i = 0; i < num_filter; ++i) {
-            sum1 += weight[i * num_col + j] * weight[i * num_col + j];
-          } 
-          for (int i = 0; i < num_filter; ++i) {            
-            sqrted_energy[i * num_col + j] = sum1 < 1e-30 ? 1 : std::sqrt(sum1); // If some column is pruned, its "sum" will be very small, "sqrt(sum)" causing nan.
-          }          
-        }
-        
-        Dtype* scaled_weight = new Dtype[count];
-        caffe_div(count, 
-                  net_params[param_id]->cpu_data(), 
-                  (const Dtype*) sqrted_energy, 
-                  scaled_weight);         
-        caffe_axpy(count, 
-                   COL_REG, 
-                   (const Dtype*) scaled_weight, 
-                   net_params[param_id]->mutable_cpu_diff()); 
-        
-        delete[] scaled_weight;
-        delete[] sqrted_energy;
-        
-        
-        // add Diff reg
-        Dtype* scaled_diff = new Dtype[count];
-        const Dtype* second_diff = net_params[param_id]->mutable_cpu_second_diff;
-
-        // ------------
-        for (int i = 0; i < 20; ++i) {
-            std::cout << second_diff[i] << " ";
-        }
-        std::cout << std::endl;
-        
-        caffe_mul(count,
-                  second_diff, 
-                  weight_diff,
-                  scaled_diff);  // second_diff * diff         
-        const Dtype* scaled_diff_2 = scaled_diff; 
-
-        Dtype* sqrted_diff = new Dtype[count]; // demoninator of Diff reg
-        for (int j = 0; j < num_col; ++j) {
-          Dtype sum2 = 0;
-          for (int i = 0; i < num_filter; ++i) {
-            sum2 += weight_diff[i * num_col + j] * weight_diff[i * num_col + j];
-          } 
-          for (int i = 0; i < num_filter; ++i) {            
-              sqrted_diff[i * num_col + j] = sum2 < 1e-30 ? 1 : std::sqrt(sum2);
-          }          
-        }
-        //here is the problem
-        caffe_div(count, 
-                  scaled_diff_2, 
-                  (const Dtype*) sqrted_diff, 
-                  scaled_diff); 
-    
-    
-        // 修改一下看是不是     -----------------------------        
-        if (count == 25600) {
-            std::cout << "\nscaled diff " << std::endl;
-            for (int i = 0; i < 20; ++i) {
-                std::cout << scaled_diff[i] << " ";
-            }
-            std::cout << std::endl;
-        }
-        // -----------------------------------------------
-        
-        caffe_axpy(count, 
-                   DIFF_REG, 
-                   (const Dtype*) second_diff, 
-                   net_params[param_id]->mutable_cpu_diff()); 
-        
-        delete[] scaled_diff;
-        delete[] sqrted_diff;
         
       } else {
           LOG(FATAL) << "Unknown regularization type: " << regularization_type;
