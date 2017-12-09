@@ -34,6 +34,10 @@ public:
     static float speedup;
     static bool IF_update_row_col;
     static bool IF_eswpf;
+    static float prune_threshold;
+    static float target_reg;
+    static int num_iter_reg;
+    
     
     
     
@@ -60,6 +64,7 @@ public:
     static vector<vector<float> > history_prob;
     static vector<vector<float> > history_reg;
     static vector<vector<float> > history_score;
+    static vector<vector<float> > history_rank;
     static vector<int> iter_prune_finished;
     static vector<float> prune_ratio;
     static vector<float> delta;
@@ -67,6 +72,7 @@ public:
     static vector<float> pruned_ratio_col;
     static vector<float> pruned_ratio_row;
     static vector<float> GFLOPs;
+    static vector<float> reg_to_distribute;
     
     
     static int num_log;
@@ -98,6 +104,8 @@ public:
     static float loss_decay;
     static float Delta_loss_history;
     static float learning_speed;
+    
+    
 
     
 

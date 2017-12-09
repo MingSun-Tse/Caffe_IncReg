@@ -66,10 +66,13 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   APP::prune_begin_iter = param_.prune_begin_iter();
   APP::iter_size = param_.iter_size();
   APP::AA = param_.aa();
-  APP::kk = param_.kk();
+  APP::target_reg = param_.target_reg(); //param_.aa();
+  APP::kk = 0.25; //param_.kk(); 
   APP::speedup = param_.speedup();
   APP::IF_update_row_col = param.if_update_row_col();
   APP::IF_eswpf = param_.if_eswpf(); /// if early stop when prune finished
+  APP::prune_threshold = param_.prune_threshold();
+  APP::num_iter_reg = 10000; // param_.num_iter_reg();
   
   // APP::score_decay = param_.score_decay();
   APP::snapshot_prefix = param_.snapshot_prefix();

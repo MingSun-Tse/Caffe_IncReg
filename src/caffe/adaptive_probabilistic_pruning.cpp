@@ -22,6 +22,10 @@ namespace caffe {
     float APP::speedup;
     bool APP::IF_update_row_col;
     bool APP::IF_eswpf;
+    float APP::prune_threshold;
+    float APP::target_reg;
+    int APP::num_iter_reg;
+    
 
     // 1.2 Info shared between solver and layer, initailized here
     int APP::inner_iter = 0;
@@ -38,6 +42,7 @@ namespace caffe {
     vector<int> APP::priority;
     
     
+    
     // 2.2 Pruning state (key)
     vector<float> APP::num_pruned_col;
     vector<int>   APP::num_pruned_row;
@@ -48,6 +53,7 @@ namespace caffe {
     vector<vector<float> > APP::history_prob;
     vector<vector<float> > APP::history_reg;
     vector<vector<float> > APP::history_score;    
+    vector<vector<float> > APP::history_rank;
     vector<int> APP::iter_prune_finished;
     vector<float> APP::prune_ratio;
     vector<float> APP::delta;
@@ -55,7 +61,10 @@ namespace caffe {
     vector<float> APP::pruned_ratio_col;
     vector<float> APP::pruned_ratio_row;
     vector<float> APP::GFLOPs;
+    vector<float> APP::reg_to_distribute;
     
+    
+
     
     // 3. Logging
     int APP::num_log;
@@ -75,7 +84,7 @@ namespace caffe {
     float APP::reg_decay = 0.59;
     
     // the penalty ratio of column regularization
-    float APP::col_reg = 0.0012; // 0.0008;  
+    float APP::col_reg = 0.05; //0.0075; // 0.0008;  
     float APP::diff_reg = 0.00001; 
         
     // Decrease-Weight-Decay ----- legacy

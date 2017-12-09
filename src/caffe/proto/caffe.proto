@@ -242,11 +242,11 @@ message SolverParameter {
   
   
   // -----------------------------------------
-  // WANGHUAN: hyper-parameters of APP (max index = 55)
+  // WANGHUAN: hyper-parameters of APP (max index = 61)
   // pruning
   optional string prune_method = 41 [default = "None"];
   optional string criteria = 42 [default = "L1-norm"];
-  optional int32 prune_begin_iter = 43;
+  optional int32 prune_begin_iter = 43 [default = -1];
   optional int32 num_once_prune = 52 [default = 1]; // how many columns/rows to prune per time
   optional int32 prune_interval = 53 [default = 0]; // how often to prune
   // optional float rgamma = 48; // recover
@@ -254,10 +254,13 @@ message SolverParameter {
   // optional float cgamma = 50; // compression
   // optional float cpower = 51; // legacies
   optional float AA = 55 [default = 0.05]; // AA of PP
-  optional float kk = 58 [default = 0.25]; // kk of PP when using fixed interval to prune
+  // optional float kk = 58 [default = 0.25]; // kk of PP when using fixed interval to prune
   optional float speedup = 56 [default = 4];
   optional bool IF_update_row_col = 57 [default = true];
   optional bool IF_eswpf = 59 [default = true];
+  optional float prune_threshold = 60 [default = 0.0001];
+  // optional int32 num_iter_reg = 61;
+  optional float target_reg = 61 [default = 10];
 
   // decrease weight decay
   optional string dwd_mode = 44 [default = "None"];
