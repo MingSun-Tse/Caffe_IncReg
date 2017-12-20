@@ -1,8 +1,11 @@
 #include <vector>
-
 #include "caffe/filler.hpp"
 #include "caffe/layers/inner_product_layer.hpp"
 #include "caffe/util/math_functions.hpp"
+#include "caffe/adaptive_probabilistic_pruning.hpp"
+#define LAYER_PRINTED 3
+#define SHOW_INTERVAL 10
+#define SHOW_NUM_LAYER 5
 
 namespace caffe {
 
@@ -11,6 +14,84 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
   const Dtype* bottom_data = bottom[0]->gpu_data();
   Dtype* top_data = top[0]->mutable_gpu_data();
+  
+    // ------------------------------------------------
+    // Added by WANGHUAN for pruning
+    Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
+    const int count = this->blobs_[0]->count();
+    const string layer_name = this->layer_param_.name();
+    const string mthd = APP::prune_method;
+    const int L = APP::layer_index[layer_name];
+    
+    /// IF_mask
+    const bool IF_prune       = mthd != "None";
+    const bool IF_enough_iter = (APP::step_ - 1) >= APP::prune_begin_iter;
+    const bool IF_pruned      = APP::pruned_ratio[L] > 0;
+    this->IF_mask             = IF_prune && (IF_enough_iter || IF_pruned);
+    
+    if (this->phase_ == TRAIN) {
+        if (this->IF_mask) {
+            // UpdateNumPrunedCol/Row
+            // TODO
+            UpdatePrunedRatio();
+            
+            // check if prune finished, get into here ONLY once
+            if (APP::iter_prune_finished[L] == INT_MAX) {
+                Dtype pruned_ratio;
+                if (APP::prune_unit == "Weight")   { pruned_ratio = APP::pruned_ratio[L];     }
+                else if (APP::prune_unit == "Row") { pruned_ratio = APP::pruned_ratio_row[L]; }
+                else if (APP::prune_unit == "Col") { pruned_ratio = APP::pruned_ratio_col[L]; }
+                const bool layer_finish     = pruned_ratio >= APP::prune_ratio[L]; /// layer pruning target achieved
+                const bool net_finish_speed = APP::IF_speedup_achieved;   /// net pruning target of speed achieved
+                const bool net_finish_param = APP::IF_compRatio_achieved; /// net pruning target of compression achieved
+                
+                if (layer_finish || net_finish_speed || net_finish_param) {
+                    APP::iter_prune_finished[L] = APP::step_ - 1;
+
+                    // print to log
+                    char rlayer[10];
+                    char rrow[10];
+                    char rcol[10];
+                    sprintf(rlayer, "%6.4f", APP::pruned_ratio[L]);
+                    sprintf(rrow,   "%6.4f", APP::pruned_ratio_row[L]);
+                    sprintf(rcol,   "%6.4f", APP::pruned_ratio_col[L]);
+                    cout << layer_name << " prune finished!" 
+                         << "  step: " << APP::step_
+                         << "  net speedup: " << APP::speedup
+                         << "  net compRatio: " << APP::compRatio
+                         << "  pruned_ratio: " << rlayer
+                         << "  pruned_ratio_row: " << rrow
+                         << "  pruned_ratio_col: " << rcol 
+                         << "  prune_ratio: " << APP::prune_ratio[L] << endl;
+                    IF_alpf();
+                }
+            }
+        }
+        
+        // Print, before masked
+        if (L == LAYER_PRINTED && APP::step_ % SHOW_INTERVAL == 0 && APP::inner_iter == 0) {
+            Print(L, 'f');
+        }
+        
+        // Update masks
+        if (this->IF_mask && APP::iter_prune_finished[L] == INT_MAX) {
+            if (mthd == "Reg_Weight") {
+                PruneMinimals();
+            }
+            UpdatePrunedRatio();
+        }
+        
+        
+        // After update, print current pruning state
+        if (mthd != "None" && L < SHOW_NUM_LAYER && APP::inner_iter == 0) {
+               cout << layer_name << "  IF_mask: " << this->IF_mask 
+                 << "  pruned_ratio: " << APP::pruned_ratio[L] 
+                 << "  prune_ratio: " << APP::prune_ratio[L] << endl;
+        }
+        
+    }
+  // ------------------------------------------------
+  
   const Dtype* weight = this->blobs_[0]->gpu_data();
   if (M_ == 1) {
     caffe_gpu_gemv<Dtype>(CblasNoTrans, N_, K_, (Dtype)1.,
@@ -49,6 +130,24 @@ void InnerProductLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
           (Dtype)1., top_diff, bottom_data,
           (Dtype)1., this->blobs_[0]->mutable_gpu_diff());
     }
+    // -------------------------------------------------
+    const int count = this->blobs_[0]->count();
+    const int L = APP::layer_index[this->layer_param_.name()];
+    Dtype* muweight_diff = this->blobs_[0]->mutable_cpu_diff();
+    
+    // Print
+    if (L == LAYER_PRINTED && APP::step_ % SHOW_INTERVAL == 0 && APP::inner_iter == 0) {
+        Print(L, 'b');
+    }
+    
+    for (int i = 0; i < count; ++i) {
+        muweight_diff[i] *= APP::masks[L][i];
+    }
+    
+
+    
+    // -------------------------------------------------
+    
   }
   if (bias_term_ && this->param_propagate_down_[1]) {
     const Dtype* top_diff = top[0]->gpu_diff();

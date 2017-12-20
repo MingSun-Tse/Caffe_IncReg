@@ -28,32 +28,41 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const bool IF_pruned      = APP::pruned_ratio[L] > 0;
     this->IF_mask             = IF_prune && (IF_enough_iter || IF_pruned);
     
-    
     if (this->phase_ == TRAIN) {
         if (this->IF_mask) {
             if (APP::IF_update_row_col) {
                 // UpdateNumPrunedRow/Col
                 // Note that, UpdateNumPrunedRow/Col before pruning, 
                 // so that when calculating score, the zombie weights will not be counted.
-                if ((mthd.substr(0, 3) == "PPc" || mthd == "Reg_Col") && L != APP::layer_cnt-1) {
+                if (APP::prune_unit == "Col" && L != APP::layer_cnt-1) {
                     if (APP::step_-1 - APP::iter_prune_finished[L+1] <= 1) {
                         UpdateNumPrunedRow();
                     }
-                } else if ((mthd == "PPr" || mthd == "FP") && L != 0) {
+                } else if (APP::prune_unit == "Row" && mthd != "TP_Row" && L != 0) {
                     UpdateNumPrunedCol();
                 } /// Note we don't update column for TP, because their method didn't mention this.
+                UpdatePrunedRatio();
             }
-            UpdatePrunedRatio();
             
-            // Given pruned_ratio, judge whether prune finished for current layer
-            // Get into here ONLY once
+            // check if prune finished, get into here ONLY once
             if (APP::iter_prune_finished[L] == INT_MAX) {
-                const Dtype pruned_ratio = (mthd == "PPr" || mthd == "FP" || mthd == "TP") ? APP::pruned_ratio_row[L] : APP::pruned_ratio_col[L];
-                const bool layer_finish = (pruned_ratio >= APP::prune_ratio[L]); /// layer pruning target achieved
-                const bool net_finish = APP::IF_speedup_achieved; /// net pruning target achieved
-                if (layer_finish || net_finish) {
-                    if (mthd.substr(0, 2) == "PP") { CleanWorkForPP(); } /// last time, do some clean work
+                Dtype pruned_ratio;
+                if (APP::prune_unit == "Weight")   { pruned_ratio = APP::pruned_ratio[L];     }
+                else if (APP::prune_unit == "Row") { pruned_ratio = APP::pruned_ratio_row[L]; }
+                else if (APP::prune_unit == "Col") { pruned_ratio = APP::pruned_ratio_col[L]; }
+                const bool layer_finish     = pruned_ratio >= APP::prune_ratio[L]; /// layer pruning target achieved
+                const bool net_finish_speed = APP::IF_speedup_achieved;   /// net pruning target of speed achieved
+                const bool net_finish_param = APP::IF_compRatio_achieved; /// net pruning target of compression achieved
+                
+                if (layer_finish || net_finish_speed || net_finish_param) {
                     APP::iter_prune_finished[L] = APP::step_ - 1;
+                    
+                    char* mthd = new char[strlen(APP::prune_method.c_str()) + 1];
+                    strcpy(mthd, APP::prune_method.c_str());
+                    const string mthd_ = strtok(mthd, "_"); // mthd is like "Reg_Col", the first split is `Reg`
+                    if (mthd_ == "SPP") { CleanWorkForPP(); } // last time, do some clean work
+                    
+                    // print to log
                     char rlayer[10];
                     char rrow[10];
                     char rcol[10];
@@ -62,7 +71,9 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                     sprintf(rcol,   "%6.4f", APP::pruned_ratio_col[L]);
                     cout << layer_name << " prune finished!" 
                          << "  step: " << APP::step_
-                         << "  speedup: " << APP::speedup
+                         << "  net speedup: " << APP::speedup
+                         << "  net compRatio: " << APP::compRatio
+                         << "  pruned_ratio: " << rlayer
                          << "  pruned_ratio_row: " << rrow
                          << "  pruned_ratio_col: " << rcol 
                          << "  prune_ratio: " << APP::prune_ratio[L] << endl;
@@ -88,11 +99,12 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 }
             } else if (mthd == "PPr" && IF_hppf()) {
                 ProbPruneRow();
-            } else if (mthd == "Reg_Col") {
-                PruneMinimals(APP::prune_threshold);
+            } else if (mthd == "Reg_Col" || mthd == "Reg_Weight") {
+                PruneMinimals();
             }
+            UpdatePrunedRatio();
         }
-        UpdatePrunedRatio();
+        
         
         // Print 
         if (mthd != "None" && L < SHOW_NUM_LAYER && APP::inner_iter == 0) {

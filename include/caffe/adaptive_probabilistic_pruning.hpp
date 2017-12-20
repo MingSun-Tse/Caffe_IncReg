@@ -19,6 +19,7 @@ public:
     /// --------------------------------
     /// pass params from solver.prototxt to layer
     static string prune_method;
+    static string prune_unit;
     static string criteria;
     static int num_once_prune;
     static int prune_interval;
@@ -32,6 +33,7 @@ public:
     static float AA;
     static float kk;
     static float speedup;
+    static float compRatio;
     static bool IF_update_row_col;
     static bool IF_eswpf;
     static float prune_threshold;
@@ -45,6 +47,7 @@ public:
     static int step_;
     static bool IF_alpf; 
     static bool IF_speedup_achieved;
+    static bool IF_compRatio_achieved;
     
     
     static map<string, int> layer_index;
@@ -57,14 +60,18 @@ public:
     
     static vector<float> num_pruned_col;
     static vector<int>   num_pruned_row;
+    static vector<int>   num_pruned_weight;
     static vector<int>   pruned_rows;
     static vector<vector<bool> > masks;
     static vector<vector<bool> > IF_row_pruned;
     static vector<vector<vector<bool> > > IF_col_pruned;
+    static vector<vector<bool> > IF_weight_pruned;
     static vector<vector<float> > history_prob;
     static vector<vector<float> > history_reg;
-    static vector<vector<float> > history_score;
-    static vector<vector<float> > history_rank;
+    static vector<vector<float> > history_reg_weight;
+    static vector<vector<float> > hscore;
+    static vector<vector<float> > hrank;
+    static vector<vector<float> > hhrank;
     static vector<int> iter_prune_finished;
     static vector<float> prune_ratio;
     static vector<float> delta;
@@ -72,6 +79,7 @@ public:
     static vector<float> pruned_ratio_col;
     static vector<float> pruned_ratio_row;
     static vector<float> GFLOPs;
+    static vector<float> num_param;
     static vector<float> reg_to_distribute;
     
     

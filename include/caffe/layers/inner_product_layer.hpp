@@ -39,7 +39,14 @@ class InnerProductLayer : public Layer<Dtype> {
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
   virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
-
+  
+  // Added by WANGHUAN for pruning
+  virtual void ComputeBlobMask();
+  virtual void PruneMinimals();
+  virtual void PruneSetUp(const PruneParameter& prune_param);
+  virtual void Print(const int& L, char mode);
+  virtual void UpdatePrunedRatio();
+  virtual void IF_alpf();
 
   int M_;
   int K_;

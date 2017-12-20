@@ -2,9 +2,260 @@
 #include "caffe/filler.hpp"
 #include "caffe/layers/inner_product_layer.hpp"
 #include "caffe/adaptive_probabilistic_pruning.hpp"
+#define SHOW_NUM 20
 
 namespace caffe {
 using namespace std;
+
+template <typename Dtype>
+void InnerProductLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
+    // Basic setting
+    const int count = this->blobs_[0]->count();
+    const int num_row = this->blobs_[0]->shape()[0];
+    const int num_col = count / num_row;
+    
+    // Get layer_index
+    const string layer_name = this->layer_param_.name();
+    if (this->phase_ == TRAIN) {
+        if (APP::layer_index.count(layer_name) == 0) {
+            APP::layer_index[layer_name] = APP::layer_cnt;
+            ++ APP::layer_cnt;
+            cout << "A new layer registered: " << layer_name 
+                 << "  Total #layer: " << APP::layer_cnt << endl;
+        }
+    } else { return; }
+    const int L = APP::layer_index[layer_name];
+    const string mthd = APP::prune_method;
+    cout << "PruneSetUp: " << layer_name  
+         << "  its layer_index: " << L
+         << "  Total #layer: " << APP::layer_cnt << endl;
+    
+    
+    // Note: the varibales below can ONLY be used in training.
+    // Note: These varibales will be called for every GPU, whereas since we use `layer_index` to index, so it doesn't matter.
+    // Set up prune parameters of layer
+    APP::prune_ratio.push_back(prune_param.prune_ratio());
+    APP::pruned_ratio.push_back(0);
+    APP::pruned_ratio_col.push_back(0);
+    APP::pruned_ratio_row.push_back(0);
+    APP::num_param.push_back(count);
+    APP::GFLOPs.push_back(count);
+
+    // Pruning state
+    APP::masks.push_back( vector<bool>(count, 1) );
+    APP::num_pruned_weight.push_back(0);
+    APP::num_pruned_col.push_back(0);
+    APP::num_pruned_row.push_back(0);
+    APP::IF_weight_pruned.push_back( vector<bool>(count, false) );
+    APP::IF_row_pruned.push_back( vector<bool>(num_row, false) );
+    vector<bool> vec_tmp(1, false); // there is no group in fc layers, equivalent to group = 1
+    APP::IF_col_pruned.push_back( vector<vector<bool> >(num_col, vec_tmp) );
+    APP::hscore.push_back( vector<float>(count, 0) );
+    APP::hrank.push_back( vector<float>(count, 0) );
+    APP::hhrank.push_back( vector<float>(count, 0) );
+    APP::history_reg.push_back( vector<float>(count, 0) );
+
+    // Info shared among layers
+    APP::priority.push_back(prune_param.priority());
+    APP::iter_prune_finished.push_back(INT_MAX);
+    
+    cout << "=== Masks etc. Initialized" << endl;
+}
+
+template <typename Dtype>
+void InnerProductLayer<Dtype>::Print(const int& L, char mode) {
+/** print example:
+forward:
+Index   WeightBeforeMasked   Mask   Prob - conv1
+  c 1              0.04044      1      1
+  c 2              0.05401      1      1
+  c 3              0.06174      1      1
+
+backward:
+Index   DiffBeforeMasked   Mask   Prob - conv1
+  c 1   0.08216(0.00003)      1      1
+  c 2   0.08249(0.00004)      1      1
+  c 3   0.08178(0.00007)      1      1
+*/
+    assert(mode == 'f' || mode = 'b'); /// forward, backward
+    const int num_col = this->blobs_[0]->count() / this->blobs_[0]->shape()[0];
+    const int num_row = this->blobs_[0]->shape()[0];
+    const Dtype* w = this->blobs_[0]->cpu_data();
+    const Dtype* d = this->blobs_[0]->cpu_diff();
+
+    // print Index, blob, Mask
+    cout.width(5);  cout << "Index" << "   ";
+    const string blob = (mode == 'f') ? "WeightBeforeMasked" : "DiffBeforeMasked";
+    cout.width(blob.size()); cout << blob << "   ";
+    cout.width(4);  cout << "Mask" << "   ";
+    
+    // print additional info
+    char* mthd = new char[strlen(APP::prune_method.c_str()) + 1];
+    strcpy(mthd, APP::prune_method.c_str());
+    const string mthd_ = strtok(mthd, "_"); // mthd is like "Reg_Col", the first split is `Reg`
+    string info;
+    vector<float> info_data; 
+    if (mthd_ == "Reg") {
+        info = "HistoryReg";
+        info_data = APP::history_reg[L];
+    } else if (mthd_ == "SPP") {
+        info = "HistoryProb";
+        info_data = APP::history_prob[L];
+    }
+    cout.width(info.size()); cout << info << " - " << this->layer_param_.name() << endl;
+    
+    if (APP::prune_unit == "Row") {
+        for (int i = 0; i < SHOW_NUM; ++i) {
+            // print Index
+            cout.width(3); cout << "r"; 
+            cout.width(2); cout << i+1 << "   ";
+            
+            // print blob
+            char s[50]; sprintf(s, "%7.5f", d[i * num_col]); // TODO: improve the print for row prune
+            if (mode == 'f') { sprintf(s, "%f", fabs(w[i * num_col])); }
+            cout.width(blob.size()); cout << s << "   ";
+            
+            // print Mask
+            cout.width(4);  cout << APP::masks[L][i * num_col] << "   ";
+            
+            // print info
+            cout.width(info.size());  cout << info_data[i] << endl;
+        }
+        
+    } else if (APP::prune_unit == "Col") {
+        for (int j = 0; j < SHOW_NUM; ++j) {
+            // print Index
+            cout.width(3); cout << "c"; 
+            cout.width(2); cout << j+1 << "   ";
+            
+            // print blob
+            Dtype sum_w = 0, sum_d = 0;
+            for (int i = 0; i < num_row; ++i) {
+                sum_w += fabs(w[i * num_col + j]);
+                sum_d += fabs(d[i * num_col + j]);
+            }
+            sum_w /= num_row; /// average abs weight
+            sum_d /= num_row; /// average abs diff
+            const Dtype reg_force = APP::history_reg[L][j] * sum_w;
+            char s[50]; sprintf(s, "%7.5f(%7.5f)", sum_d, reg_force);
+            if (mode == 'f') { sprintf(s, "%f", sum_w); }
+            cout.width(blob.size()); cout << s << "   ";
+            
+            // print Mask
+            cout.width(4);  cout << APP::masks[L][j] << "   ";
+            
+            // print info
+            cout.width(info.size());  cout << info_data[j] << endl;
+        }
+    } else if (APP::prune_unit == "Weight") {
+        for (int i = 0; i < SHOW_NUM; ++i) {
+            // print Index
+            cout.width(3); cout << "w";
+            cout.width(2); cout << i+1 << "   ";
+            
+            // print blob
+            const Dtype reg_force = APP::history_reg[L][i] * fabs(w[i]);
+            char s[50]; sprintf(s, "%7.5f(%7.5f)", fabs(d[i]), reg_force);
+            if (mode == 'f') { sprintf(s, "%f", fabs(w[i])); }
+            cout.width(blob.size()); cout << s << "   ";
+            
+            // print Mask
+            cout.width(4);  cout << APP::masks[L][i] << "   ";
+            
+            // print info
+            cout.width(info.size());  cout << info_data[i] << endl;
+        }
+    }
+}
+
+template <typename Dtype>
+void InnerProductLayer<Dtype>::IF_alpf() {
+    /** IF_all_layer_prune_finished
+    */
+    APP::IF_alpf = true;
+    for (int i = 0; i < APP::layer_cnt; ++i) {
+        if (APP::iter_prune_finished[i] == INT_MAX) {
+            APP::IF_alpf = false;
+            break;
+        }
+    }
+}
+
+template <typename Dtype> 
+void InnerProductLayer<Dtype>::UpdatePrunedRatio() {
+    const int L = APP::layer_index[this->layer_param_.name()];
+    const int count   = this->blobs_[0]->count();
+    const int num_row = this->blobs_[0]->shape()[0];
+    const int num_col = count / num_row;
+    
+    if (APP::prune_unit == "Weight") {
+        for (int i = 0; i < num_row; ++i) {
+            if (APP::IF_row_pruned[L][i]) { continue; }
+            bool IF_whole_row_pruned = true;
+            for (int j = 0; j < num_col; ++j) {
+                if (!APP::IF_weight_pruned[L][i * num_col + j]) {
+                    IF_whole_row_pruned = false;
+                    break;
+                }
+            }
+            if (IF_whole_row_pruned) {
+                APP::IF_row_pruned[L][i] = true;
+                APP::num_pruned_row[L] += 1;
+            }
+        }
+        for (int j = 0; j < num_col; ++j) {
+            if (APP::IF_col_pruned[L][j][0]) { continue; }
+            bool IF_whole_col_pruned = true;
+            for (int i = 0; i < num_row; ++i) {
+                if (!APP::IF_weight_pruned[L][i * num_col + j]) {
+                    IF_whole_col_pruned = false;
+                    break;
+                }
+            }
+            if (IF_whole_col_pruned) {
+                APP::IF_col_pruned[L][j][0] = true;
+                APP::num_pruned_col[L] += 1;
+            }
+        }
+    }
+    APP::pruned_ratio_col[L] = APP::num_pruned_col[L] / num_col;
+    APP::pruned_ratio_row[L] = APP::num_pruned_row[L] * 1.0 / num_row;
+    if (APP::prune_unit == "Weight") {
+        APP::pruned_ratio[L] = APP::num_pruned_weight[L] * 1.0 / count;
+    } else {
+        APP::pruned_ratio[L] =  (APP::pruned_ratio_col[L] + APP::pruned_ratio_row[L]) 
+                               - APP::pruned_ratio_col[L] * APP::pruned_ratio_row[L];
+    }
+}
+
+template <typename Dtype>
+void InnerProductLayer<Dtype>::ComputeBlobMask() {
+    Dtype* muweight   = this->blobs_[0]->mutable_cpu_data();
+    const int count   = this->blobs_[0]->count();
+    const int L = APP::layer_index[this->layer_param_.name()];
+   
+    if (APP::prune_unit == "Weight") {
+        for (int i = 0; i < count; ++i) {
+            if (fabs(muweight[i]) < APP::prune_threshold || APP::history_reg[L][i] >= APP::target_reg) {
+                muweight[i] = 0;
+                APP::masks[L][i] = 0;
+                APP::num_pruned_weight[L] += 1;
+                APP::IF_weight_pruned[L][i] = true;
+                APP::hrank[L][i] = APP::step_ - 1000000 - (APP::history_reg[L][i] - APP::target_reg);
+            }
+        }
+        APP::pruned_ratio[L] = APP::num_pruned_weight[L] * 1.0 / count;
+        if (APP::pruned_ratio[L] >= APP::prune_ratio[L]) {
+            APP::iter_prune_finished[L] = -1;
+            cout << this->layer_param_.name() << " prune finshed" << endl;
+        }
+        LOG(INFO) << "    Masks restored"
+                  << "  pruned_ratio = "   << APP::pruned_ratio[L]
+                  << "  prune_ratio = "    << APP::prune_ratio[L];
+    }
+    
+}
+
 
 template <typename Dtype>
 void InnerProductLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
@@ -52,6 +303,10 @@ void InnerProductLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     }
   }  // parameter initialization
   this->param_propagate_down_.resize(this->blobs_.size(), true);
+  
+  // Added by WANGHUAN for pruning
+  PruneSetUp(this->layer_param_.prune_param());
+  
 }
 
 template <typename Dtype>
@@ -79,6 +334,28 @@ void InnerProductLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
     caffe_set(M_, Dtype(1), bias_multiplier_.mutable_cpu_data());
   }
 }
+
+template <typename Dtype>
+void InnerProductLayer<Dtype>::PruneMinimals() {
+    Dtype* muweight   = this->blobs_[0]->mutable_cpu_data();
+    const int count   = this->blobs_[0]->count();
+    const int L = APP::layer_index[this->layer_param_.name()];
+    
+    if (APP::prune_unit == "Weight") {
+        for (int i = 0; i < count; ++i) {
+            if (APP::IF_weight_pruned[L][i]) { continue; }
+            if (fabs(muweight[i]) < APP::prune_threshold || APP::history_reg[L][i] >= APP::target_reg) {
+                muweight[i] = 0;
+                APP::masks[L][i] = 0;
+                APP::num_pruned_weight[L] += 1;
+                APP::IF_weight_pruned[L][i] = true;
+                APP::hrank[L][i]  = APP::step_ - 1000000 - (APP::history_reg[L][i] - APP::target_reg);
+                APP::hhrank[L][i] = APP::step_ - 1000000 - (APP::history_reg[L][i] - APP::target_reg);
+            }
+        }
+    }
+}
+
 
 template <typename Dtype>
 void InnerProductLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,

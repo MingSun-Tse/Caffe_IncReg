@@ -77,14 +77,16 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
   virtual inline bool reverse_dimensions() { return false; }
   virtual void compute_output_shape();
-  virtual void ComputeBlobMask(); // WANGHUAN
+  // -----------------------------------------
+  // Added by WANGHUAN for pruning
+  virtual void ComputeBlobMask();
   virtual void RestorePruneProb(const Dtype& pruned_r);
   virtual void FilterPrune(); 
   virtual void TaylorPrune(const vector<Blob<Dtype>*>& top);
   virtual void ProbPruneCol();
   virtual void ProbPruneCol(const int& prune_interval);
   virtual void ProbPruneRow();
-  virtual void PruneMinimals(const Dtype& threshold);
+  virtual void PruneMinimals();
   virtual void CleanWorkForPP();
   virtual void UpdateNumPrunedRow(); 
   virtual void UpdateNumPrunedCol(); 
@@ -92,7 +94,7 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
   virtual void IF_alpf();
   virtual bool IF_hppf();
   virtual void Print(const int& L, char mode);
-  virtual void PruneSetUp(const PruneParameter& prune_param); // WANGHUAN
+  virtual void PruneSetUp(const PruneParameter& prune_param);
   virtual Dtype normal_random();
 
 };

@@ -56,7 +56,12 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   // ------------------------------------------
   // WANGHUAN, copy prune params
   APP::prune_method = param_.prune_method();
-  APP::criteria = param_.criteria();
+  char* mthd = new char[strlen(APP::prune_method.c_str()) + 1];
+  strcpy(mthd, APP::prune_method.c_str());
+  strtok(mthd, "_"); // mthd is like "Reg_Col", the first split is `Reg`
+  APP::prune_unit = strtok(NULL, "_"); // TODO: put this in APP's member function
+  
+  APP::criteria = "L1-norm"; //param_.criteria();
   APP::num_once_prune = param_.num_once_prune();
   APP::prune_interval = param_.prune_interval();
   APP::rgamma = 30;   //param_.rgamma();
@@ -69,6 +74,7 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   APP::target_reg = param_.target_reg(); //param_.aa();
   APP::kk = 0.25; //param_.kk(); 
   APP::speedup = param_.speedup();
+  APP::compRatio = param_.compratio();
   APP::IF_update_row_col = param.if_update_row_col();
   APP::IF_eswpf = param_.if_eswpf(); /// if early stop when prune finished
   APP::prune_threshold = param_.prune_threshold();
@@ -258,7 +264,7 @@ void Solver<Dtype>::Step(int iters) {
     /// ----------------------------------------------------------------------
     // Before another forward, judge whether prune could be stopped
     if (APP::IF_alpf && APP::IF_eswpf) {
-        cout << "all layer prune finished: " << iter_ << " -- early stopped." << endl;
+        cout << "all layer prune finished: iter = " << iter_ << " -- early stopped." << endl;
         requested_early_exit_ = true;
         break;
     }
@@ -267,14 +273,28 @@ void Solver<Dtype>::Step(int iters) {
     Dtype GFLOPs_left   = 0;
     Dtype GFLOPs_origin = 0;
     for (int i = 0; i < APP::layer_cnt; ++i) {
-        GFLOPs_left   += APP::GFLOPs[i] * (1 - APP::pruned_ratio[i]);
+        const Dtype pr = APP::pruned_ratio_row[i];
+        const Dtype pc = APP::pruned_ratio_col[i];
+        GFLOPs_left   += APP::GFLOPs[i] * (1 - (pr + pc - pr * pc));
         GFLOPs_origin += APP::GFLOPs[i];
     }
-    APP::IF_speedup_achieved = (GFLOPs_origin / GFLOPs_left >= APP::speedup);
+    APP::IF_speedup_achieved = GFLOPs_origin/GFLOPs_left >= APP::speedup;
+    
+    Dtype num_param_left   = 0;
+    Dtype num_param_origin = 0;
+    for (int i = 0; i < APP::layer_cnt; ++i) {
+        num_param_left   += APP::num_param[i] * (1 - APP::pruned_ratio[i]);
+        num_param_origin += APP::num_param[i];
+    }
+    APP::IF_compRatio_achieved = num_param_origin/num_param_left >= APP::compRatio;
     
     APP::step_ = iter_ + 1;
-    cout << "\n**** Step " << APP::step_ << ": " << GFLOPs_origin / GFLOPs_left << "/" << APP::speedup << " ****" << endl;
-    cout << "Total GFLOPs_origin: " << GFLOPs_origin << endl;
+    cout << "\n**** Step " << APP::step_ << ": " 
+         << GFLOPs_origin / GFLOPs_left << "/" << APP::speedup << " "
+         << num_param_origin / num_param_left << "/" << APP::compRatio
+         << " ****" << endl;
+    cout << "Total GFLOPs_origin: " << GFLOPs_origin 
+         << "  Total num_param_origin: " << num_param_origin << endl;
     /// ----------------------------------------------------------------------
     
     APP::inner_iter = 0;

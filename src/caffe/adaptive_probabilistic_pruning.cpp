@@ -7,6 +7,7 @@ namespace caffe {
     /// --------------------------------
     // 1.1 Params passed from solver to layer, not initialized here
     string APP::prune_method = "None"; /// initialized for caffe test, which has no solver but this info is still needed in layer.
+    string APP::prune_unit;
     string APP::criteria;
     int APP::num_once_prune;
     int APP::prune_interval;
@@ -20,6 +21,7 @@ namespace caffe {
     float APP::AA;
     float APP::kk;
     float APP::speedup;
+    float APP::compRatio;
     bool APP::IF_update_row_col;
     bool APP::IF_eswpf;
     float APP::prune_threshold;
@@ -31,7 +33,8 @@ namespace caffe {
     int APP::inner_iter = 0;
     int APP::step_ = -1;
     bool APP::IF_alpf = false; /// if all layer prune finished
-    bool APP::IF_speedup_achieved = false;
+    bool APP::IF_speedup_achieved   = false;
+    bool APP::IF_compRatio_achieved = false;
     
     
     // 2.1 Info shared among layers
@@ -46,14 +49,18 @@ namespace caffe {
     // 2.2 Pruning state (key)
     vector<float> APP::num_pruned_col;
     vector<int>   APP::num_pruned_row;
+    vector<int>   APP::num_pruned_weight;
     vector<int>   APP::pruned_rows; /// used in UpdateNumCol
     vector<vector<bool> > APP::masks;
     vector<vector<bool> > APP::IF_row_pruned;
     vector<vector<vector<bool> > > APP::IF_col_pruned;
+    vector<vector<bool> > APP::IF_weight_pruned;
     vector<vector<float> > APP::history_prob;
     vector<vector<float> > APP::history_reg;
-    vector<vector<float> > APP::history_score;    
-    vector<vector<float> > APP::history_rank;
+    vector<vector<float> > APP::history_reg_weight; // for each weight, not column
+    vector<vector<float> > APP::hscore;
+    vector<vector<float> > APP::hrank;
+    vector<vector<float> > APP::hhrank;
     vector<int> APP::iter_prune_finished;
     vector<float> APP::prune_ratio;
     vector<float> APP::delta;
@@ -61,10 +68,8 @@ namespace caffe {
     vector<float> APP::pruned_ratio_col;
     vector<float> APP::pruned_ratio_row;
     vector<float> APP::GFLOPs;
+    vector<float> APP::num_param;
     vector<float> APP::reg_to_distribute;
-    
-    
-
     
     // 3. Logging
     int APP::num_log;
