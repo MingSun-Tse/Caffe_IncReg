@@ -79,6 +79,8 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   APP::IF_eswpf = param_.if_eswpf(); /// if early stop when prune finished
   APP::prune_threshold = param_.prune_threshold();
   APP::num_iter_reg = 10000; // param_.num_iter_reg();
+  APP::reg_cushion_iter = 2000;
+  APP::hrank_momentum = 0.999;
   
   // APP::score_decay = param_.score_decay();
   APP::snapshot_prefix = param_.snapshot_prefix();

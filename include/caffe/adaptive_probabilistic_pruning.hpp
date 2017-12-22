@@ -39,6 +39,8 @@ public:
     static float prune_threshold;
     static float target_reg;
     static int num_iter_reg;
+    static int reg_cushion_iter; // In the beginning of reg, improve the reg little-by-little to mitigate the side-effect. `reg_cushion_iter` is the iter of this mitigation perioid
+    static float hrank_momentum;
     
     
     

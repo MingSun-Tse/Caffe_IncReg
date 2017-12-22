@@ -27,6 +27,7 @@ namespace caffe {
     float APP::prune_threshold;
     float APP::target_reg;
     int APP::num_iter_reg;
+    float APP::hrank_momentum;
     
 
     // 1.2 Info shared between solver and layer, initailized here

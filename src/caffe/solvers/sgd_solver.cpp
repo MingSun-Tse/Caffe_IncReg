@@ -685,7 +685,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             const int w_of_rank_rk = w_score[rk].second;
             if (APP::IF_weight_pruned[L][w_of_rank_rk]) { continue; } // don't update the hrank of the pruned
             //APP::hrank[L][w_of_rank_rk] = ((n-1) * APP::hrank[L][w_of_rank_rk] + rk) / n;
-            APP::hrank[L][w_of_rank_rk] = APP::hrank[L][w_of_rank_rk] ? 0.9999 * APP::hrank[L][w_of_rank_rk] + 0.0001 * rk : rk;
+            APP::hrank[L][w_of_rank_rk] = APP::hrank[L][w_of_rank_rk] ? APP::hrank_momentum * APP::hrank[L][w_of_rank_rk] + (1-APP::hrank_momentum) * rk : rk;
         }
 
         // Sort 02: sort by history_rank
@@ -747,7 +747,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         if (APP::iter_prune_finished[L] != INT_MAX) { return; }
         
         // compute reg multiplier for those "bad" columns, "good" columns are spared with zero reg.
-        const Dtype AA = (this->iter_ < 2000) ? ((this->iter_+1)/2000.0 * APP::AA) : APP::AA; // TODO: replace this 2000 with more consideration
+        const Dtype AA = (this->iter_ < APP::reg_cushion_iter) ? ((this->iter_+1)*1.0/APP::reg_cushion_iter * APP::AA) : APP::AA; // TODO: replace this 2000 with more consideration
         const Dtype kk = APP::kk;
         const Dtype alpha = log(2/kk) / (num_weight_to_prune - num_pruned_weight + 1);
         const Dtype N1 = -log(kk)/alpha;
