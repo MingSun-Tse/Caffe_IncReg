@@ -34,7 +34,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 // UpdateNumPrunedRow/Col
                 // Note that, UpdateNumPrunedRow/Col before pruning, 
                 // so that when calculating score, the zombie weights will not be counted.
-                if (APP::prune_unit == "Col" && L != APP::layer_cnt-1) {
+                if (APP::prune_unit == "Col" && L != APP::conv_layer_cnt-1) {
                     if (APP::step_-1 - APP::iter_prune_finished[L+1] <= 1) {
                         UpdateNumPrunedRow();
                     }
@@ -83,6 +83,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
         
         // Print and check, before update probs
+        // put this outside, to print even when we do not prune
         if (L == LAYER_PRINTED && APP::step_ % SHOW_INTERVAL == 0 && APP::inner_iter == 0) {
             Print(L, 'f');
         }

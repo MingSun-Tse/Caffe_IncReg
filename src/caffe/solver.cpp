@@ -274,21 +274,26 @@ void Solver<Dtype>::Step(int iters) {
     // GFLOPs, since it measures the speedup of the whole net, so put it here rather than in layer.
     Dtype GFLOPs_left   = 0;
     Dtype GFLOPs_origin = 0;
-    for (int i = 0; i < APP::layer_cnt; ++i) {
+    for (int i = 0; i < APP::conv_layer_cnt + APP::fc_layer_cnt; ++i) {
         const Dtype pr = APP::pruned_ratio_row[i];
         const Dtype pc = APP::pruned_ratio_col[i];
         GFLOPs_left   += APP::GFLOPs[i] * (1 - (pr + pc - pr * pc));
         GFLOPs_origin += APP::GFLOPs[i];
     }
-    APP::IF_speedup_achieved = GFLOPs_origin/GFLOPs_left >= APP::speedup;
+    if (APP::prune_unit == "Col" || APP::prune_unit == "Row") {
+        APP::IF_speedup_achieved = GFLOPs_origin/GFLOPs_left >= APP::speedup;
+    }
+    
     
     Dtype num_param_left   = 0;
     Dtype num_param_origin = 0;
-    for (int i = 0; i < APP::layer_cnt; ++i) {
+    for (int i = 0; i < APP::conv_layer_cnt + APP::fc_layer_cnt; ++i) {
         num_param_left   += APP::num_param[i] * (1 - APP::pruned_ratio[i]);
         num_param_origin += APP::num_param[i];
     }
-    APP::IF_compRatio_achieved = num_param_origin/num_param_left >= APP::compRatio;
+    if (APP::prune_unit == "Weight") {
+        APP::IF_compRatio_achieved = num_param_origin/num_param_left >= APP::compRatio;
+    }
     
     APP::step_ = iter_ + 1;
     cout << "\n**** Step " << APP::step_ << ": " 
@@ -387,19 +392,31 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   }
   
 
-  // After restore, calculate GFLOPs and determine whether the prune finished
-  Dtype GFLOPs_left   = 0;
-  Dtype GFLOPs_origin = 0;
-  for (int i = 0; i < APP::layer_cnt; ++i) {
-      GFLOPs_left   += APP::GFLOPs[i] * (1 - APP::pruned_ratio[i]);
-      GFLOPs_origin += APP::GFLOPs[i];
-  }
-  APP::IF_speedup_achieved = (GFLOPs_origin / GFLOPs_left >= APP::speedup);
-  if (APP::IF_speedup_achieved) {
-    for (int i = 0; i < APP::layer_index.size(); ++i) {
-        APP::iter_prune_finished[i] = -1; 
+    // After restore, calculate GFLOPs and determine whether the prune finished
+    Dtype GFLOPs_left   = 0;
+    Dtype GFLOPs_origin = 0;
+    for (int i = 0; i < APP::conv_layer_cnt + APP::fc_layer_cnt; ++i) {
+        const Dtype pr = APP::pruned_ratio_row[i];
+        const Dtype pc = APP::pruned_ratio_col[i];
+        GFLOPs_left   += APP::GFLOPs[i] * (1 - (pr + pc - pr * pc));
+        GFLOPs_origin += APP::GFLOPs[i];
     }
-  }
+    APP::IF_speedup_achieved = GFLOPs_origin/GFLOPs_left >= APP::speedup;
+    
+    Dtype num_param_left   = 0;
+    Dtype num_param_origin = 0;
+    for (int i = 0; i < APP::conv_layer_cnt + APP::fc_layer_cnt; ++i) {
+        num_param_left   += APP::num_param[i] * (1 - APP::pruned_ratio[i]);
+        num_param_origin += APP::num_param[i];
+    }
+    APP::IF_compRatio_achieved = num_param_origin/num_param_left >= APP::compRatio;
+  
+  
+    if (APP::IF_speedup_achieved || APP::IF_compRatio_achieved) {
+        for (int i = 0; i < APP::layer_index.size(); ++i) {
+            APP::iter_prune_finished[i] = -1; 
+        }
+    }
   
 
   // For a network that is trained by the solver, no bottom or top vecs

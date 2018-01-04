@@ -43,8 +43,6 @@ public:
     static float hrank_momentum;
     
     
-    
-    
     static int inner_iter;
     static int step_;
     static bool IF_alpf; 
@@ -53,7 +51,8 @@ public:
     
     
     static map<string, int> layer_index;
-    static int layer_cnt;
+    static int fc_layer_cnt;
+    static int conv_layer_cnt;
     static vector<int> filter_area;
     static vector<int> group;
     static vector<int> priority;
@@ -114,6 +113,8 @@ public:
     static float loss_decay;
     static float Delta_loss_history;
     static float learning_speed;
+    
+    const static int test = 10;
     
     
 

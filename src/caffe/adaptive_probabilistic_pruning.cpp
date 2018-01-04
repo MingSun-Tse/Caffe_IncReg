@@ -27,6 +27,7 @@ namespace caffe {
     float APP::prune_threshold;
     float APP::target_reg;
     int APP::num_iter_reg;
+    int APP::reg_cushion_iter;
     float APP::hrank_momentum;
     
 
@@ -40,7 +41,8 @@ namespace caffe {
     
     // 2.1 Info shared among layers
     map<string, int> APP::layer_index;
-    int APP::layer_cnt = 0; /// the number of conv layer
+    int APP::fc_layer_cnt   = 0;
+    int APP::conv_layer_cnt = 0;
     vector<int> APP::filter_area;
     vector<int> APP::group;
     vector<int> APP::priority;

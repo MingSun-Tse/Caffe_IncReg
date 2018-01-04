@@ -184,7 +184,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
   Dtype current_wd = weight_decay; // default
   if (this->param_.dwd_mode() != "None") {
       CHECK_GE(this->param_.wd_end(), 0) << "Error: wd_end must be in [0, 1]";
-      CHECK_LE(this->param_.wd_end(), 1) << "Error: wd_end must be in [0, 1]";
+      // CHECK_LE(this->param_.wd_end(), 1) << "Error: wd_end must be in [0, 1]"; // weight decay can go up, when wd_end > 1
       
       const int begin = this->param_.dwd_begin_iter();      
       if (this->iter_ >= begin) {
@@ -199,7 +199,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             const int tmp_iter = (std::min(this->iter_, end) - begin) / this->param_.dwd_step() * this->param_.dwd_step();
             current_wd = weight_decay * (1 - (1 - this->param_.wd_end()) / (end - begin) * tmp_iter);
 
-          } else if (this->param_.dwd_mode() == "adaptive") {
+          } else if (this->param_.dwd_mode() == "adaptive") { // legacy
             const int num_pruned = *std::max_element(APP::num_pruned_col.begin(), APP::num_pruned_col.end()); // 9 is the size, TODO: replace it using vector
             const int num_to_prune = APP::max_num_column_to_prune;
             current_wd = weight_decay * (1 - (1 - this->param_.wd_end()) / num_to_prune * num_pruned);
@@ -505,6 +505,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         
         
         // some occasions to return
+        if (APP::step_ <= APP::prune_begin_iter) { return; }
         const int L = param_id / 2; // TODO: improve
         bool IF_find_layer_name = false;
         std::map<string,int>::iterator it;

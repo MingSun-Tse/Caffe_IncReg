@@ -18,17 +18,17 @@ void InnerProductLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     const string layer_name = this->layer_param_.name();
     if (this->phase_ == TRAIN) {
         if (APP::layer_index.count(layer_name) == 0) {
-            APP::layer_index[layer_name] = APP::layer_cnt;
-            ++ APP::layer_cnt;
+            APP::layer_index[layer_name] = APP::conv_layer_cnt + APP::fc_layer_cnt;
+            ++ APP::fc_layer_cnt;
             cout << "A new layer registered: " << layer_name 
-                 << "  Total #layer: " << APP::layer_cnt << endl;
+                 << "  Total layers: " << APP::conv_layer_cnt + APP::fc_layer_cnt << endl;
         }
     } else { return; }
     const int L = APP::layer_index[layer_name];
     const string mthd = APP::prune_method;
     cout << "PruneSetUp: " << layer_name  
          << "  its layer_index: " << L
-         << "  Total #layer: " << APP::layer_cnt << endl;
+         << "  Total layers: " << APP::conv_layer_cnt + APP::fc_layer_cnt << endl;
     
     
     // Note: the varibales below can ONLY be used in training.
@@ -93,7 +93,7 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
     char* mthd = new char[strlen(APP::prune_method.c_str()) + 1];
     strcpy(mthd, APP::prune_method.c_str());
     const string mthd_ = strtok(mthd, "_"); // mthd is like "Reg_Col", the first split is `Reg`
-    string info;
+    string info = "Unknown";;
     vector<float> info_data; 
     if (mthd_ == "Reg") {
         info = "HistoryReg";
@@ -173,7 +173,7 @@ void InnerProductLayer<Dtype>::IF_alpf() {
     /** IF_all_layer_prune_finished
     */
     APP::IF_alpf = true;
-    for (int i = 0; i < APP::layer_cnt; ++i) {
+    for (int i = 0; i < APP::conv_layer_cnt + APP::fc_layer_cnt; ++i) {
         if (APP::iter_prune_finished[i] == INT_MAX) {
             APP::IF_alpf = false;
             break;
