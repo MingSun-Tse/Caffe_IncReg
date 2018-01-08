@@ -88,6 +88,7 @@ class Layer {
   
   // added by WANGHUAN
   vector<bool> masks_;
+  Blob<Dtype> blobmasks;
   vector<int> indices_;
   vector<Dtype> centroids_;
   int num_pruned_col;

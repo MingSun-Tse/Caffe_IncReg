@@ -47,6 +47,9 @@ class InnerProductLayer : public Layer<Dtype> {
   virtual void Print(const int& L, char mode);
   virtual void UpdatePrunedRatio();
   virtual void IF_alpf();
+  virtual void RestorePruneProb(const Dtype& pruned_r) {};
+  virtual void UpdateNumPrunedRow();
+  virtual void UpdateNumPrunedCol();
 
   int M_;
   int K_;

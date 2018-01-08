@@ -55,35 +55,36 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   
   // ------------------------------------------
   // WANGHUAN, copy prune params
-  APP::prune_method = param_.prune_method();
-  char* mthd = new char[strlen(APP::prune_method.c_str()) + 1];
-  strcpy(mthd, APP::prune_method.c_str());
-  strtok(mthd, "_"); // mthd is like "Reg_Col", the first split is `Reg`
-  APP::prune_unit = strtok(NULL, "_"); // TODO: put this in APP's member function
+  APP<Dtype>::prune_method = param_.prune_method();
+  if (APP<Dtype>::prune_method != "None") {
+      char* mthd = new char[strlen(APP<Dtype>::prune_method.c_str()) + 1];
+      strcpy(mthd, APP<Dtype>::prune_method.c_str());
+      APP<Dtype>::prune_coremthd = strtok(mthd, "_"); // mthd is like "Reg_Col", the first split is `Reg`
+      APP<Dtype>::prune_unit = strtok(NULL, "_"); // TODO: put this in APP's member function
+  }
+  APP<Dtype>::criteria = "L1-norm"; //param_.criteria();
+  APP<Dtype>::num_once_prune = param_.num_once_prune();
+  APP<Dtype>::prune_interval = param_.prune_interval();
+  APP<Dtype>::rgamma = 30;   //param_.rgamma();
+  APP<Dtype>::rpower = -1.3; //param_.rpower();
+  APP<Dtype>::cgamma = 70;   //param_.cgamma();
+  APP<Dtype>::cpower = -1.2; //param_.cpower(); 
+  APP<Dtype>::prune_begin_iter = param_.prune_begin_iter();
+  APP<Dtype>::iter_size = param_.iter_size();
+  APP<Dtype>::AA = param_.aa();
+  APP<Dtype>::target_reg = param_.target_reg(); //param_.aa();
+  APP<Dtype>::kk = 0.25; //param_.kk(); 
+  APP<Dtype>::speedup = param_.speedup();
+  APP<Dtype>::compRatio = param_.compratio();
+  APP<Dtype>::IF_update_row_col = param.if_update_row_col();
+  APP<Dtype>::IF_eswpf = param_.if_eswpf(); /// if early stop when prune finished
+  APP<Dtype>::prune_threshold = param_.prune_threshold();
+  APP<Dtype>::num_iter_reg = 10000; // param_.num_iter_reg();
+  APP<Dtype>::reg_cushion_iter = 2000;
+  APP<Dtype>::hrank_momentum = 0.999;
   
-  APP::criteria = "L1-norm"; //param_.criteria();
-  APP::num_once_prune = param_.num_once_prune();
-  APP::prune_interval = param_.prune_interval();
-  APP::rgamma = 30;   //param_.rgamma();
-  APP::rpower = -1.3; //param_.rpower();
-  APP::cgamma = 70;   //param_.cgamma();
-  APP::cpower = -1.2; //param_.cpower(); 
-  APP::prune_begin_iter = param_.prune_begin_iter();
-  APP::iter_size = param_.iter_size();
-  APP::AA = param_.aa();
-  APP::target_reg = param_.target_reg(); //param_.aa();
-  APP::kk = 0.25; //param_.kk(); 
-  APP::speedup = param_.speedup();
-  APP::compRatio = param_.compratio();
-  APP::IF_update_row_col = param.if_update_row_col();
-  APP::IF_eswpf = param_.if_eswpf(); /// if early stop when prune finished
-  APP::prune_threshold = param_.prune_threshold();
-  APP::num_iter_reg = 10000; // param_.num_iter_reg();
-  APP::reg_cushion_iter = 2000;
-  APP::hrank_momentum = 0.999;
-  
-  // APP::score_decay = param_.score_decay();
-  APP::snapshot_prefix = param_.snapshot_prefix();
+  // APP<Dtype>::score_decay = param_.score_decay();
+  APP<Dtype>::snapshot_prefix = param_.snapshot_prefix();
   // ------------------------------------------
 
   CHECK_GE(param_.average_loss(), 1) << "average_loss should be non-negative.";
@@ -265,7 +266,7 @@ void Solver<Dtype>::Step(int iters) {
 
     /// ----------------------------------------------------------------------
     // Before another forward, judge whether prune could be stopped
-    if (APP::IF_alpf && APP::IF_eswpf) {
+    if (APP<Dtype>::IF_alpf && APP<Dtype>::IF_eswpf) {
         cout << "all layer prune finished: iter = " << iter_ << " -- early stopped." << endl;
         requested_early_exit_ = true;
         break;
@@ -274,40 +275,40 @@ void Solver<Dtype>::Step(int iters) {
     // GFLOPs, since it measures the speedup of the whole net, so put it here rather than in layer.
     Dtype GFLOPs_left   = 0;
     Dtype GFLOPs_origin = 0;
-    for (int i = 0; i < APP::conv_layer_cnt + APP::fc_layer_cnt; ++i) {
-        const Dtype pr = APP::pruned_ratio_row[i];
-        const Dtype pc = APP::pruned_ratio_col[i];
-        GFLOPs_left   += APP::GFLOPs[i] * (1 - (pr + pc - pr * pc));
-        GFLOPs_origin += APP::GFLOPs[i];
+    for (int i = 0; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
+        const Dtype pr = APP<Dtype>::pruned_ratio_row[i];
+        const Dtype pc = APP<Dtype>::pruned_ratio_col[i];
+        GFLOPs_left   += APP<Dtype>::GFLOPs[i] * (1 - (pr + pc - pr * pc));
+        GFLOPs_origin += APP<Dtype>::GFLOPs[i];
     }
-    if (APP::prune_unit == "Col" || APP::prune_unit == "Row") {
-        APP::IF_speedup_achieved = GFLOPs_origin/GFLOPs_left >= APP::speedup;
+    if (APP<Dtype>::prune_unit == "Col" || APP<Dtype>::prune_unit == "Row") {
+        APP<Dtype>::IF_speedup_achieved = GFLOPs_origin/GFLOPs_left >= APP<Dtype>::speedup;
     }
     
     
     Dtype num_param_left   = 0;
     Dtype num_param_origin = 0;
-    for (int i = 0; i < APP::conv_layer_cnt + APP::fc_layer_cnt; ++i) {
-        num_param_left   += APP::num_param[i] * (1 - APP::pruned_ratio[i]);
-        num_param_origin += APP::num_param[i];
+    for (int i = 0; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
+        num_param_left   += APP<Dtype>::num_param[i] * (1 - APP<Dtype>::pruned_ratio[i]);
+        num_param_origin += APP<Dtype>::num_param[i];
     }
-    if (APP::prune_unit == "Weight") {
-        APP::IF_compRatio_achieved = num_param_origin/num_param_left >= APP::compRatio;
+    if (APP<Dtype>::prune_unit == "Weight") {
+        APP<Dtype>::IF_compRatio_achieved = num_param_origin/num_param_left >= APP<Dtype>::compRatio;
     }
     
-    APP::step_ = iter_ + 1;
-    cout << "\n**** Step " << APP::step_ << ": " 
-         << GFLOPs_origin / GFLOPs_left << "/" << APP::speedup << " "
-         << num_param_origin / num_param_left << "/" << APP::compRatio
+    APP<Dtype>::step_ = iter_ + 1;
+    cout << "\n**** Step " << APP<Dtype>::step_ << ": " 
+         << GFLOPs_origin / GFLOPs_left << "/" << APP<Dtype>::speedup << " "
+         << num_param_origin / num_param_left << "/" << APP<Dtype>::compRatio
          << " ****" << endl;
     cout << "Total GFLOPs_origin: " << GFLOPs_origin 
          << "  Total num_param_origin: " << num_param_origin << endl;
     /// ----------------------------------------------------------------------
     
-    APP::inner_iter = 0;
+    APP<Dtype>::inner_iter = 0;
     for (int i = 0; i < param_.iter_size(); ++i) {
       loss += net_->ForwardBackward();
-      ++ APP::inner_iter; /// WANGHUAN
+      ++ APP<Dtype>::inner_iter; /// WANGHUAN
     }
 
     loss /= param_.iter_size();
@@ -316,11 +317,11 @@ void Solver<Dtype>::Step(int iters) {
     
     /// ----------------------------------------------------------------------
     /// WANGHUAN, used for Adaptive SPP
-    /// APP::Delta_loss_history =  APP::Delta_loss_history * APP::loss_decay + (smoothed_loss_ - APP::loss);
-    /// APP::Delta_loss_history =  smoothed_loss_ - APP::loss;
-    APP::learning_speed = APP::loss - smoothed_loss_;
-    APP::loss = smoothed_loss_;
-    cout << "learning_speed: " << APP::learning_speed << endl;
+    /// APP<Dtype>::Delta_loss_history =  APP<Dtype>::Delta_loss_history * APP<Dtype>::loss_decay + (smoothed_loss_ - APP<Dtype>::loss);
+    /// APP<Dtype>::Delta_loss_history =  smoothed_loss_ - APP<Dtype>::loss;
+    APP<Dtype>::learning_speed = APP<Dtype>::loss - smoothed_loss_;
+    APP<Dtype>::loss = smoothed_loss_;
+    cout << "learning_speed: " << APP<Dtype>::learning_speed << endl;
     /// ----------------------------------------------------------------------
 
     if (display) {
@@ -395,26 +396,26 @@ void Solver<Dtype>::Solve(const char* resume_file) {
     // After restore, calculate GFLOPs and determine whether the prune finished
     Dtype GFLOPs_left   = 0;
     Dtype GFLOPs_origin = 0;
-    for (int i = 0; i < APP::conv_layer_cnt + APP::fc_layer_cnt; ++i) {
-        const Dtype pr = APP::pruned_ratio_row[i];
-        const Dtype pc = APP::pruned_ratio_col[i];
-        GFLOPs_left   += APP::GFLOPs[i] * (1 - (pr + pc - pr * pc));
-        GFLOPs_origin += APP::GFLOPs[i];
+    for (int i = 0; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
+        const Dtype pr = APP<Dtype>::pruned_ratio_row[i];
+        const Dtype pc = APP<Dtype>::pruned_ratio_col[i];
+        GFLOPs_left   += APP<Dtype>::GFLOPs[i] * (1 - (pr + pc - pr * pc));
+        GFLOPs_origin += APP<Dtype>::GFLOPs[i];
     }
-    APP::IF_speedup_achieved = GFLOPs_origin/GFLOPs_left >= APP::speedup;
+    APP<Dtype>::IF_speedup_achieved = GFLOPs_origin/GFLOPs_left >= APP<Dtype>::speedup;
     
     Dtype num_param_left   = 0;
     Dtype num_param_origin = 0;
-    for (int i = 0; i < APP::conv_layer_cnt + APP::fc_layer_cnt; ++i) {
-        num_param_left   += APP::num_param[i] * (1 - APP::pruned_ratio[i]);
-        num_param_origin += APP::num_param[i];
+    for (int i = 0; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
+        num_param_left   += APP<Dtype>::num_param[i] * (1 - APP<Dtype>::pruned_ratio[i]);
+        num_param_origin += APP<Dtype>::num_param[i];
     }
-    APP::IF_compRatio_achieved = num_param_origin/num_param_left >= APP::compRatio;
+    APP<Dtype>::IF_compRatio_achieved = num_param_origin/num_param_left >= APP<Dtype>::compRatio;
   
   
-    if (APP::IF_speedup_achieved || APP::IF_compRatio_achieved) {
-        for (int i = 0; i < APP::layer_index.size(); ++i) {
-            APP::iter_prune_finished[i] = -1; 
+    if (APP<Dtype>::IF_speedup_achieved || APP<Dtype>::IF_compRatio_achieved) {
+        for (int i = 0; i < APP<Dtype>::layer_index.size(); ++i) {
+            APP<Dtype>::iter_prune_finished[i] = -1; 
         }
     }
   
@@ -431,8 +432,8 @@ void Solver<Dtype>::Solve(const char* resume_file) {
     Snapshot();
   }
   if (requested_early_exit_) {
-    if (APP::num_log) { Logshot(); }
-    if (APP::prune_method.substr(0, 2) == "PP") { PruneStateShot(); }
+    if (APP<Dtype>::num_log) { Logshot(); }
+    if (APP<Dtype>::prune_coremthd == "SPP") { PruneStateShot(); }
     LOG(INFO) << "Optimization stopped early.";
     return;
   }
@@ -454,8 +455,8 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   if (param_.test_interval() && iter_ % param_.test_interval() == 0) {
     TestAll();
   }
-  if (APP::num_log) { Logshot(); }
-  if (APP::prune_method.substr(0, 2) == "PP") { PruneStateShot(); }
+  if (APP<Dtype>::num_log) { Logshot(); }
+  if (APP<Dtype>::prune_method.substr(0, 2) == "PP") { PruneStateShot(); }
   LOG(INFO) << "Optimization Done.";
 }
 
@@ -566,7 +567,7 @@ void Solver<Dtype>::Snapshot() {
 template <typename Dtype>
 void Solver<Dtype>::PruneStateShot() {
     map<string, int>::iterator it_m;
-    for (it_m = APP::layer_index.begin(); it_m != APP::layer_index.end(); ++it_m) {
+    for (it_m = APP<Dtype>::layer_index.begin(); it_m != APP<Dtype>::layer_index.end(); ++it_m) {
         const char* outfile = (param_.snapshot_prefix() + "prob_snapshot/prob_" + it_m->first + ".txt").c_str();
         if (!access(outfile, 0)) { /// outfile has already existed
             remove(outfile);
@@ -576,8 +577,8 @@ void Solver<Dtype>::PruneStateShot() {
             cout << "Error: opening prob file failed: " << prob << endl; 
         } else {
             prob << iter_ << "\n"; 
-            vector<float> pr = APP::history_prob[it_m->second];
-            vector<float>::iterator it;
+            vector<Dtype> pr = APP<Dtype>::history_prob[it_m->second];
+            typename vector<Dtype>::iterator it;
             for (it = pr.begin(); it != pr.end(); ++it) {
                 prob << *it << " ";
             }
@@ -609,16 +610,16 @@ void Solver<Dtype>::Logshot() {
     ofstream log_w(ww, ofstream::app); 
     ofstream log_d(dd, ofstream::app);
     
-    vector<vector<vector<float> > >::iterator it_l; /// it_layer
-    vector<vector<float> >::iterator it_w; /// it_weight
-    vector<float>::iterator it_i; /// it_iter
+    typename vector<vector<vector<Dtype> > >::iterator it_l; /// it_layer
+    typename vector<vector<Dtype> >::iterator it_w; /// it_weight
+    typename vector<Dtype>::iterator it_i; /// it_iter
     vector<vector<int> >::iterator it_il;
     vector<int>::iterator it_iw;
 
     if (!log_i.is_open()) { 
         cout << "Error: opening file failed: " << ii << endl; 
     } else {
-        for (it_il = APP::log_index.begin(); it_il != APP::log_index.end(); ++it_il) {
+        for (it_il = APP<Dtype>::log_index.begin(); it_il != APP<Dtype>::log_index.end(); ++it_il) {
             for (it_iw = (*it_il).begin(); it_iw != (*it_il).end(); ++it_iw) {
                 log_i << *it_iw << " ";
             }
@@ -629,7 +630,7 @@ void Solver<Dtype>::Logshot() {
     if (!log_w.is_open()) { 
         cout << "Error: opening file failed: " << ww << endl; 
     } else {
-        for (it_l = APP::log_weight.begin(); it_l != APP::log_weight.end(); ++it_l) {
+        for (it_l = APP<Dtype>::log_weight.begin(); it_l != APP<Dtype>::log_weight.end(); ++it_l) {
             for (it_w = (*it_l).begin(); it_w != (*it_l).end(); ++it_w) {
                 for (it_i = (*it_w).begin(); it_i != (*it_w).end(); ++it_i) {
                     log_w << *it_i << " ";
@@ -643,7 +644,7 @@ void Solver<Dtype>::Logshot() {
     if (!log_d.is_open()) { 
         cout << "Error: opening file failed: " << dd << endl; 
     } else {
-        for (it_l = APP::log_diff.begin(); it_l != APP::log_diff.end(); ++it_l) {
+        for (it_l = APP<Dtype>::log_diff.begin(); it_l != APP<Dtype>::log_diff.end(); ++it_l) {
             for (it_w = (*it_l).begin(); it_w != (*it_l).end(); ++it_w) {
                 for (it_i = (*it_w).begin(); it_i != (*it_w).end(); ++it_i) {
                     log_d << *it_i << " ";

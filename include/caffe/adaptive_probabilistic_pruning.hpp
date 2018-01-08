@@ -11,6 +11,7 @@
 namespace caffe {
 using namespace std;
 
+template<typename Dtype>
 class APP {
 public:
      APP() {};
@@ -20,27 +21,28 @@ public:
     /// pass params from solver.prototxt to layer
     static string prune_method;
     static string prune_unit;
-    static string criteria;
+    static string prune_coremthd;
+    static string criteria; 
     static int num_once_prune;
     static int prune_interval;
-    static float rgamma;
-    static float rpower;
-    static float cgamma;
-    static float cpower;
+    static Dtype rgamma;
+    static Dtype rpower;
+    static Dtype cgamma;
+    static Dtype cpower;
     static int prune_begin_iter;
     static int iter_size;
-    static float score_decay;
-    static float AA;
-    static float kk;
-    static float speedup;
-    static float compRatio;
+    static Dtype score_decay;
+    static Dtype AA;
+    static Dtype kk;
+    static Dtype speedup;
+    static Dtype compRatio;
     static bool IF_update_row_col;
     static bool IF_eswpf;
-    static float prune_threshold;
-    static float target_reg;
+    static Dtype prune_threshold;
+    static Dtype target_reg;
     static int num_iter_reg;
     static int reg_cushion_iter; // In the beginning of reg, improve the reg little-by-little to mitigate the side-effect. `reg_cushion_iter` is the iter of this mitigation perioid
-    static float hrank_momentum;
+    static Dtype hrank_momentum;
     
     
     static int inner_iter;
@@ -59,69 +61,164 @@ public:
     
     
     
-    static vector<float> num_pruned_col;
+    static vector<Dtype> num_pruned_col;
     static vector<int>   num_pruned_row;
     static vector<int>   num_pruned_weight;
     static vector<int>   pruned_rows;
-    static vector<vector<bool> > masks;
+    static vector<vector<Dtype> > masks;
     static vector<vector<bool> > IF_row_pruned;
     static vector<vector<vector<bool> > > IF_col_pruned;
     static vector<vector<bool> > IF_weight_pruned;
-    static vector<vector<float> > history_prob;
-    static vector<vector<float> > history_reg;
-    static vector<vector<float> > history_reg_weight;
-    static vector<vector<float> > hscore;
-    static vector<vector<float> > hrank;
-    static vector<vector<float> > hhrank;
+    static vector<vector<Dtype> > history_prob;
+    static vector<vector<Dtype> > history_reg;
+    static vector<vector<Dtype> > history_reg_weight;
+    static vector<vector<Dtype> > hscore;
+    static vector<vector<Dtype> > hrank;
+    static vector<vector<Dtype> > hhrank;
     static vector<int> iter_prune_finished;
-    static vector<float> prune_ratio;
-    static vector<float> delta;
-    static vector<float> pruned_ratio;
-    static vector<float> pruned_ratio_col;
-    static vector<float> pruned_ratio_row;
-    static vector<float> GFLOPs;
-    static vector<float> num_param;
-    static vector<float> reg_to_distribute;
+    static vector<Dtype> prune_ratio;
+    static vector<Dtype> delta;
+    static vector<Dtype> pruned_ratio;
+    static vector<Dtype> pruned_ratio_col;
+    static vector<Dtype> pruned_ratio_row;
+    static vector<Dtype> GFLOPs;
+    static vector<Dtype> num_param;
+    static vector<Dtype> reg_to_distribute;
     
     
     static int num_log;
-    static vector<vector<vector<float> > > log_weight;
-    static vector<vector<vector<float> > > log_diff;
+    static vector<vector<vector<Dtype> > > log_weight;
+    static vector<vector<vector<Dtype> > > log_diff;
     static vector<vector<int> > log_index;
     static string snapshot_prefix;
     /// --------------------------------
     
-    static int window_size;  
-    static float score_decay_rate;
+    static int window_size;
+    static Dtype score_decay_rate;
     static bool use_score_decay;
     
     // When to Prune or Reg etc.
     static int when_to_col_reg;
-    static float col_reg;
-    static float diff_reg;
+    static Dtype col_reg;
+    static Dtype diff_reg;
     
     // Decrease-Weight_Decay
     static int max_num_column_to_prune;
 
     // Selective Reg
-    static float reg_decay;
+    static Dtype reg_decay;
     static bool use_selective_reg;
-    static float selective_reg_cut_threshold;
     
     // Adaptive SPP
-    static float loss; 
-    static float loss_decay;
-    static float Delta_loss_history;
-    static float learning_speed;
+    static Dtype loss; 
+    static Dtype loss_decay;
+    static Dtype Delta_loss_history;
+    static Dtype learning_speed;
     
     const static int test = 10;
-    
-    
 
-    
-
-    
 }; 
+
+    template<typename Dtype>  string  APP<Dtype>::prune_method   = "None"; /// initialized for caffe test, which has no solver but this info is still needed in layer.
+    template<typename Dtype>  string  APP<Dtype>::prune_unit     = "None";
+    template<typename Dtype>  string  APP<Dtype>::prune_coremthd = "None";
+    template<typename Dtype>  string  APP<Dtype>::criteria;
+    template<typename Dtype>  int     APP<Dtype>::num_once_prune;
+    template<typename Dtype>  int     APP<Dtype>::prune_interval;
+    template<typename Dtype>  Dtype   APP<Dtype>::rgamma;
+    template<typename Dtype>  Dtype   APP<Dtype>::rpower;
+    template<typename Dtype>  Dtype   APP<Dtype>::cgamma;
+    template<typename Dtype>  Dtype   APP<Dtype>::cpower;
+    template<typename Dtype>  int     APP<Dtype>::prune_begin_iter;
+    template<typename Dtype>  int     APP<Dtype>::iter_size;
+    template<typename Dtype>  Dtype   APP<Dtype>::score_decay = 0;
+    template<typename Dtype>  Dtype   APP<Dtype>::AA;
+    template<typename Dtype>  Dtype   APP<Dtype>::kk;
+    template<typename Dtype>  Dtype   APP<Dtype>::speedup;
+    template<typename Dtype>  Dtype   APP<Dtype>::compRatio;
+    template<typename Dtype>  bool    APP<Dtype>::IF_update_row_col;
+    template<typename Dtype>  bool    APP<Dtype>::IF_eswpf;
+    template<typename Dtype>  Dtype   APP<Dtype>::prune_threshold;
+    template<typename Dtype>  Dtype   APP<Dtype>::target_reg;
+    template<typename Dtype>  int     APP<Dtype>::num_iter_reg;
+    template<typename Dtype>  int     APP<Dtype>::reg_cushion_iter;
+    template<typename Dtype>  Dtype   APP<Dtype>::hrank_momentum;
+
+    // 1.2 Info shared between solver and layer, initailized here
+    template<typename Dtype>  int   APP<Dtype>::inner_iter = 0;
+    template<typename Dtype>  int   APP<Dtype>::step_ = -1;
+    template<typename Dtype>  bool  APP<Dtype>::IF_alpf = false; /// if all layer prune finished
+    template<typename Dtype>  bool  APP<Dtype>::IF_speedup_achieved   = false;
+    template<typename Dtype>  bool  APP<Dtype>::IF_compRatio_achieved = false;
+
+    
+    // 2.1 Info shared among layers
+    template<typename Dtype>  map<string, int>  APP<Dtype>::layer_index;
+    template<typename Dtype>  int  APP<Dtype>::fc_layer_cnt   = 0;
+    template<typename Dtype>  int  APP<Dtype>::conv_layer_cnt = 0;
+    template<typename Dtype>  vector<int>  APP<Dtype>::filter_area;
+    template<typename Dtype>  vector<int>  APP<Dtype>::group;
+    template<typename Dtype>  vector<int>  APP<Dtype>::priority;
+    
+     
+    
+    // 2.2 Pruning state (key)
+    template<typename Dtype>  vector<Dtype>  APP<Dtype>::num_pruned_col;
+    template<typename Dtype>  vector<int>    APP<Dtype>::num_pruned_row;
+    template<typename Dtype>  vector<int>    APP<Dtype>::num_pruned_weight;
+    template<typename Dtype>  vector<int>    APP<Dtype>::pruned_rows; /// used in UpdateNumCol
+    template<typename Dtype>  vector<vector<Dtype> >  APP<Dtype>::masks;
+    template<typename Dtype>  vector<vector<bool> >   APP<Dtype>::IF_row_pruned;
+    template<typename Dtype>  vector<vector<vector<bool> > >  APP<Dtype>::IF_col_pruned;
+    template<typename Dtype>  vector<vector<bool> >   APP<Dtype>::IF_weight_pruned;
+    template<typename Dtype>  vector<vector<Dtype> >  APP<Dtype>::history_prob;
+    template<typename Dtype>  vector<vector<Dtype> >  APP<Dtype>::history_reg;
+    template<typename Dtype>  vector<vector<Dtype> >  APP<Dtype>::history_reg_weight; // for each weight, not column
+    template<typename Dtype>  vector<vector<Dtype> >  APP<Dtype>::hscore;
+    template<typename Dtype>  vector<vector<Dtype> >  APP<Dtype>::hrank;
+    template<typename Dtype>  vector<vector<Dtype> >  APP<Dtype>::hhrank;
+    template<typename Dtype>  vector<int>    APP<Dtype>::iter_prune_finished;
+    template<typename Dtype>  vector<Dtype>  APP<Dtype>::prune_ratio;
+    template<typename Dtype>  vector<Dtype>  APP<Dtype>::delta;
+    template<typename Dtype>  vector<Dtype>  APP<Dtype>::pruned_ratio;
+    template<typename Dtype>  vector<Dtype>  APP<Dtype>::pruned_ratio_col;
+    template<typename Dtype>  vector<Dtype>  APP<Dtype>::pruned_ratio_row;
+    template<typename Dtype>  vector<Dtype>  APP<Dtype>::GFLOPs;
+    template<typename Dtype>  vector<Dtype>  APP<Dtype>::num_param;
+    template<typename Dtype>  vector<Dtype>  APP<Dtype>::reg_to_distribute;
+    
+    // 3. Logging
+    template<typename Dtype>  int     APP<Dtype>::num_log = 0;
+    template<typename Dtype>  vector<vector<vector<Dtype> > >  APP<Dtype>::log_weight;
+    template<typename Dtype>  vector<vector<vector<Dtype> > >  APP<Dtype>::log_diff;
+    template<typename Dtype>  vector<vector<int> >    APP<Dtype>::log_index;
+    template<typename Dtype>  string  APP<Dtype>::snapshot_prefix;
+    /// --------------------------------
+
+    // use window proposal or score decay ----- legacy
+    template<typename Dtype>  int    APP<Dtype>::window_size = 40;
+    template<typename Dtype>  bool   APP<Dtype>::use_score_decay = true;
+    template<typename Dtype>  Dtype  APP<Dtype>::score_decay_rate = 0.88;
+    
+    // selective reg ----- legacy
+    template<typename Dtype>  bool   APP<Dtype>::use_selective_reg = false; // default is false
+    template<typename Dtype>  Dtype  APP<Dtype>::reg_decay = 0.59;
+    
+    // the penalty ratio of column regularization
+    template<typename Dtype>  Dtype  APP<Dtype>::col_reg = 0.05; //0.0075; // 0.0008;  
+    template<typename Dtype>  Dtype  APP<Dtype>::diff_reg = 0.00001; 
+        
+    // Decrease-Weight-Decay ----- legacy
+    template<typename Dtype>  int  APP<Dtype>::max_num_column_to_prune = 0; // If "adaptive" used, this must be provided.
+    // When to Prune or Reg etc.
+    template<typename Dtype>  int  APP<Dtype>::when_to_col_reg = 7654321; // when to apply col reg, SSL or SelectiveReg
+
+    // Adaptive SPP
+    template<typename Dtype>  Dtype  APP<Dtype>::loss = 0;
+    template<typename Dtype>  Dtype  APP<Dtype>::loss_decay = 0.7;
+    template<typename Dtype>  Dtype  APP<Dtype>::Delta_loss_history = 0;
+    template<typename Dtype>  Dtype  APP<Dtype>::learning_speed = 0;
+
 
 }
 

@@ -18,47 +18,47 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
     const string layer_name = this->layer_param_.name();
-    const string mthd = APP::prune_method;
-    const int L = APP::layer_index[layer_name];
+    const string mthd = APP<Dtype>::prune_method;
+    const int L = APP<Dtype>::layer_index[layer_name];
     this->IF_restore = false;
     
     /// IF_mask
     const bool IF_prune       = mthd != "None";
-    const bool IF_enough_iter = (APP::step_ - 1) >= APP::prune_begin_iter;
-    const bool IF_pruned      = APP::pruned_ratio[L] > 0;
+    const bool IF_enough_iter = (APP<Dtype>::step_ - 1) >= APP<Dtype>::prune_begin_iter;
+    const bool IF_pruned      = APP<Dtype>::pruned_ratio[L] > 0;
     this->IF_mask             = IF_prune && (IF_enough_iter || IF_pruned);
     
     if (this->phase_ == TRAIN) {
         if (this->IF_mask) {
-            if (APP::IF_update_row_col) {
+            if (APP<Dtype>::IF_update_row_col) {
                 // UpdateNumPrunedRow/Col
                 // Note that, UpdateNumPrunedRow/Col before pruning, 
                 // so that when calculating score, the zombie weights will not be counted.
-                if (APP::prune_unit == "Col" && L != APP::conv_layer_cnt-1) {
-                    if (APP::step_-1 - APP::iter_prune_finished[L+1] <= 1) {
+                if (APP<Dtype>::prune_unit == "Col" && L != APP<Dtype>::conv_layer_cnt-1) {
+                    if (APP<Dtype>::step_-1 - APP<Dtype>::iter_prune_finished[L+1] <= 1) {
                         UpdateNumPrunedRow();
                     }
-                } else if (APP::prune_unit == "Row" && mthd != "TP_Row" && L != 0) {
+                } else if (APP<Dtype>::prune_unit == "Row" && mthd != "TP_Row" && L != 0 && APP<Dtype>::pruned_rows.size()) {
                     UpdateNumPrunedCol();
                 } /// Note we don't update column for TP, because their method didn't mention this.
                 UpdatePrunedRatio();
             }
             
             // check if prune finished, get into here ONLY once
-            if (APP::iter_prune_finished[L] == INT_MAX) {
+            if (APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
                 Dtype pruned_ratio;
-                if (APP::prune_unit == "Weight")   { pruned_ratio = APP::pruned_ratio[L];     }
-                else if (APP::prune_unit == "Row") { pruned_ratio = APP::pruned_ratio_row[L]; }
-                else if (APP::prune_unit == "Col") { pruned_ratio = APP::pruned_ratio_col[L]; }
-                const bool layer_finish     = pruned_ratio >= APP::prune_ratio[L]; /// layer pruning target achieved
-                const bool net_finish_speed = APP::IF_speedup_achieved;   /// net pruning target of speed achieved
-                const bool net_finish_param = APP::IF_compRatio_achieved; /// net pruning target of compression achieved
+                if (APP<Dtype>::prune_unit == "Weight")   { pruned_ratio = APP<Dtype>::pruned_ratio[L];     }
+                else if (APP<Dtype>::prune_unit == "Row") { pruned_ratio = APP<Dtype>::pruned_ratio_row[L]; }
+                else if (APP<Dtype>::prune_unit == "Col") { pruned_ratio = APP<Dtype>::pruned_ratio_col[L]; }
+                const bool layer_finish     = pruned_ratio >= APP<Dtype>::prune_ratio[L]; /// layer pruning target achieved
+                const bool net_finish_speed = APP<Dtype>::IF_speedup_achieved;   /// net pruning target of speed achieved
+                const bool net_finish_param = APP<Dtype>::IF_compRatio_achieved; /// net pruning target of compression achieved
                 
                 if (layer_finish || net_finish_speed || net_finish_param) {
-                    APP::iter_prune_finished[L] = APP::step_ - 1;
+                    APP<Dtype>::iter_prune_finished[L] = APP<Dtype>::step_ - 1;
                     
-                    char* mthd = new char[strlen(APP::prune_method.c_str()) + 1];
-                    strcpy(mthd, APP::prune_method.c_str());
+                    char* mthd = new char[strlen(APP<Dtype>::prune_method.c_str()) + 1];
+                    strcpy(mthd, APP<Dtype>::prune_method.c_str());
                     const string mthd_ = strtok(mthd, "_"); // mthd is like "Reg_Col", the first split is `Reg`
                     if (mthd_ == "SPP") { CleanWorkForPP(); } // last time, do some clean work
                     
@@ -66,17 +66,17 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                     char rlayer[10];
                     char rrow[10];
                     char rcol[10];
-                    sprintf(rlayer, "%6.4f", APP::pruned_ratio[L]);
-                    sprintf(rrow,   "%6.4f", APP::pruned_ratio_row[L]);
-                    sprintf(rcol,   "%6.4f", APP::pruned_ratio_col[L]);
+                    sprintf(rlayer, "%6.4f", APP<Dtype>::pruned_ratio[L]);
+                    sprintf(rrow,   "%6.4f", APP<Dtype>::pruned_ratio_row[L]);
+                    sprintf(rcol,   "%6.4f", APP<Dtype>::pruned_ratio_col[L]);
                     cout << layer_name << " prune finished!" 
-                         << "  step: " << APP::step_
-                         << "  net speedup: " << APP::speedup
-                         << "  net compRatio: " << APP::compRatio
+                         << "  step: " << APP<Dtype>::step_
+                         << "  net speedup: " << APP<Dtype>::speedup
+                         << "  net compRatio: " << APP<Dtype>::compRatio
                          << "  pruned_ratio: " << rlayer
                          << "  pruned_ratio_row: " << rrow
                          << "  pruned_ratio_col: " << rcol 
-                         << "  prune_ratio: " << APP::prune_ratio[L] << endl;
+                         << "  prune_ratio: " << APP<Dtype>::prune_ratio[L] << endl;
                     IF_alpf();
                 }
             }
@@ -84,17 +84,17 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         
         // Print and check, before update probs
         // put this outside, to print even when we do not prune
-        if (L == LAYER_PRINTED && APP::step_ % SHOW_INTERVAL == 0 && APP::inner_iter == 0) {
+        if (L == LAYER_PRINTED && APP<Dtype>::step_ % SHOW_INTERVAL == 0 && APP<Dtype>::inner_iter == 0) {
             Print(L, 'f');
         }
 
         // Update masks and apply masks
-        if (this->IF_mask && APP::iter_prune_finished[L] == INT_MAX) {
-            if (mthd == "FP" && (APP::step_ - 1) % APP::prune_interval == 0) {
+        if (this->IF_mask && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
+            if (mthd == "FP" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
                 FilterPrune(); 
             } else if (mthd.substr(0, 3) == "PPc" && IF_hppf()) {
-                if (APP::prune_interval) {
-                    ProbPruneCol(APP::prune_interval);
+                if (APP<Dtype>::prune_interval) {
+                    ProbPruneCol(APP<Dtype>::prune_interval);
                 } else {
                     ProbPruneCol();
                 }
@@ -104,52 +104,55 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 PruneMinimals();
             }
             UpdatePrunedRatio();
+            if (L == APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt - 1) {
+                APP<Dtype>::pruned_rows.clear();
+            }
         }
         
         
         // Print 
-        if (mthd != "None" && L < SHOW_NUM_LAYER && APP::inner_iter == 0) {
+        if (mthd != "None" && L < SHOW_NUM_LAYER && APP<Dtype>::inner_iter == 0) {
             cout << layer_name << "  IF_mask: " << this->IF_mask 
-                 << "  pruned_ratio: " << APP::pruned_ratio[L];
+                 << "  pruned_ratio: " << APP<Dtype>::pruned_ratio[L];
             if (mthd == "PPr" || mthd == "FP" || mthd == "TP") {
-                cout << "  pruned_ratio_col: " << APP::num_pruned_col[L] * 1.0 / num_col << "(" << APP::num_pruned_col[L] << ")"
-                     << "  pruned_ratio_row: " << APP::num_pruned_row[L] * 1.0 / num_row << "(" << APP::num_pruned_row[L] << ")";
+                cout << "  pruned_ratio_col: " << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << "(" << APP<Dtype>::num_pruned_col[L] << ")"
+                     << "  pruned_ratio_row: " << APP<Dtype>::num_pruned_row[L] * 1.0 / num_row << "(" << APP<Dtype>::num_pruned_row[L] << ")";
             } else {
-                cout << "  pruned_ratio_row: " << APP::num_pruned_row[L] * 1.0 / num_row << "(" << APP::num_pruned_row[L] << ")"
-                     << "  pruned_ratio_col: " << APP::num_pruned_col[L] * 1.0 / num_col << "(" << APP::num_pruned_col[L] << ")";
+                cout << "  pruned_ratio_row: " << APP<Dtype>::num_pruned_row[L] * 1.0 / num_row << "(" << APP<Dtype>::num_pruned_row[L] << ")"
+                     << "  pruned_ratio_col: " << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << "(" << APP<Dtype>::num_pruned_col[L] << ")";
             }
-            cout << "  prune_ratio: "  << APP::prune_ratio[L] 
-                 << "  reg: " << APP::reg_to_distribute[L] 
-                 << "/" << ceil(APP::prune_ratio[L] * num_col) * APP::target_reg << endl; 
+            cout << "  prune_ratio: "  << APP<Dtype>::prune_ratio[L] 
+                 << "  reg: " << APP<Dtype>::reg_to_distribute[L] 
+                 << "/" << ceil(APP<Dtype>::prune_ratio[L] * num_col) * APP<Dtype>::target_reg << endl; 
         }
         
         
         // Weight logging
-        if (APP::num_log) {
-            const int num_log = APP::log_index[L].size();
+        if (APP<Dtype>::num_log) {
+            const int num_log = APP<Dtype>::log_index[L].size();
             for (int k = 0; k < num_log; ++k) {
-                const int index = APP::log_index[L][k];
+                const int index = APP<Dtype>::log_index[L][k];
                 Dtype sum = 0;
                 for (int i = 0; i < num_row; ++i) {
                     sum += fabs(muweight[i * num_col + index]);
                 }
                 sum /= num_row;
-                APP::log_weight[L][k].push_back(sum);
+                APP<Dtype>::log_weight[L][k].push_back(sum);
             }
         }
     } else {
-        if (this->IF_mask && APP::iter_prune_finished[L] == INT_MAX && mthd.substr(0, 2) == "PP") {
+        if (this->IF_mask && APP<Dtype>::iter_prune_finished[L] == INT_MAX && mthd.substr(0, 2) == "PP") {
             Dtype rands[num_col];
             caffe_rng_uniform(num_col, (Dtype)0, (Dtype)1, rands);
             for (int i = 0; i < count; ++i) {
-                APP::masks[L][i] = rands[i % num_col] < APP::history_prob[L][i % num_col] ? 1 : 0; /// generate masks
+                APP<Dtype>::masks[L][i] = rands[i % num_col] < APP<Dtype>::history_prob[L][i % num_col] ? 1 : 0; /// generate masks
             }              
             for (int i = 0; i < count; ++i) { 
                 this->weight_backup[i] = muweight[i]; /// backup weights
             } 
             this->IF_restore = true;
             for (int i = 0; i < count; ++i) { 
-                muweight[i] *= APP::masks[L][i]; /// apply masks
+                muweight[i] *= APP<Dtype>::masks[L][i]; /// apply masks
             } 
         }
     }
@@ -175,7 +178,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     /// Print feature map to check --------
     /// If row 3 and 8 are pruned in previous layer, then channel 3 and 8 will be only biases in this layer's feature map.
     /**
-    if (!APP::IN_TEST && L == 0) {
+    if (!APP<Dtype>::IN_TEST && L == 0) {
         cout << "bottom.size(): " << bottom.size() << endl;
         for (int i = 0; i < bottom.size(); ++i) {
             const Dtype* top_data = top[i]->cpu_data();
@@ -275,36 +278,49 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     const int count   = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
-    const int L = APP::layer_index[this->layer_param_.name()];
+    const int L = APP<Dtype>::layer_index[this->layer_param_.name()];
 
     /// Print and check
-    if (L == LAYER_PRINTED && APP::step_ % SHOW_INTERVAL == 0 && APP::inner_iter == 0) {
+    if (L == LAYER_PRINTED && APP<Dtype>::step_ % SHOW_INTERVAL == 0 && APP<Dtype>::inner_iter == 0) {
         Print(L, 'b');
     }
     
     /// Diff log
-    if (APP::num_log) {
-        const int num_log = APP::log_index[L].size();
+    if (APP<Dtype>::num_log) {
+        const int num_log = APP<Dtype>::log_index[L].size();
         for (int i = 0; i < num_log; ++i) {
-            const int index = APP::log_index[L][i];
+            const int index = APP<Dtype>::log_index[L][i];
             Dtype sum = 0;
             for (int r = 0; r < num_row; ++r) {
                 sum += fabs(muweight_diff[r * num_col + index]);
             }
             sum /= num_row;
-            APP::log_diff[L][i].push_back(sum);
+            APP<Dtype>::log_diff[L][i].push_back(sum);
         }
     }
     
     if (this->IF_mask) {
-        if (APP::iter_prune_finished[L] == INT_MAX) {
-            if (APP::prune_method == "TP" && (APP::step_ - 1) % APP::prune_interval == 0) {
+        if (APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
+            if (APP<Dtype>::prune_method == "TP" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
                 TaylorPrune(top);
             }
         }
         for (int j = 0; j < count; ++j) { 
-            muweight_diff[j] *= APP::masks[L][j]; 
+            muweight_diff[j] *= APP<Dtype>::masks[L][j]; 
         }
+        
+        // Trying: update this to GPU code
+        /* 
+        caffe_gpu_mul(this->blobs_[0]->count(), 
+                      this->blobs_[0]->gpu_diff(), 
+                      &(APP<Dtype>::masks[L][0]), 
+                      this->blobs_[0]->mutable_gpu_diff());
+        
+        cout << this->layer_param_.name() << " - weight_diff:" << endl;
+        for (int j = 0; j < 20;  ++j) {
+            cout << muweight_diff[j] << endl;
+        }
+        */
     }
 /// ------------------------------------------------------------- 
   

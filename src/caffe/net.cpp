@@ -170,9 +170,9 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
           << "Top shape: " << top_vecs_[layer_id][top_id]->shape_string();
       /// --------------------------------------------------------------------
       /// GFLOPs
-      if (phase_ == TRAIN && APP::layer_index.count(layer_param.name())) {
-          const int L = APP::layer_index[layer_param.name()];
-          APP::GFLOPs[L] *= (top_vecs_[layer_id][top_id]->shape()[2] * top_vecs_[layer_id][top_id]->shape()[3]);                           
+      if (phase_ == TRAIN && APP<Dtype>::layer_index.count(layer_param.name()) && layer_param.type() == "Convolution") {
+          const int L = APP<Dtype>::layer_index[layer_param.name()];
+          APP<Dtype>::GFLOPs[L] *= (top_vecs_[layer_id][top_id]->shape()[2] * top_vecs_[layer_id][top_id]->shape()[3]);                           
           // std::cout << this->blobs_[0]->shape()[0]
                     // << " " << this->blobs_[0]->shape()[1]
                     // << " " << this->blobs_[0]->shape()[2]
@@ -823,7 +823,7 @@ void Net<Dtype>::CopyTrainedLayersFrom(const NetParameter& param) {
     
     // ---------------------------------------------------------------------------------------------
     // WANGHUAN, restore masks
-    if (APP::prune_method != "None" && phase_ == TRAIN && target_blobs.size()) {
+    if (APP<Dtype>::prune_method != "None" && phase_ == TRAIN && target_blobs.size()) {
         LOG(INFO) << "Going to restore masks from binproto file, current layer: " << source_layer_name;
         layers_[target_layer_id]->ComputeBlobMask();
     }
@@ -882,7 +882,7 @@ void Net<Dtype>::CopyTrainedLayersFromHDF5(const string trained_filename) {
         
     // ---------------------------------------------------------------------------------------------
     // WANGHUAN, restore masks
-    if (APP::prune_method != "None" && phase_ == TRAIN && target_blobs.size()) {
+    if (APP<Dtype>::prune_method != "None" && phase_ == TRAIN && target_blobs.size()) {
         LOG(INFO) << "Going to restore masks from H5 file, current layer: " << source_layer_name;
         layers_[target_layer_id]->ComputeBlobMask();
     }
