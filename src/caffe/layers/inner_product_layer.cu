@@ -23,14 +23,14 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const string mthd = APP<Dtype>::prune_method;
     const int L = APP<Dtype>::layer_index[layer_name];
     
-    /// IF_mask
-    const bool IF_prune       = mthd != "None";
-    const bool IF_enough_iter = (APP<Dtype>::step_ - 1) >= APP<Dtype>::prune_begin_iter;
-    const bool IF_pruned      = APP<Dtype>::pruned_ratio[L] > 0;
-    this->IF_mask             = IF_prune && (IF_enough_iter || IF_pruned);
+    /// IF_prune
+    const bool IF_want_prune  = mthd != "None" && APP<Dtype>::prune_ratio[L] > 0; // if you want to prune, you must specify a meaningful prune_method and give a positive prune_ratio
+    const bool IF_been_pruned = APP<Dtype>::pruned_ratio[L] > 0; // for a pruned layer, continue to prune
+    const bool IF_enough_iter = APP<Dtype>::step_ >= APP<Dtype>::prune_begin_iter+1; // for a raw layer, if iter is enough, then prune
+    this->IF_prune = IF_want_prune && (IF_been_pruned || IF_enough_iter);
     
     if (this->phase_ == TRAIN) {
-        if (this->IF_mask) {
+        if (this->IF_prune) {
             if (APP<Dtype>::IF_update_row_col) {
                 // UpdateNumPrunedRow/Col
                 // Note that, UpdateNumPrunedRow/Col before pruning, 
@@ -84,7 +84,7 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
         
         // Update masks
-        if (this->IF_mask && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
+        if (this->IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
             if (APP<Dtype>::prune_coremthd == "Reg") {
                 PruneMinimals();
             }
@@ -97,7 +97,7 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         
         // After update, print current pruning state
         if (mthd != "None" && L < SHOW_NUM_LAYER && APP<Dtype>::inner_iter == 0) {
-               cout << layer_name << "  IF_mask: " << this->IF_mask 
+               cout << layer_name << "  IF_prune: " << this->IF_prune 
                  << "  pruned_ratio: " << APP<Dtype>::pruned_ratio[L] 
                  << "  prune_ratio: " << APP<Dtype>::prune_ratio[L] << endl;
         }
@@ -144,21 +144,19 @@ void InnerProductLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
           (Dtype)1., this->blobs_[0]->mutable_gpu_diff());
     }
     // -------------------------------------------------
-    const int count = this->blobs_[0]->count();
     const int L = APP<Dtype>::layer_index[this->layer_param_.name()];
-    Dtype* muweight_diff = this->blobs_[0]->mutable_cpu_diff();
-    
-    // Print
-    if (L == LAYER_PRINTED && APP<Dtype>::step_ % SHOW_INTERVAL == 0 && APP<Dtype>::inner_iter == 0) {
-        Print(L, 'b');
+    if (APP<Dtype>::prune_method != "None" && APP<Dtype>::pruned_ratio[L] > 0) {
+        // Print
+        if (L == LAYER_PRINTED && APP<Dtype>::step_ % SHOW_INTERVAL == 0 && APP<Dtype>::inner_iter == 0) {
+            Print(L, 'b');
+        }
+        
+        const int count = this->blobs_[0]->count();
+        Dtype* muweight_diff = this->blobs_[0]->mutable_cpu_diff();
+        for (int i = 0; i < count; ++i) {
+            muweight_diff[i] *= APP<Dtype>::masks[L][i];
+        }
     }
-    
-    for (int i = 0; i < count; ++i) {
-        muweight_diff[i] *= APP<Dtype>::masks[L][i];
-    }
-    
-
-    
     // -------------------------------------------------
     
   }

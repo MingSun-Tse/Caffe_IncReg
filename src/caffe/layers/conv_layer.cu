@@ -22,14 +22,14 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const int L = APP<Dtype>::layer_index[layer_name];
     this->IF_restore = false;
     
-    /// IF_mask
-    const bool IF_prune       = mthd != "None";
-    const bool IF_enough_iter = (APP<Dtype>::step_ - 1) >= APP<Dtype>::prune_begin_iter;
-    const bool IF_pruned      = APP<Dtype>::pruned_ratio[L] > 0;
-    this->IF_mask             = IF_prune && (IF_enough_iter || IF_pruned);
+    /// IF_prune
+    const bool IF_want_prune  = mthd != "None" && APP<Dtype>::prune_ratio[L] > 0; // if you want to prune, you must specify a meaningful prune_method and give a positive prune_ratio
+    const bool IF_been_pruned = APP<Dtype>::pruned_ratio[L] > 0; // for a pruned layer, continue to prune
+    const bool IF_enough_iter = APP<Dtype>::step_ >= APP<Dtype>::prune_begin_iter+1; // for a raw layer, if iter is enough, then prune
+    this->IF_prune = IF_want_prune && (IF_been_pruned || IF_enough_iter);
     
     if (this->phase_ == TRAIN) {
-        if (this->IF_mask) {
+        if (this->IF_prune) {
             if (APP<Dtype>::IF_update_row_col) {
                 // UpdateNumPrunedRow/Col
                 // Note that, UpdateNumPrunedRow/Col before pruning, 
@@ -89,7 +89,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
 
         // Update masks and apply masks
-        if (this->IF_mask && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
+        if (this->IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
             if (mthd == "FP" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
                 FilterPrune(); 
             } else if (mthd.substr(0, 3) == "PPc" && IF_hppf()) {
@@ -112,7 +112,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         
         // Print 
         if (mthd != "None" && L < SHOW_NUM_LAYER && APP<Dtype>::inner_iter == 0) {
-            cout << layer_name << "  IF_mask: " << this->IF_mask 
+            cout << layer_name << "  IF_prune: " << this->IF_prune 
                  << "  pruned_ratio: " << APP<Dtype>::pruned_ratio[L];
             if (mthd == "PPr" || mthd == "FP" || mthd == "TP") {
                 cout << "  pruned_ratio_col: " << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << "(" << APP<Dtype>::num_pruned_col[L] << ")"
@@ -141,7 +141,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             }
         }
     } else {
-        if (this->IF_mask && APP<Dtype>::iter_prune_finished[L] == INT_MAX && mthd.substr(0, 2) == "PP") {
+        if (this->IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX && mthd.substr(0, 2) == "PP") {
             Dtype rands[num_col];
             caffe_rng_uniform(num_col, (Dtype)0, (Dtype)1, rands);
             for (int i = 0; i < count; ++i) {
@@ -280,11 +280,6 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     const int num_col = count / num_row;
     const int L = APP<Dtype>::layer_index[this->layer_param_.name()];
 
-    /// Print and check
-    if (L == LAYER_PRINTED && APP<Dtype>::step_ % SHOW_INTERVAL == 0 && APP<Dtype>::inner_iter == 0) {
-        Print(L, 'b');
-    }
-    
     /// Diff log
     if (APP<Dtype>::num_log) {
         const int num_log = APP<Dtype>::log_index[L].size();
@@ -299,12 +294,19 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
         }
     }
     
-    if (this->IF_mask) {
-        if (APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
-            if (APP<Dtype>::prune_method == "TP" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
-                TaylorPrune(top);
-            }
+    // TaylorPrune
+    if (this->IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
+        if (APP<Dtype>::prune_method == "TP" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
+            TaylorPrune(top);
         }
+    }
+    
+    /// Print and check
+    if (L == LAYER_PRINTED && APP<Dtype>::step_ % SHOW_INTERVAL == 0 && APP<Dtype>::inner_iter == 0) {
+        Print(L, 'b');
+    }
+    
+    if (APP<Dtype>::prune_method != "None" && APP<Dtype>::pruned_ratio[L] > 0) { 
         for (int j = 0; j < count; ++j) { 
             muweight_diff[j] *= APP<Dtype>::masks[L][j]; 
         }

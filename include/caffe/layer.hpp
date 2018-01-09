@@ -100,7 +100,7 @@ class Layer {
   Dtype pruned_ratio;
   Dtype delta;
   bool IF_restore;
-  bool IF_mask;
+  bool IF_prune;
   vector<Dtype> history_score;
 
   vector<Dtype> weight_backup;
