@@ -322,11 +322,25 @@ void Solver<Dtype>::Step(int iters) {
     APP<Dtype>::learning_speed = APP<Dtype>::loss - smoothed_loss_;
     APP<Dtype>::loss = smoothed_loss_;
     cout << "learning_speed: " << APP<Dtype>::learning_speed << endl;
+
     /// ----------------------------------------------------------------------
 
     if (display) {
+      // -------------------------------
+      // calculate training speed
+      const time_t current_time = time(NULL);
+      if (APP<Dtype>::last_time == 0) {
+          APP<Dtype>::first_time = current_time;
+          APP<Dtype>::first_iter = iter_;
+      }
+      char train_speed[50];
+      sprintf(train_speed, "%.3f(%.3f)s/iter", (current_time - APP<Dtype>::last_time ) * 1.0 / param_.display(),
+                                               (current_time - APP<Dtype>::first_time) * 1.0 / (iter_ - APP<Dtype>::first_iter));
+      APP<Dtype>::last_time = current_time;
+      // -------------------------------
+      
       LOG_IF(INFO, Caffe::root_solver()) << "Iteration " << iter_
-          << ", smoothed loss = " << smoothed_loss_; 
+          << ", smoothed loss = " << smoothed_loss_ << ", speed = " << train_speed; 
       const vector<Blob<Dtype>*>& result = net_->output_blobs();
       int score_index = 0;
       for (int j = 0; j < result.size(); ++j) {

@@ -90,15 +90,15 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
 
         // Update masks and apply masks
         if (this->IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
-            if (mthd == "FP" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
+            if (mthd == "FP_Row" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
                 FilterPrune(); 
-            } else if (mthd.substr(0, 3) == "PPc" && IF_hppf()) {
+            } else if (mthd == "SPP_Col" && IF_hppf()) {
                 if (APP<Dtype>::prune_interval) {
                     ProbPruneCol(APP<Dtype>::prune_interval);
                 } else {
                     ProbPruneCol();
                 }
-            } else if (mthd == "PPr" && IF_hppf()) {
+            } else if (mthd == "SPP_Row" && IF_hppf()) {
                 ProbPruneRow();
             } else if (mthd == "Reg_Col" || mthd == "Reg_Weight") {
                 PruneMinimals();
@@ -296,7 +296,7 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     
     // TaylorPrune
     if (this->IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
-        if (APP<Dtype>::prune_method == "TP" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
+        if (APP<Dtype>::prune_method == "TP_Row" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
             TaylorPrune(top);
         }
     }
