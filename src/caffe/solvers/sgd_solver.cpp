@@ -504,8 +504,8 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                        net_params[param_id]->mutable_gpu_diff());    
         
         
-        // some occasions to return
-        if (APP<Dtype>::step_ <= APP<Dtype>::prune_begin_iter || APP<Dtype>::prune_method == "None") { return; }
+        // Three occasions to return
+        // 1. Get layer index and layer name, if not registered, don't reg it.
         const int L = param_id / 2; // TODO: improve
         bool IF_find_layer_name = false;
         std::map<string,int>::iterator it;
@@ -518,9 +518,17 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             }
         }
         if (!IF_find_layer_name) { return; }
-        if (APP<Dtype>::iter_prune_finished[L] != INT_MAX) { return; }
+        
+        // 2.
+        const bool IF_want_prune  = APP<Dtype>::prune_method != "None" && APP<Dtype>::prune_ratio[L] > 0;
+        const bool IF_been_pruned = APP<Dtype>::pruned_ratio[L] > 0;
+        const bool IF_enough_iter = APP<Dtype>::step_ >= APP<Dtype>::prune_begin_iter+1;
+        const bool IF_prune = IF_want_prune && (IF_been_pruned || IF_enough_iter);
+        if (!(IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX)) { return; }
+        
+        // 3. Do not reg biases
         const vector<int>& shape = net_params[param_id]->shape();
-        if (shape.size() == 1) { return; } // do not reg biases
+        if (shape.size() == 1) { return; } 
         
         
         const Dtype* weight = net_params[param_id]->cpu_data();

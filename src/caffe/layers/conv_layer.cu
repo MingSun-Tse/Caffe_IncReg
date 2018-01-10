@@ -26,19 +26,20 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const bool IF_want_prune  = mthd != "None" && APP<Dtype>::prune_ratio[L] > 0; // if you want to prune, you must specify a meaningful prune_method and give a positive prune_ratio
     const bool IF_been_pruned = APP<Dtype>::pruned_ratio[L] > 0; // for a pruned layer, continue to prune
     const bool IF_enough_iter = APP<Dtype>::step_ >= APP<Dtype>::prune_begin_iter+1; // for a raw layer, if iter is enough, then prune
-    this->IF_prune = IF_want_prune && (IF_been_pruned || IF_enough_iter);
+    const bool IF_prune = IF_want_prune && (IF_been_pruned || IF_enough_iter);
     
     if (this->phase_ == TRAIN) {
-        if (this->IF_prune) {
+        // For a layer which doesn't want to prune, it still should UpdateNumPrunedCol/Row because of neighbour layer
+        if (mthd != "None" && (IF_been_pruned || IF_enough_iter)) { 
             if (APP<Dtype>::IF_update_row_col) {
-                // UpdateNumPrunedRow/Col
-                // Note that, UpdateNumPrunedRow/Col before pruning, 
-                // so that when calculating score, the zombie weights will not be counted.
-                if (APP<Dtype>::prune_unit == "Col" && L != APP<Dtype>::conv_layer_cnt-1) {
+                // Note that, UpdateNumPrunedRow/Col before pruning, so that when calculating score, the zombie weights will not be counted.
+                // The last conv and last fc layer need not updating num of pruned row.
+                // In fact, the last conv should be updated row and the first fc should be updated col, but for simplicity, which are ignored for now.
+                if (APP<Dtype>::prune_unit == "Col" && L != APP<Dtype>::conv_layer_cnt-1) { 
                     if (APP<Dtype>::step_-1 - APP<Dtype>::iter_prune_finished[L+1] <= 1) {
                         UpdateNumPrunedRow();
                     }
-                } else if (APP<Dtype>::prune_unit == "Row" && mthd != "TP_Row" && L != 0 && APP<Dtype>::pruned_rows.size()) {
+                } else if (APP<Dtype>::prune_unit == "Row" && mthd != "TP_Row" && APP<Dtype>::pruned_rows.size()) {
                     UpdateNumPrunedCol();
                 } /// Note we don't update column for TP, because their method didn't mention this.
                 UpdatePrunedRatio();
@@ -89,7 +90,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
 
         // Update masks and apply masks
-        if (this->IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
+        if (IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
             if (mthd == "FP_Row" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
                 FilterPrune(); 
             } else if (mthd == "SPP_Col" && IF_hppf()) {
@@ -104,7 +105,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 PruneMinimals();
             }
             UpdatePrunedRatio();
-            if (L == APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt - 1) {
+            if (L == APP<Dtype>::conv_layer_cnt - 1) { // To avoid the first fc from updating col
                 APP<Dtype>::pruned_rows.clear();
             }
         }
@@ -112,7 +113,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         
         // Print 
         if (mthd != "None" && L < SHOW_NUM_LAYER && APP<Dtype>::inner_iter == 0) {
-            cout << layer_name << "  IF_prune: " << this->IF_prune 
+            cout << layer_name << "  IF_prune: " << IF_prune 
                  << "  pruned_ratio: " << APP<Dtype>::pruned_ratio[L];
             if (mthd == "PPr" || mthd == "FP" || mthd == "TP") {
                 cout << "  pruned_ratio_col: " << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << "(" << APP<Dtype>::num_pruned_col[L] << ")"
@@ -141,7 +142,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             }
         }
     } else {
-        if (this->IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX && mthd.substr(0, 2) == "PP") {
+        if (IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX && mthd.substr(0, 2) == "PP") {
             Dtype rands[num_col];
             caffe_rng_uniform(num_col, (Dtype)0, (Dtype)1, rands);
             for (int i = 0; i < count; ++i) {
@@ -295,13 +296,17 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     }
     
     // TaylorPrune
-    if (this->IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
-        if (APP<Dtype>::prune_method == "TP_Row" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
+    if (APP<Dtype>::prune_method == "TP_Row" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
+        const bool IF_want_prune  = APP<Dtype>::prune_method != "None" && APP<Dtype>::prune_ratio[L] > 0;
+        const bool IF_been_pruned = APP<Dtype>::pruned_ratio[L] > 0;
+        const bool IF_enough_iter = APP<Dtype>::step_ >= APP<Dtype>::prune_begin_iter+1;
+        const bool IF_prune = IF_want_prune && (IF_been_pruned || IF_enough_iter);
+        if (IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
             TaylorPrune(top);
         }
     }
     
-    /// Print and check
+    // Print and check
     if (L == LAYER_PRINTED && APP<Dtype>::step_ % SHOW_INTERVAL == 0 && APP<Dtype>::inner_iter == 0) {
         Print(L, 'b');
     }

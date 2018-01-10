@@ -27,14 +27,15 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const bool IF_want_prune  = mthd != "None" && APP<Dtype>::prune_ratio[L] > 0; // if you want to prune, you must specify a meaningful prune_method and give a positive prune_ratio
     const bool IF_been_pruned = APP<Dtype>::pruned_ratio[L] > 0; // for a pruned layer, continue to prune
     const bool IF_enough_iter = APP<Dtype>::step_ >= APP<Dtype>::prune_begin_iter+1; // for a raw layer, if iter is enough, then prune
-    this->IF_prune = IF_want_prune && (IF_been_pruned || IF_enough_iter);
+    const bool IF_prune = IF_want_prune && (IF_been_pruned || IF_enough_iter);
     
     if (this->phase_ == TRAIN) {
-        if (this->IF_prune) {
+        // For a layer which doesn't want to prune, it still should UpdateNumPrunedCol/Row because of neighbour layer
+        if (mthd != "None" && (IF_been_pruned || IF_enough_iter)) { 
             if (APP<Dtype>::IF_update_row_col) {
-                // UpdateNumPrunedRow/Col
-                // Note that, UpdateNumPrunedRow/Col before pruning, 
-                // so that when calculating score, the zombie weights will not be counted.
+                // Note that, UpdateNumPrunedRow/Col before pruning, so that when calculating score, the zombie weights will not be counted.
+                // The last conv and last fc layer need not updating num of pruned row.
+                // In fact, the last conv should be updated row and the first fc should be updated col, but for simplicity, which are ignored for now.
                 if (APP<Dtype>::prune_unit == "Col" && L != APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt -1) {
                     if (APP<Dtype>::step_-1 - APP<Dtype>::iter_prune_finished[L+1] <= 1) {
                         UpdateNumPrunedRow();
@@ -84,12 +85,12 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
         
         // Update masks
-        if (this->IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
+        if (IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
             if (APP<Dtype>::prune_coremthd == "Reg") {
                 PruneMinimals();
             }
             UpdatePrunedRatio();
-            if (L == APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt - 1) {
+            if (L == APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt - 1) { // To avoid the first conv from updating col
                 APP<Dtype>::pruned_rows.clear();
             }
         }
@@ -97,7 +98,7 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         
         // After update, print current pruning state
         if (mthd != "None" && L < SHOW_NUM_LAYER && APP<Dtype>::inner_iter == 0) {
-               cout << layer_name << "  IF_prune: " << this->IF_prune 
+               cout << layer_name << "  IF_prune: " << IF_prune 
                  << "  pruned_ratio: " << APP<Dtype>::pruned_ratio[L] 
                  << "  prune_ratio: " << APP<Dtype>::prune_ratio[L] << endl;
         }
