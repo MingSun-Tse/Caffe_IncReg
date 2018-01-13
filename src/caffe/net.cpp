@@ -489,6 +489,7 @@ void Net<Dtype>::AppendParam(const NetParameter& param, const int layer_id,
     param_display_names_.push_back(param_display_name.str());
   }
   const int net_param_id = params_.size();
+  // std::cout << "net_param_id: " << net_param_id << endl; // WANGHUAN
   params_.push_back(layers_[layer_id]->blobs()[param_id]);
   param_id_vecs_[layer_id].push_back(net_param_id);
   param_layer_indices_.push_back(make_pair(layer_id, param_id));

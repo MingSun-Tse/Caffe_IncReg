@@ -409,6 +409,7 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   
 
     // After restore, calculate GFLOPs and determine whether the prune finished
+    // WANGHUAN TODO 
     Dtype GFLOPs_left   = 0;
     Dtype GFLOPs_origin = 0;
     for (int i = 0; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {

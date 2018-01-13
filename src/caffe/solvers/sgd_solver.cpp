@@ -129,7 +129,6 @@ void SGDSolver<Dtype>::ApplyUpdate() {
 
     // added by WANGHUAN
     // std::cout << "learnable_params().size(): " << this->net_->learnable_params().size() << std::endl;
-    // std::cout << this->net_->name() << std::endl;
 
     Normalize(param_id);
     Regularize(param_id);
@@ -338,7 +337,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         
         
         // some occasions to return
-        const int L = param_id / 2; // TODO: improve
+        const int L = param_id / 2; // TODO: improve, if no biase, this will cause error.
         bool IF_find_layer_name = false;
         std::map<string,int>::iterator it;
         string layer_name;
@@ -503,21 +502,24 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                        net_params[param_id]->gpu_data(),
                        net_params[param_id]->mutable_gpu_diff());    
         
-        
         // Three occasions to return
         // 1. Get layer index and layer name, if not registered, don't reg it.
-        const int L = param_id / 2; // TODO: improve
-        bool IF_find_layer_name = false;
-        std::map<string,int>::iterator it;
-        string layer_name;
-        for (it = APP<Dtype>::layer_index.begin(); it != APP<Dtype>::layer_index.end(); ++it) {
-            if (it->second == L) {
-                IF_find_layer_name = true;
-                layer_name = it->first;
-                break;
-            }
-        }
-        if (!IF_find_layer_name) { return; }
+        const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[param_id].first];
+        if (APP<Dtype>::layer_index.count(layer_name) == 0) { return; }
+        const int L = APP<Dtype>::layer_index[layer_name];
+        
+        /* print for check
+        cout << param_id << "  layer_name: " << layer_name << endl;
+        cout << "  num_param_layer_indices: " << this->net_->param_layer_indices().size() << endl; 
+        cout << "  num_layer: "               << this->net_->layer_names().size() << endl;
+        cout << "  num_blob: "                << this->net_->blob_names().size()  << endl;
+        cout << "  num_learnable_param: "     << this->net_->learnable_params().size() << endl;
+
+        // My layer_index only contains conv and fc layers, while caffe's layer_index contains literally all layers.
+        map<string, int> layer_names_index = this->net_->layer_names_index();
+        cout << "my layer_index: " << L 
+             << "  caffe's layer_index: " << layer_names_index[layer_name] << endl;
+        */
         
         // 2.
         const bool IF_want_prune  = APP<Dtype>::prune_method != "None" && APP<Dtype>::prune_ratio[L] > 0;
@@ -536,6 +538,8 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         const int num_row = net_params[param_id]->shape()[0];
         const int num_col = count / num_row;
         
+        
+        
         // ***********************************************************
         // Sort 01: sort by L1-norm
         typedef std::pair<Dtype, int> mypair;
@@ -551,7 +555,6 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             }            
         }
         sort(col_score.begin(), col_score.end());
-        
         // Make new criteria by rank: history_rank
         const int n = this->iter_ + 1; // No.n iter (n starts from 1)
         for (int j = 0; j < num_col; ++j) { // j: rank
@@ -561,7 +564,6 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         }
         
 
-        
         // ***********************************************************
         // Sort 02: sort by history_rank
         vector<mypair> col_hrank(num_col); // the history_rank of each column, history_rank is like the new score
@@ -577,7 +579,6 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             const int col_of_rank_j = col_hrank[j].second;
             col_rank[col_of_rank_j] = j;
         }
-
         
         // Print: Check rank, j is column number --------------------
         if (this->iter_ % 20 == 0) {
@@ -666,6 +667,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         for (int i = 0; i < count; ++i) {
             net_params[param_id]->mutable_cpu_diff()[i] += reg_multiplier[i] * weight[i];
         }
+        
         
       } else if (regularization_type == "SelectiveRegCompression") {
         // add weight decay, weight decay still used
