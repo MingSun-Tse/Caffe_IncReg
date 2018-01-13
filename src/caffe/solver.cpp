@@ -73,7 +73,8 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   APP<Dtype>::iter_size = param_.iter_size();
   APP<Dtype>::AA = param_.aa();
   APP<Dtype>::target_reg = param_.target_reg(); //param_.aa();
-  APP<Dtype>::kk = 0.25; //param_.kk(); 
+  APP<Dtype>::kk  = 0.25; //param_.kk(); 
+  APP<Dtype>::kk2 = 0.1;
   APP<Dtype>::speedup = param_.speedup();
   APP<Dtype>::compRatio = param_.compratio();
   APP<Dtype>::IF_update_row_col = param.if_update_row_col();

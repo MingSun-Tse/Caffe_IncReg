@@ -535,9 +535,6 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         const int count   = net_params[param_id]->count();
         const int num_row = net_params[param_id]->shape()[0];
         const int num_col = count / num_row;
-        const int num_col_to_prune = ceil(num_col * APP<Dtype>::prune_ratio[L]);
-        const int num_pruned_col = APP<Dtype>::num_pruned_col[L];
-        if (num_pruned_col >= num_col_to_prune) { return; }
         
         // ***********************************************************
         // Sort 01: sort by L1-norm
@@ -622,24 +619,49 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         } else {
         */ 
         
-
-        // compute reg multiplier for those "bad" columns, "good" columns are spared with zero reg.
+        // Punishment Function -------------------------------------------------------
+        const int num_pruned_col = APP<Dtype>::num_pruned_col[L];
+        const int num_col_to_prune_ = ceil(num_col * APP<Dtype>::prune_ratio[L]) - num_pruned_col;
+        const int num_col_ = num_col - num_pruned_col;
+        assert (num_col_to_prune_ > 0);
         const Dtype AA = APP<Dtype>::AA;
-        const Dtype kk = APP<Dtype>::kk;
-        const Dtype alpha = log(2/kk) / (num_col_to_prune - num_pruned_col + 1);
-        const Dtype N1 = -log(kk)/alpha;
         vector<Dtype> reg_multiplier(count, -1);
         
-        for (int j = 0; j < num_col - num_pruned_col; ++j) { // j: rank 
-            const int col_of_rank_j = col_hrank[j + num_pruned_col].second; // Note the real rank is j + num_pruned_col
-            const Dtype Delta = j < N1 ? AA * exp(-alpha * j) : -AA * exp(-alpha * (2*N1-j)) + 2*kk*AA;
-            const Dtype old_reg = APP<Dtype>::history_reg[L][col_of_rank_j];
-            const Dtype new_reg = std::max(old_reg + Delta, Dtype(0));
-            APP<Dtype>::history_reg[L][col_of_rank_j] = new_reg;
-            for (int i = 0; i < num_row; ++i) {
-                reg_multiplier[i * num_col + col_of_rank_j] = new_reg;
+        const int scheme = 2;
+        if (scheme == 1) {
+            // scheme 1
+            const Dtype kk = APP<Dtype>::kk;
+            const Dtype alpha = log(2/kk) / (num_col_to_prune_ + 1);
+            const Dtype N1 = -log(kk)/alpha; // symmetry point
+            
+            for (int j = 0; j < num_col_; ++j) { // j: rank 
+                const int col_of_rank_j = col_hrank[j + num_pruned_col].second; // Note the real rank is j + num_pruned_col
+                const Dtype Delta = j < N1 ? AA * exp(-alpha * j) : -AA * exp(-alpha * (2*N1-j)) + 2*kk*AA;
+                const Dtype old_reg = APP<Dtype>::history_reg[L][col_of_rank_j];
+                const Dtype new_reg = std::max(old_reg + Delta, Dtype(0));
+                APP<Dtype>::history_reg[L][col_of_rank_j] = new_reg;
+                for (int i = 0; i < num_row; ++i) {
+                    reg_multiplier[i * num_col + col_of_rank_j] = new_reg;
+                }
+            }
+        } else if (scheme == 2) {
+            // scheme 2
+            const Dtype kk2 = APP<Dtype>::kk2;
+            const Dtype alpha1 = (num_col_to_prune_ == 1)          ? 0 : log(1/kk2) / (num_col_to_prune_ - 1);
+            const Dtype alpha2 = (num_col_to_prune_ == num_col_-1) ? 0 : log(1/kk2) / (num_col_-1 - num_col_to_prune_);
+
+            for (int j = 0; j < num_col_; ++j) { // j: rank 
+                const int col_of_rank_j = col_hrank[j + num_pruned_col].second; // Note the real rank is j + num_pruned_col
+                const Dtype Delta = j < num_col_to_prune_ ? AA * exp(-alpha1 * j) : -AA * exp(-alpha2 * (num_col_-1 - j));
+                const Dtype old_reg = APP<Dtype>::history_reg[L][col_of_rank_j];
+                const Dtype new_reg = std::max(old_reg + Delta, Dtype(0));
+                APP<Dtype>::history_reg[L][col_of_rank_j] = new_reg;
+                for (int i = 0; i < num_row; ++i) {
+                    reg_multiplier[i * num_col + col_of_rank_j] = new_reg;
+                }
             }
         }
+        // ----------------------------------------------------------------------------
         
         for (int i = 0; i < count; ++i) {
             net_params[param_id]->mutable_cpu_diff()[i] += reg_multiplier[i] * weight[i];

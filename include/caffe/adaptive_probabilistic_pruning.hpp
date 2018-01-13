@@ -34,6 +34,7 @@ public:
     static Dtype score_decay;
     static Dtype AA;
     static Dtype kk;
+    static Dtype kk2;
     static Dtype speedup;
     static Dtype compRatio;
     static bool IF_update_row_col;
@@ -137,6 +138,7 @@ public:
     template<typename Dtype>  Dtype   APP<Dtype>::score_decay = 0;
     template<typename Dtype>  Dtype   APP<Dtype>::AA;
     template<typename Dtype>  Dtype   APP<Dtype>::kk;
+    template<typename Dtype>  Dtype   APP<Dtype>::kk2;
     template<typename Dtype>  Dtype   APP<Dtype>::speedup;
     template<typename Dtype>  Dtype   APP<Dtype>::compRatio;
     template<typename Dtype>  bool    APP<Dtype>::IF_update_row_col;
