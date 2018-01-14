@@ -39,6 +39,7 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     // Set up prune parameters of layer
     APP<Dtype>::prune_ratio.push_back(prune_param.prune_ratio());
     APP<Dtype>::delta.push_back(prune_param.delta()); // TODO: abolish delta
+    APP<Dtype>::IF_update_row_col_layer.push_back(prune_param.if_update_row_col());
     APP<Dtype>::pruned_ratio.push_back(0);
     APP<Dtype>::pruned_ratio_col.push_back(0);
     APP<Dtype>::pruned_ratio_row.push_back(0);

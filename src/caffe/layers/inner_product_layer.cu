@@ -32,7 +32,7 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     if (this->phase_ == TRAIN) {
         // For a layer which doesn't want to prune, it still should UpdateNumPrunedCol/Row because of neighbour layer
         if (mthd != "None" && (IF_been_pruned || IF_enough_iter)) { 
-            if (APP<Dtype>::IF_update_row_col) {
+            if (APP<Dtype>::IF_update_row_col && APP<Dtype>::IF_update_row_col_layer[L]) {
                 // Note that, UpdateNumPrunedRow/Col before pruning, so that when calculating score, the zombie weights will not be counted.
                 // The last conv and last fc layer need not updating num of pruned row.
                 // In fact, the last conv should be updated row and the first fc should be updated col, but for simplicity, which are ignored for now.

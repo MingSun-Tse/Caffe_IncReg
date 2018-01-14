@@ -35,6 +35,7 @@ void InnerProductLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     // Note: These varibales will be called for every GPU, whereas since we use `layer_index` to index, so it doesn't matter.
     // Set up prune parameters of layer
     APP<Dtype>::prune_ratio.push_back(prune_param.prune_ratio());
+    APP<Dtype>::IF_update_row_col_layer.push_back(prune_param.if_update_row_col());
     APP<Dtype>::pruned_ratio.push_back(0);
     APP<Dtype>::pruned_ratio_col.push_back(0);
     APP<Dtype>::pruned_ratio_row.push_back(0);
