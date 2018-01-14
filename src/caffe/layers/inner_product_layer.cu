@@ -29,7 +29,7 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const bool IF_enough_iter = APP<Dtype>::step_ >= APP<Dtype>::prune_begin_iter+1; // for a raw layer, if iter is enough, then prune
     const bool IF_prune = IF_want_prune && (IF_been_pruned || IF_enough_iter);
     
-    if (this->phase_ == TRAIN) {
+    if (this->phase_ == TRAIN && APP<Dtype>::inner_iter == 0) {
         // For a layer which doesn't want to prune, it still should UpdateNumPrunedCol/Row because of neighbour layer
         if (mthd != "None" && (IF_been_pruned || IF_enough_iter)) { 
             if (APP<Dtype>::IF_update_row_col && APP<Dtype>::IF_update_row_col_layer[L]) {
@@ -80,7 +80,7 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
         
         // Print, before masked
-        if (L == LAYER_PRINTED && APP<Dtype>::step_ % SHOW_INTERVAL == 0 && APP<Dtype>::inner_iter == 0) {
+        if (L == LAYER_PRINTED && APP<Dtype>::step_ % SHOW_INTERVAL == 0) {
             Print(L, 'f');
         }
         
@@ -97,11 +97,13 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         
         
         // After update, print current pruning state
-        if (mthd != "None" && L < SHOW_NUM_LAYER && APP<Dtype>::inner_iter == 0) {
+        if (mthd != "None" && L < SHOW_NUM_LAYER) {
                cout << layer_name << "  IF_prune: " << IF_prune 
                  << "  pruned_ratio: " << APP<Dtype>::pruned_ratio[L] 
                  << "  prune_ratio: " << APP<Dtype>::prune_ratio[L] << endl;
         }
+        
+    } else if (this->phase_ == TEST) {
         
     }
   // ------------------------------------------------

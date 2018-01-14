@@ -28,7 +28,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const bool IF_enough_iter = APP<Dtype>::step_ >= APP<Dtype>::prune_begin_iter+1; // for a raw layer, if iter is enough, then prune
     const bool IF_prune = IF_want_prune && (IF_been_pruned || IF_enough_iter);
     
-    if (this->phase_ == TRAIN) {
+    if (this->phase_ == TRAIN && APP<Dtype>::inner_iter == 0) {
         // For a layer which doesn't want to prune, it still should UpdateNumPrunedCol/Row because of neighbour layer
         if (mthd != "None" && (IF_been_pruned || IF_enough_iter)) { 
             if (APP<Dtype>::IF_update_row_col && APP<Dtype>::IF_update_row_col_layer[L]) {
@@ -85,7 +85,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         
         // Print and check, before update probs
         // put this outside, to print even when we do not prune
-        if (L == LAYER_PRINTED && APP<Dtype>::step_ % SHOW_INTERVAL == 0 && APP<Dtype>::inner_iter == 0) {
+        if (L == LAYER_PRINTED && APP<Dtype>::step_ % SHOW_INTERVAL == 0) {
             Print(L, 'f');
         }
 
@@ -101,7 +101,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 }
             } else if (mthd == "SPP_Row" && IF_hppf()) {
                 ProbPruneRow();
-            } else if (mthd == "Reg_Col" || mthd == "Reg_Weight") {
+            } else if (APP<Dtype>::prune_coremthd == "Reg") {
                 PruneMinimals();
             }
             UpdatePrunedRatio();
@@ -112,7 +112,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         
         
         // Print 
-        if (mthd != "None" && L < SHOW_NUM_LAYER && APP<Dtype>::inner_iter == 0) {
+        if (mthd != "None" && L < SHOW_NUM_LAYER) {
             cout << layer_name << "  IF_prune: " << IF_prune 
                  << "  pruned_ratio: " << APP<Dtype>::pruned_ratio[L];
             if (mthd == "PPr" || mthd == "FP" || mthd == "TP") {
@@ -141,7 +141,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 APP<Dtype>::log_weight[L][k].push_back(sum);
             }
         }
-    } else {
+    } else if (this->phase_ == TEST) {
         if (IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX && mthd.substr(0, 2) == "PP") {
             Dtype rands[num_col];
             caffe_rng_uniform(num_col, (Dtype)0, (Dtype)1, rands);
