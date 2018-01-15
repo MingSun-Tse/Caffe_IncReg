@@ -10,6 +10,9 @@
 #include "caffe/util/upgrade_proto.hpp"
 #include "caffe/adaptive_probabilistic_pruning.hpp"
 #include <ctime>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 namespace caffe {
 
@@ -449,7 +452,7 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   }
   if (requested_early_exit_) {
     if (APP<Dtype>::num_log) { Logshot(); }
-    if (APP<Dtype>::prune_coremthd == "SPP") { PruneStateShot(); }
+      if (APP<Dtype>::prune_coremthd == "SPP" || APP<Dtype>::prune_coremthd == "Reg") { PruneStateShot(); }
     LOG(INFO) << "Optimization stopped early.";
     return;
   }
@@ -472,7 +475,7 @@ void Solver<Dtype>::Solve(const char* resume_file) {
     TestAll();
   }
   if (APP<Dtype>::num_log) { Logshot(); }
-  if (APP<Dtype>::prune_method.substr(0, 2) == "PP") { PruneStateShot(); }
+  if (APP<Dtype>::prune_coremthd == "SPP" || APP<Dtype>::prune_coremthd == "Reg") { PruneStateShot(); }
   LOG(INFO) << "Optimization Done.";
 }
 
@@ -584,24 +587,42 @@ template <typename Dtype>
 void Solver<Dtype>::PruneStateShot() {
     map<string, int>::iterator it_m;
     for (it_m = APP<Dtype>::layer_index.begin(); it_m != APP<Dtype>::layer_index.end(); ++it_m) {
-        const char* outfile = (param_.snapshot_prefix() + "prob_snapshot/prob_" + it_m->first + ".txt").c_str();
-        if (!access(outfile, 0)) { /// outfile has already existed
-            remove(outfile);
-        } 
-        ofstream prob(outfile, ofstream::app);
-        if (!prob.is_open()) {
-            cout << "Error: opening prob file failed: " << prob << endl; 
+        const string prune_state_dir = param_.snapshot_prefix() + APP<Dtype>::prune_state_dir;
+        if (access(prune_state_dir.c_str(), 0)) {
+            cout << "Prune state dir `" << prune_state_dir << "` doesn't exist, now make it." << endl;
+            mkdir(prune_state_dir.c_str(), S_IRWXU);
+        }
+        const string outfile = param_.snapshot_prefix() + APP<Dtype>::prune_state_dir + it_m->first + ".txt";
+        ofstream state_stream(outfile.c_str(), ios::out);
+        if (!state_stream.is_open()) {
+            cout << "Error: cannot open file `" << outfile << "`" << endl;
         } else {
-            prob << iter_ << "\n"; 
-            vector<Dtype> pr = APP<Dtype>::history_prob[it_m->second];
-            typename vector<Dtype>::iterator it;
-            for (it = pr.begin(); it != pr.end(); ++it) {
-                prob << *it << " ";
+            state_stream << iter_ << "\n";
+            if (APP<Dtype>::prune_coremthd == "SPP") {
+                vector<Dtype> state_punish = APP<Dtype>::history_prob[it_m->second];
+                typename vector<Dtype>::iterator it;
+                for (it = state_punish.begin(); it != state_punish.end(); ++it) {
+                    state_stream << *it << " ";
+                }
+            } else if (APP<Dtype>::prune_coremthd == "Reg") {
+                vector<Dtype> state_score  = APP<Dtype>::hrank[it_m->second];
+                vector<Dtype> state_punish = APP<Dtype>::history_reg[it_m->second];
+                typename vector<Dtype>::iterator it;
+                assert (state_score.size() == state_punish.size());
+                for (it = state_score.begin(); it != state_score.end(); ++it) {
+                    state_stream << *it << " ";
+                }
+                for (it = state_punish.begin(); it != state_punish.end(); ++it) {
+                    state_stream << *it << " ";
+                }
             }
-        }    
+            state_stream.close();
+            LOG(INFO) << it_m->first << " Save prune state done!";
+        }
     }
-    cout << "Save prune prob done!" << endl;
+    
 }
+
 
 template <typename Dtype>
 void Solver<Dtype>::Logshot() {

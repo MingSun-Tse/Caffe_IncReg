@@ -96,6 +96,7 @@ public:
     static vector<vector<vector<Dtype> > > log_diff;
     static vector<vector<int> > log_index;
     static string snapshot_prefix;
+    static string prune_state_dir;
     /// --------------------------------
     
     static int window_size;
@@ -203,6 +204,7 @@ public:
     template<typename Dtype>  vector<vector<vector<Dtype> > >  APP<Dtype>::log_diff;
     template<typename Dtype>  vector<vector<int> >    APP<Dtype>::log_index;
     template<typename Dtype>  string  APP<Dtype>::snapshot_prefix;
+    template<typename Dtype>  string  APP<Dtype>::prune_state_dir = "/PruneStateSnapshot/";
     /// --------------------------------
 
     // use window proposal or score decay ----- legacy

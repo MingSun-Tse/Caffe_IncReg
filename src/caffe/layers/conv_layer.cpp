@@ -747,7 +747,7 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask() {
         APP<Dtype>::iter_prune_finished[L] = -1; /// To check multi-GPU
         cout << layer_name << " prune finished" << endl;
     } else { 
-        if (APP<Dtype>::prune_coremthd == "SPP") {
+        if (APP<Dtype>::prune_coremthd == "SPP" || APP<Dtype>::prune_coremthd == "Reg") {
             RestorePruneProb(pruned_ratio);
         }
     }
@@ -813,26 +813,33 @@ void ConvolutionLayer<Dtype>::RestorePruneProb(const Dtype& pruned_r) {
     const string layer_name = this->layer_param_.name();
     const int L = APP<Dtype>::layer_index[layer_name];    
     
-    const string infile = APP<Dtype>::snapshot_prefix + "prob_snapshot/prob_" + layer_name + ".txt"; /// TODO: paramaters check
-    ifstream prob;
-    prob.open(infile.data());
-    string line;
-    vector<Dtype> pr;
-    if (!prob.is_open()) {
-        if (pruned_r) {
-            cout << "Error, failed to restore prune_prob: the prune_prob file cannot be opened! " 
-                 << infile << endl;
-        }
+    const string inFile = APP<Dtype>::snapshot_prefix + APP<Dtype>::prune_state_dir + layer_name + ".txt"; /// TODO: paramaters check
+    ifstream state_stream;
+    state_stream.open(inFile.data());
+    if (!state_stream.is_open()) {
+        cout << "Error, failed to restore prune_prob, the prune_prob file cannot be opened: `" 
+             << inFile << "`" << endl;
     } else {
-        getline(prob, line); /// the first line is iteration
-        while (getline(prob, line, ' ')) {
-            pr.push_back(atof(line.c_str()));
+        string line;
+        getline(state_stream, line); /// the first line is iteration
+        vector<Dtype> state;
+        while (getline(state_stream, line, ' ')) {
+            state.push_back(atof(line.c_str()));
         }
-        assert(pr.size() == APP<Dtype>::history_prob[L].size());
-        for (int i = 0; i < pr.size(); ++i) {
-            APP<Dtype>::history_prob[L][i] = pr[i];
+        if (APP<Dtype>::prune_coremthd == "SPP"){
+            assert(state.size() == APP<Dtype>::history_prob[L].size());
+            for (int i = 0; i < state.size(); ++i) {
+                APP<Dtype>::history_prob[L][i] = state[i];
+            }
+        } else if (APP<Dtype>::prune_coremthd == "Reg") {
+            const int vsize = APP<Dtype>::hrank[L].size();
+            assert(state.size() == 2 * vsize);
+            for (int i = 0; i < vsize; ++i) {
+                APP<Dtype>::hrank[L][i] = state[i];
+                APP<Dtype>::history_reg[L][i] = state[vsize + i];
+            }
         }
-        cout << "  Prune Prob Restored!" << endl;
+        LOG(INFO) << layer_name << " Restore prune state done!";
     }
 
 }
