@@ -817,7 +817,7 @@ void ConvolutionLayer<Dtype>::RestorePruneProb(const Dtype& pruned_r) {
     ifstream state_stream;
     state_stream.open(inFile.data());
     if (!state_stream.is_open()) {
-        cout << "Error, failed to restore prune_prob, the prune_prob file cannot be opened: `" 
+        LOG(INFO) << "Error, failed to restore prune_prob, the prune_prob file cannot be opened: `" 
              << inFile << "`" << endl;
     } else {
         string line;

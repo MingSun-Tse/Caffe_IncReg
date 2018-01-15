@@ -452,7 +452,8 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   }
   if (requested_early_exit_) {
     if (APP<Dtype>::num_log) { Logshot(); }
-      if (APP<Dtype>::prune_coremthd == "SPP" || APP<Dtype>::prune_coremthd == "Reg") { PruneStateShot(); }
+    if (APP<Dtype>::prune_coremthd == "SPP" || APP<Dtype>::prune_coremthd == "Reg") { PruneStateShot(); }
+    if (APP<Dtype>::prune_method != "None") { PrintFinalPrunedRatio(); }
     LOG(INFO) << "Optimization stopped early.";
     return;
   }
@@ -476,8 +477,24 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   }
   if (APP<Dtype>::num_log) { Logshot(); }
   if (APP<Dtype>::prune_coremthd == "SPP" || APP<Dtype>::prune_coremthd == "Reg") { PruneStateShot(); }
+  if (APP<Dtype>::prune_method != "None") { PrintFinalPrunedRatio(); }
   LOG(INFO) << "Optimization Done.";
 }
+
+template <typename Dtype>
+void Solver<Dtype>::PrintFinalPrunedRatio() {
+    cout << "Print final pruned ratio of all layers:" << endl;
+    map<string, int>::iterator it_m;
+    for (it_m = APP<Dtype>::layer_index.begin(); it_m != APP<Dtype>::layer_index.end(); ++it_m) {
+        const int L = it_m->second;
+        cout << it_m->first
+             << "  pruned_ratio=" << APP<Dtype>::pruned_ratio[L]
+             << "  pruned_ratio_row=" << APP<Dtype>::pruned_ratio_row[L]
+             << "  pruned_ratio_col=" << APP<Dtype>::pruned_ratio_col[L] 
+             << "  prune_ratio=" << APP<Dtype>::prune_ratio[L] << endl;
+    }
+}
+
 
 template <typename Dtype>
 void Solver<Dtype>::TestAll() {
@@ -486,7 +503,6 @@ void Solver<Dtype>::TestAll() {
        ++test_net_id) {
     Test(test_net_id);
   }
-  
 }
 
 template <typename Dtype>
@@ -589,13 +605,13 @@ void Solver<Dtype>::PruneStateShot() {
     for (it_m = APP<Dtype>::layer_index.begin(); it_m != APP<Dtype>::layer_index.end(); ++it_m) {
         const string prune_state_dir = param_.snapshot_prefix() + APP<Dtype>::prune_state_dir;
         if (access(prune_state_dir.c_str(), 0)) {
-            cout << "Prune state dir `" << prune_state_dir << "` doesn't exist, now make it." << endl;
+            LOG(INFO) << "Prune state dir `" << prune_state_dir << "` doesn't exist, now make it." << endl;
             mkdir(prune_state_dir.c_str(), S_IRWXU);
         }
         const string outfile = param_.snapshot_prefix() + APP<Dtype>::prune_state_dir + it_m->first + ".txt";
         ofstream state_stream(outfile.c_str(), ios::out);
         if (!state_stream.is_open()) {
-            cout << "Error: cannot open file `" << outfile << "`" << endl;
+            LOG(INFO) << "Error: cannot open file `" << outfile << "`" << endl;
         } else {
             state_stream << iter_ << "\n";
             if (APP<Dtype>::prune_coremthd == "SPP") {

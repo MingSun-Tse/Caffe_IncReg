@@ -70,6 +70,7 @@ class Solver {
   void Logshot(); /// APP
   void UpdateMasks();
   void PruneStateShot(); /// APP
+  void PrintFinalPrunedRatio();
   virtual ~Solver() {}
   inline const SolverParameter& param() const { return param_; }
   inline shared_ptr<Net<Dtype> > net() { return net_; }
