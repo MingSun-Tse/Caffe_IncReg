@@ -19,6 +19,9 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const int num_col = count / num_row;
     const string layer_name = this->layer_param_.name();
     const string mthd = APP<Dtype>::prune_method;
+    char* coremthd = new char[strlen(APP<Dtype>::prune_coremthd.c_str()) + 1];
+    strcpy(coremthd, APP<Dtype>::prune_coremthd.c_str());
+    const string coremthd_ = strtok(coremthd, "-");
     const int L = APP<Dtype>::layer_index[layer_name];
     this->IF_restore = false;
     
@@ -101,7 +104,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 }
             } else if (mthd == "SPP_Row" && IF_hppf()) {
                 ProbPruneRow();
-            } else if (APP<Dtype>::prune_coremthd == "Reg") {
+            } else if (coremthd_ == "Reg") {
                 PruneMinimals();
             }
             UpdatePrunedRatio();

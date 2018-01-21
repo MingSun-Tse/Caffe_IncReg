@@ -21,6 +21,9 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const int count = this->blobs_[0]->count();
     const string layer_name = this->layer_param_.name();
     const string mthd = APP<Dtype>::prune_method;
+    char* coremthd = new char[strlen(APP<Dtype>::prune_coremthd.c_str()) + 1];
+    strcpy(coremthd, APP<Dtype>::prune_coremthd.c_str());
+    const string coremthd_ = strtok(coremthd, "-");
     const int L = APP<Dtype>::layer_index[layer_name];
     
     /// IF_prune
@@ -86,7 +89,7 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         
         // Update masks
         if (IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
-            if (APP<Dtype>::prune_coremthd == "Reg") {
+            if (coremthd_ == "Reg") {
                 PruneMinimals();
             }
             UpdatePrunedRatio();

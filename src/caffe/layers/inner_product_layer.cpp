@@ -51,10 +51,17 @@ void InnerProductLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     APP<Dtype>::IF_row_pruned.push_back( vector<bool>(num_row, false) );
     vector<bool> vec_tmp(1, false); // there is no group in fc layers, equivalent to group = 1
     APP<Dtype>::IF_col_pruned.push_back( vector<vector<bool> >(num_col, vec_tmp) );
-    APP<Dtype>::hscore.push_back( vector<Dtype>(count, 0) );
-    APP<Dtype>::hrank.push_back( vector<Dtype>(count, 0) );
-    APP<Dtype>::hhrank.push_back( vector<Dtype>(count, 0) );
-    APP<Dtype>::history_reg.push_back( vector<Dtype>(count, 0) );
+    
+    int num_ = num_col;
+    if (APP<Dtype>::prune_unit == "Weight") {
+        num_ = count;
+    } else if (APP<Dtype>::prune_unit == "Row") {
+        num_ = num_row;
+    }
+    APP<Dtype>::hscore.push_back( vector<Dtype>(num_, 0) );
+    APP<Dtype>::hrank.push_back( vector<Dtype>(num_, 0) );
+    APP<Dtype>::hhrank.push_back( vector<Dtype>(num_, 0) );
+    APP<Dtype>::history_reg.push_back( vector<Dtype>(num_, 0) );
 
     // Info shared among layers
     APP<Dtype>::group.push_back(1);
@@ -92,9 +99,9 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
     cout.width(4);  cout << "Mask" << "   ";
     
     // print additional info
-    char* mthd = new char[strlen(APP<Dtype>::prune_method.c_str()) + 1];
-    strcpy(mthd, APP<Dtype>::prune_method.c_str());
-    const string mthd_ = strtok(mthd, "_"); // mthd is like "Reg_Col", the first split is `Reg`
+    char* mthd = new char[strlen(APP<Dtype>::prune_coremthd.c_str()) + 1];
+    strcpy(mthd, APP<Dtype>::prune_coremthd.c_str());
+    const string mthd_ = strtok(mthd, "-");
     string info = "Unknown";;
     vector<Dtype> info_data; 
     if (mthd_ == "Reg") {
@@ -107,7 +114,8 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
     cout.width(info.size()); cout << info << " - " << this->layer_param_.name() << endl;
     
     if (APP<Dtype>::prune_unit == "Row") {
-        for (int i = 0; i < SHOW_NUM; ++i) {
+        const int show_num = SHOW_NUM > num_row ? num_row : SHOW_NUM;
+        for (int i = 0; i < show_num; ++i) {
             // print Index
             cout.width(3); cout << "r"; 
             cout.width(2); cout << i+1 << "   ";
@@ -125,7 +133,8 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
         }
         
     } else if (APP<Dtype>::prune_unit == "Col") {
-        for (int j = 0; j < SHOW_NUM; ++j) {
+        const int show_num = SHOW_NUM > num_col ? num_col : SHOW_NUM;
+        for (int j = 0; j < show_num; ++j) {
             // print Index
             cout.width(3); cout << "c"; 
             cout.width(2); cout << j+1 << "   ";
@@ -483,6 +492,25 @@ void InnerProductLayer<Dtype>::PruneMinimals() {
                 APP<Dtype>::IF_col_pruned[L][j][0] = true;
                 APP<Dtype>::hrank[L][j] = APP<Dtype>::step_ - 1000000 - (APP<Dtype>::history_reg[L][j] - APP<Dtype>::target_reg);  // the worser column, the earlier pruned column will be ranked in fronter
             }        
+        }
+    } else if (APP<Dtype>::prune_unit == "Row") {
+        for (int i = 0; i < num_row; ++i) {
+            if (APP<Dtype>::IF_row_pruned[L][i]) { continue; }
+            Dtype sum = 0;
+            for (int j = 0; j < num_col; ++j) {
+                sum += fabs(muweight[i * num_col + j]);
+            }
+            sum /= num_col;
+            if (sum < APP<Dtype>::prune_threshold ||  APP<Dtype>::history_reg[L][i] >= APP<Dtype>::target_reg) {
+                for (int j = 0; j < num_col; ++j) {
+                    muweight[i * num_col + j] = 0;
+                    APP<Dtype>::masks[L][i * num_col + j] = 0; 
+                }
+                ++ APP<Dtype>::num_pruned_row[L];
+                APP<Dtype>::IF_row_pruned[L][i] = true;
+                APP<Dtype>::pruned_rows.push_back(i);
+                APP<Dtype>::hrank[L][i] = APP<Dtype>::step_ - 1000000 - (APP<Dtype>::history_reg[L][i] - APP<Dtype>::target_reg);
+            }
         }
     }
 }
