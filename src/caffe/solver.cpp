@@ -448,7 +448,7 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   }
   if (requested_early_exit_) {
     if (APP<Dtype>::num_log) { Logshot(); }
-    if (APP<Dtype>::prune_coremthd == "SPP" || APP<Dtype>::prune_coremthd == "Reg") { PruneStateShot(); }
+    if (APP<Dtype>::prune_coremthd == "SPP" || APP<Dtype>::prune_coremthd.substr(0,3) == "Reg") { PruneStateShot(); }
     if (APP<Dtype>::prune_method != "None") { PrintFinalPrunedRatio(); }
     LOG(INFO) << "Optimization stopped early.";
     return;
@@ -472,7 +472,7 @@ void Solver<Dtype>::Solve(const char* resume_file) {
     TestAll();
   }
   if (APP<Dtype>::num_log) { Logshot(); }
-  if (APP<Dtype>::prune_coremthd == "SPP" || APP<Dtype>::prune_coremthd == "Reg") { PruneStateShot(); }
+  if (APP<Dtype>::prune_coremthd == "SPP" || APP<Dtype>::prune_coremthd.substr(0,3) == "Reg") { PruneStateShot(); }
   if (APP<Dtype>::prune_method != "None") { PrintFinalPrunedRatio(); }
   LOG(INFO) << "Optimization Done.";
 }
@@ -616,7 +616,7 @@ void Solver<Dtype>::PruneStateShot() {
                 for (it = state_punish.begin(); it != state_punish.end(); ++it) {
                     state_stream << *it << " ";
                 }
-            } else if (APP<Dtype>::prune_coremthd == "Reg") {
+            } else if (APP<Dtype>::prune_coremthd.substr(0,3) == "Reg") {
                 vector<Dtype> state_score  = APP<Dtype>::hrank[it_m->second];
                 vector<Dtype> state_punish = APP<Dtype>::history_reg[it_m->second];
                 typename vector<Dtype>::iterator it;
@@ -629,7 +629,7 @@ void Solver<Dtype>::PruneStateShot() {
                 }
             }
             state_stream.close();
-            LOG(INFO) << it_m->first << " Save prune state done!";
+            LOG(INFO) << APP<Dtype>::layer_index[it_m->first] << " " << it_m->first << ": save prune state done!";
         }
     }
     

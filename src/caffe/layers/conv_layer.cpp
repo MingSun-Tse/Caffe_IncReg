@@ -748,7 +748,7 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask() {
         APP<Dtype>::iter_prune_finished[L] = -1; /// To check multi-GPU
         cout << L << ": " << layer_name << " prune finished" << endl;
     } else { 
-        if (APP<Dtype>::prune_coremthd == "SPP" || APP<Dtype>::prune_coremthd == "Reg") {
+        if (APP<Dtype>::prune_coremthd == "SPP" || APP<Dtype>::prune_coremthd.substr(0,3) == "Reg") {
             RestorePruneProb(pruned_ratio);
         }
     }
@@ -847,7 +847,7 @@ void ConvolutionLayer<Dtype>::RestorePruneProb(const Dtype& pruned_r) {
             for (int i = 0; i < state.size(); ++i) {
                 APP<Dtype>::history_prob[L][i] = state[i];
             }
-        } else if (APP<Dtype>::prune_coremthd == "Reg") {
+        } else if (APP<Dtype>::prune_coremthd.substr(0,3) == "Reg") {
             const int vsize = APP<Dtype>::hrank[L].size();
             assert(state.size() == 2 * vsize);
             for (int i = 0; i < vsize; ++i) {
@@ -855,7 +855,7 @@ void ConvolutionLayer<Dtype>::RestorePruneProb(const Dtype& pruned_r) {
                 APP<Dtype>::history_reg[L][i] = state[vsize + i];
             }
         }
-        LOG(INFO) << layer_name << " Restore prune state done!";
+        LOG(INFO) << L << " " << layer_name << ": restore prune state done!";
     }
 
 }
