@@ -38,6 +38,8 @@ public:
     static Dtype speedup;
     static Dtype compRatio;
     static bool IF_update_row_col;
+    static bool IF_speedup_count_fc;
+    static bool IF_compr_count_conv;
     static bool IF_eswpf;
     static Dtype prune_threshold;
     static Dtype target_reg;
@@ -144,6 +146,8 @@ public:
     template<typename Dtype>  Dtype   APP<Dtype>::speedup;
     template<typename Dtype>  Dtype   APP<Dtype>::compRatio;
     template<typename Dtype>  bool    APP<Dtype>::IF_update_row_col;
+    template<typename Dtype>  bool    APP<Dtype>::IF_speedup_count_fc;
+    template<typename Dtype>  bool    APP<Dtype>::IF_compr_count_conv;
     template<typename Dtype>  bool    APP<Dtype>::IF_eswpf;
     template<typename Dtype>  Dtype   APP<Dtype>::prune_threshold;
     template<typename Dtype>  Dtype   APP<Dtype>::target_reg;

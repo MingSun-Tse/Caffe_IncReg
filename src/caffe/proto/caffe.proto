@@ -254,20 +254,22 @@ message SolverParameter {
   // optional float cpower = 51; // legacies
   optional float AA = 55 [default = 0.05]; // AA of PP
   // optional float kk = 58 [default = 0.25]; // kk of PP when using fixed interval to prune
-  optional float speedup = 56 [default = 4];
+  optional float speedup = 56 [default = 0];
   optional bool IF_update_row_col = 57 [default = true];
   optional bool IF_eswpf = 59 [default = true];
-  optional float prune_threshold = 60 [default = 0.0001];
-  // optional int32 num_iter_reg = 61;
+  optional float prune_threshold = 60 [default = 0];
   optional float target_reg = 61 [default = 0];
   optional float compRatio = 62 [default = 0];
-
+  optional bool IF_speedup_count_fc = 63 [default = true];
+  optional bool IF_compr_count_conv = 64 [default = true];
+ 
   // decrease weight decay
   optional string dwd_mode = 44 [default = "None"];
   optional int32 dwd_begin_iter = 45;
   optional int32 dwd_end_iter = 46;
   optional float wd_end = 47; 
   optional int32 dwd_step = 54;
+  
   // -----------------------------------------
   
 }

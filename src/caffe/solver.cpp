@@ -65,7 +65,7 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
       APP<Dtype>::prune_coremthd = strtok(mthd, "_"); // mthd is like "Reg_Col", the first split is `Reg`
       APP<Dtype>::prune_unit = strtok(NULL, "_"); // TODO: put this in APP's member function
   }
-  APP<Dtype>::criteria = "L1-norm"; //param_.criteria();
+  APP<Dtype>::criteria = "L1-norm";
   APP<Dtype>::num_once_prune = param_.num_once_prune();
   APP<Dtype>::prune_interval = param_.prune_interval();
   APP<Dtype>::rgamma = 30;   //param_.rgamma();
@@ -75,15 +75,17 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   APP<Dtype>::prune_begin_iter = param_.prune_begin_iter();
   APP<Dtype>::iter_size = param_.iter_size();
   APP<Dtype>::AA = param_.aa();
-  APP<Dtype>::target_reg = param_.target_reg(); //param_.aa();
+  APP<Dtype>::target_reg = param_.target_reg();
   APP<Dtype>::kk  = 0.25; //param_.kk(); 
   APP<Dtype>::kk2 = 0.1;
   APP<Dtype>::speedup = param_.speedup();
   APP<Dtype>::compRatio = param_.compratio();
   APP<Dtype>::IF_update_row_col = param.if_update_row_col();
+  APP<Dtype>::IF_speedup_count_fc = param.if_speedup_count_fc();
+  APP<Dtype>::IF_compr_count_conv = param.if_compr_count_conv();
   APP<Dtype>::IF_eswpf = param_.if_eswpf(); /// if early stop when prune finished
   APP<Dtype>::prune_threshold = param_.prune_threshold();
-  APP<Dtype>::num_iter_reg = 10000; // param_.num_iter_reg();
+  APP<Dtype>::num_iter_reg = 10000;
   APP<Dtype>::reg_cushion_iter = 2000;
   APP<Dtype>::hrank_momentum = 0.999;
   
@@ -279,7 +281,8 @@ void Solver<Dtype>::Step(int iters) {
     // GFLOPs, since it measures the speedup of the whole net, so put it here rather than in layer.
     Dtype GFLOPs_left   = 0;
     Dtype GFLOPs_origin = 0;
-    for (int i = 0; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
+    const int num_layer_count = APP<Dtype>::IF_speedup_count_fc ? APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt : APP<Dtype>::conv_layer_cnt;
+    for (int i = 0; i < num_layer_count; ++i) {
         const Dtype pr = APP<Dtype>::pruned_ratio_row[i];
         const Dtype pc = APP<Dtype>::pruned_ratio_col[i];
         GFLOPs_left   += APP<Dtype>::GFLOPs[i] * (1 - (pr + pc - pr * pc));
@@ -292,7 +295,8 @@ void Solver<Dtype>::Step(int iters) {
     
     Dtype num_param_left   = 0;
     Dtype num_param_origin = 0;
-    for (int i = 0; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
+    const int num_layer_begin = APP<Dtype>::IF_compr_count_conv ? 0 : APP<Dtype>::conv_layer_cnt;
+    for (int i = num_layer_begin; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
         num_param_left   += APP<Dtype>::num_param[i] * (1 - APP<Dtype>::pruned_ratio[i]);
         num_param_origin += APP<Dtype>::num_param[i];
     }
@@ -305,7 +309,9 @@ void Solver<Dtype>::Step(int iters) {
          << GFLOPs_origin / GFLOPs_left << "/" << APP<Dtype>::speedup << " "
          << num_param_origin / num_param_left << "/" << APP<Dtype>::compRatio
          << " ****" << endl;
-    cout << "Total GFLOPs_origin: " << GFLOPs_origin 
+    cout << "fc counted: " << APP<Dtype>::IF_speedup_count_fc
+         << "  Total GFLOPs_origin: " << GFLOPs_origin
+         << " | conv counted: " << APP<Dtype>::IF_compr_count_conv
          << "  Total num_param_origin: " << num_param_origin << endl;
     /// ----------------------------------------------------------------------
     
@@ -317,17 +323,7 @@ void Solver<Dtype>::Step(int iters) {
 
     loss /= param_.iter_size();
     // average the loss across iterations for smoothed reporting
-    UpdateSmoothedLoss(loss, start_iter, average_loss); 
-    
-    /// ----------------------------------------------------------------------
-    /// WANGHUAN, used for Adaptive SPP
-    /// APP<Dtype>::Delta_loss_history =  APP<Dtype>::Delta_loss_history * APP<Dtype>::loss_decay + (smoothed_loss_ - APP<Dtype>::loss);
-    /// APP<Dtype>::Delta_loss_history =  smoothed_loss_ - APP<Dtype>::loss;
-    APP<Dtype>::learning_speed = APP<Dtype>::loss - smoothed_loss_;
-    APP<Dtype>::loss = smoothed_loss_;
-    cout << "learning_speed: " << APP<Dtype>::learning_speed << endl;
-
-    /// ----------------------------------------------------------------------
+    UpdateSmoothedLoss(loss, start_iter, average_loss);
 
     if (display) {
       // -------------------------------

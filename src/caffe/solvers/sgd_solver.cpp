@@ -1093,7 +1093,6 @@ void SGDSolver<Dtype>::ClearHistory(int param_id) {
               history_[param_id]->cpu_data(), 
               history_[param_id]->mutable_cpu_data());
     delete[] tmp;
-    cout << layer_name << "-ClearHistory done" << endl;
 }
 
 template <typename Dtype>
