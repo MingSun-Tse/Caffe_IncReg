@@ -82,15 +82,6 @@ void SGDSolver<Dtype>::PreSolve() {
     update_.push_back(shared_ptr<Blob<Dtype> >(new Blob<Dtype>(shape)));
     temp_.push_back(shared_ptr<Blob<Dtype> >(new Blob<Dtype>(shape)));    
   }
-  
-  // initialize history reg, WANGHUAN
-  for (int i = 0; i < net_params.size(); ++i) {
-      const vector<int>& shape = net_params[i]->shape();  
-      const int num_col = net_params[i]->count() / shape[0];
-      if (shape.size() != 4) continue; // do not reg fc layers and biases
-      vector<Dtype> tmp(num_col, 0);
-      history_reg_.push_back(tmp);
-  }
 }
 
 template <typename Dtype>
@@ -122,6 +113,7 @@ void SGDSolver<Dtype>::ApplyUpdate() {
   if (this->param_.display() && this->iter_ % this->param_.display() == 0) {
     LOG(INFO) << "Iteration " << this->iter_ << ", lr = " << rate;
   }
+  // ClearHistory();
   ClipGradients();
   for (int param_id = 0; param_id < this->net_->learnable_params().size();
        ++param_id) {
@@ -491,7 +483,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         }
 
       // ******************************************************************************************
-      } else if (regularization_type == "SelectiveReg") {
+      } else if (regularization_type == "SelectiveReg" || regularization_type == "Reg_Col") {
         // add weight decay, weight decay still used
         caffe_gpu_axpy(net_params[param_id]->count(),
                        local_decay,
@@ -534,89 +526,6 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         const int num_row = net_params[param_id]->shape()[0];
         const int num_col = count / num_row;
         
-        
-        
-        // ***********************************************************
-        // Sort 01: sort by L1-norm
-        typedef std::pair<Dtype, int> mypair;
-        vector<mypair> col_score(num_col); // score of each column
-        for (int j = 0; j < num_col; ++j) { // j: column number
-            col_score[j].second = j;
-            col_score[j].first  = 0;
-            for (int i = 0; i < num_row; ++i) {
-                col_score[j].first += fabs(weight[i * num_col + j]);
-            }
-            if (APP<Dtype>::IF_col_pruned[L][j][0]) { // TODEBUG: fix this [0]
-                col_score[j].first = APP<Dtype>::hrank[L][j]; // make the pruned sink down
-            }            
-        }
-        sort(col_score.begin(), col_score.end());
-        // Make new criteria by rank: history_rank
-        const int n = this->iter_ + 1; // No.n iter (n starts from 1)
-        for (int j = 0; j < num_col; ++j) { // j: rank
-            const int col_of_rank_j = col_score[j].second;
-            if (APP<Dtype>::IF_col_pruned[L][col_of_rank_j][0]) { continue; }
-            APP<Dtype>::hrank[L][col_of_rank_j] = ((n-1) * APP<Dtype>::hrank[L][col_of_rank_j] + j) / n;
-        }
-        
-
-        // ***********************************************************
-        // Sort 02: sort by history_rank
-        vector<mypair> col_hrank(num_col); // the history_rank of each column, history_rank is like the new score
-        for (int j = 0; j < num_col; ++j) { // j: column number
-            col_hrank[j].first  = APP<Dtype>::hrank[L][j];
-            col_hrank[j].second = j;
-        }
-        sort(col_hrank.begin(), col_hrank.end());
-
-        // for print
-        vector<int> col_rank(num_col);
-        for (int j = 0; j < num_col; ++j) { // j: rank
-            const int col_of_rank_j = col_hrank[j].second;
-            col_rank[col_of_rank_j] = j;
-        }
-        
-        // Print: Check rank, j is column number --------------------
-        if (this->iter_ % 20 == 0) {
-            char iter[10]; sprintf(iter, "%6d", this->iter_ + 1); // max_iter should be in [0, 999999]
-            cout << iter << "-" << layer_name << "hrank:";
-            for (int j = 0; j < num_col; ++j) { // j: column number
-                cout << "  ";
-                char s[50];
-                if (APP<Dtype>::IF_col_pruned[L][j][0]) { 
-                    sprintf(s, "%7.0f", APP<Dtype>::hrank[L][j]);
-                } else {
-                    sprintf(s, "%7.2f", APP<Dtype>::hrank[L][j]);
-                }
-                cout << s;
-            }
-            cout << endl;
-            
-            cout << iter << "-" << layer_name << "rank(by_hrank):";
-            for (int j = 0; j < num_col; ++j) { // j: rank
-                cout << "  ";
-                char s[50];
-                const int prune_mark = APP<Dtype>::IF_col_pruned[L][col_hrank[j].second][0] ? 0 : 1;
-                sprintf(s, "%4d-%d", col_hrank[j].second, prune_mark);
-                cout << s;
-            }
-            cout << endl;
-        }
-        // -----------------------------------------------------------
-        
-        
-        // check order            
-        /* TODEBUG: why this code generate two `_order.txt`? 
-        ostringstream stream;
-        stream << APP<Dtype>::snapshot_prefix << layer_name << "_order.txt";
-        const char* dd = stream.str().c_str();
-        ofstream col_score_order(dd, ofstream::app); // dd must be char*, ofstream::app
-        if (!col_score_order.is_open()) { 
-            cerr << "file open failed: layer_name = " << layer_name << endl; 
-        } else {
-        */ 
-        
-        // Punishment Function -------------------------------------------------------
         const int num_pruned_col = APP<Dtype>::num_pruned_col[L];
         const int num_col_to_prune_ = ceil(num_col * APP<Dtype>::prune_ratio[L]) - num_pruned_col;
         const int num_col_ = num_col - num_pruned_col;
@@ -624,42 +533,167 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         const Dtype AA = APP<Dtype>::AA;
         vector<Dtype> reg_multiplier(count, -1);
         
-        const int scheme = 2;
-        if (scheme == 1) {
-            // scheme 1
-            const Dtype kk = APP<Dtype>::kk;
-            const Dtype alpha = log(2/kk) / (num_col_to_prune_ + 1);
-            const Dtype N1 = -log(kk)/alpha; // symmetry point
-            
-            for (int j = 0; j < num_col_; ++j) { // j: rank 
-                const int col_of_rank_j = col_hrank[j + num_pruned_col].second; // Note the real rank is j + num_pruned_col
-                const Dtype Delta = j < N1 ? AA * exp(-alpha * j) : -AA * exp(-alpha * (2*N1-j)) + 2*kk*AA;
-                const Dtype old_reg = APP<Dtype>::history_reg[L][col_of_rank_j];
-                const Dtype new_reg = std::max(old_reg + Delta, Dtype(0));
-                APP<Dtype>::history_reg[L][col_of_rank_j] = new_reg;
+        // (1) Reg-rank_Col
+        if (APP<Dtype>::prune_coremthd == "Reg-rank") {
+            // ***********************************************************
+            // Sort 01: sort by L1-norm
+            typedef std::pair<Dtype, int> mypair;
+            vector<mypair> col_score(num_col); // score of each column
+            for (int j = 0; j < num_col; ++j) {
+                col_score[j].second = j;
+                if (APP<Dtype>::IF_col_pruned[L][j][0]) { // TODEBUG: fix this [0]
+                    col_score[j].first = APP<Dtype>::hrank[L][j]; // make the pruned sink down
+                    continue;
+                } 
+                col_score[j].first  = 0;
                 for (int i = 0; i < num_row; ++i) {
-                    reg_multiplier[i * num_col + col_of_rank_j] = new_reg;
-                }
+                    col_score[j].first += fabs(weight[i * num_col + j]);
+                }           
             }
-        } else if (scheme == 2) {
-            // scheme 2, the dis-continual function
-            const Dtype kk2 = APP<Dtype>::kk2;
-            const Dtype alpha1 = (num_col_to_prune_ == 1)          ? 0 : log(1/kk2) / (num_col_to_prune_ - 1);
-            const Dtype alpha2 = (num_col_to_prune_ == num_col_-1) ? 0 : log(1/kk2) / (num_col_-1 - num_col_to_prune_);
+            sort(col_score.begin(), col_score.end());
+            // Make new criteria by rank: history_rank
+            const int n = this->iter_ + 1; // No.n iter (n starts from 1)
+            for (int rk = 0; rk < num_col; ++rk) {
+                const int col_of_rank_rk = col_score[rk].second;
+                if (APP<Dtype>::IF_col_pruned[L][col_of_rank_rk][0]) { continue; }
+                APP<Dtype>::hrank[L][col_of_rank_rk] = ((n-1) * APP<Dtype>::hrank[L][col_of_rank_rk] + rk) / n;
+            }
 
-            for (int j = 0; j < num_col_; ++j) { // j: rank 
-                const int col_of_rank_j = col_hrank[j + num_pruned_col].second; // Note the real rank is j + num_pruned_col
-                const Dtype Delta = j < num_col_to_prune_ ? AA * exp(-alpha1 * j) : -AA * exp(-alpha2 * (num_col_-1 - j));
-                const Dtype old_reg = APP<Dtype>::history_reg[L][col_of_rank_j];
-                const Dtype new_reg = std::max(old_reg + Delta, Dtype(0));
-                APP<Dtype>::history_reg[L][col_of_rank_j] = new_reg;
-                for (int i = 0; i < num_row; ++i) {
-                    reg_multiplier[i * num_col + col_of_rank_j] = new_reg;
+            // ***********************************************************
+            // Sort 02: sort by history_rank
+            vector<mypair> col_hrank(num_col); // the history_rank of each column, history_rank is like the new score
+            for (int j = 0; j < num_col; ++j) {
+                col_hrank[j].first  = APP<Dtype>::hrank[L][j];
+                col_hrank[j].second = j;
+            }
+            sort(col_hrank.begin(), col_hrank.end());
+
+            // for print
+            vector<int> col_rank(num_col);
+            for (int rk = 0; rk < num_col; ++rk) {
+                const int col_of_rank_rk = col_hrank[rk].second;
+                col_rank[col_of_rank_rk] = rk;
+            }
+            
+            // Print: Check rank, j is column number
+            if (this->iter_ % 20 == 0) {
+                char iter[10]; sprintf(iter, "%6d", this->iter_ + 1); // max_iter should be in [0, 999999]
+                cout << iter << "-" << layer_name << "hrank:";
+                for (int j = 0; j < num_col; ++j) {
+                    cout << "  ";
+                    char s[50];
+                    if (APP<Dtype>::IF_col_pruned[L][j][0]) { 
+                        sprintf(s, "%7.0f", APP<Dtype>::hrank[L][j]);
+                    } else {
+                        sprintf(s, "%7.2f", APP<Dtype>::hrank[L][j]);
+                    }
+                    cout << s;
+                }
+                cout << endl;
+                
+                cout << iter << "-" << layer_name << "rank(by_hrank):";
+                for (int rk = 0; rk < num_col; ++rk) {
+                    cout << "  ";
+                    char s[50];
+                    const int prune_mark = APP<Dtype>::IF_col_pruned[L][col_hrank[rk].second][0] ? 0 : 1;
+                    sprintf(s, "%4d-%d", col_hrank[rk].second, prune_mark);
+                    cout << s;
+                }
+                cout << endl;
+            }
+
+            // check order            
+            /* TODEBUG: why this code generate two `_order.txt`? 
+            ostringstream stream;
+            stream << APP<Dtype>::snapshot_prefix << layer_name << "_order.txt";
+            const char* dd = stream.str().c_str();
+            ofstream col_score_order(dd, ofstream::app); // dd must be char*, ofstream::app
+            if (!col_score_order.is_open()) { 
+                cerr << "file open failed: layer_name = " << layer_name << endl; 
+            } else {
+            */
+            
+            // Punishment Function
+            const int scheme = 2;
+            if (scheme == 1) {
+                // scheme 1
+                const Dtype kk = APP<Dtype>::kk;
+                const Dtype alpha = log(2/kk) / (num_col_to_prune_ + 1);
+                const Dtype N1 = -log(kk)/alpha; // symmetry point
+                
+                for (int j = 0; j < num_col_; ++j) { // j: rank 
+                    const int col_of_rank_j = col_hrank[j + num_pruned_col].second; // Note the real rank is j + num_pruned_col
+                    const Dtype Delta = j < N1 ? AA * exp(-alpha * j) : -AA * exp(-alpha * (2*N1-j)) + 2*kk*AA;
+                    const Dtype old_reg = APP<Dtype>::history_reg[L][col_of_rank_j];
+                    const Dtype new_reg = std::max(old_reg + Delta, Dtype(0));
+                    APP<Dtype>::history_reg[L][col_of_rank_j] = new_reg;
+                    for (int i = 0; i < num_row; ++i) {
+                        reg_multiplier[i * num_col + col_of_rank_j] = new_reg;
+                    }
+                }
+            } else if (scheme == 2) {
+                // scheme 2, the dis-continual function
+                const Dtype kk2 = APP<Dtype>::kk2;
+                const Dtype alpha1 = (num_col_to_prune_ == 1)          ? 0 : log(1/kk2) / (num_col_to_prune_ - 1);
+                const Dtype alpha2 = (num_col_to_prune_ == num_col_-1) ? 0 : log(1/kk2) / (num_col_-1 - num_col_to_prune_);
+
+                for (int j = 0; j < num_col_; ++j) { // j: rank 
+                    const int col_of_rank_j = col_hrank[j + num_pruned_col].second; // Note the real rank is j + num_pruned_col
+                    const Dtype Delta = j < num_col_to_prune_ ? AA * exp(-alpha1 * j) : -AA * exp(-alpha2 * (num_col_-1 - j));
+                    const Dtype old_reg = APP<Dtype>::history_reg[L][col_of_rank_j];
+                    const Dtype new_reg = std::max(old_reg + Delta, Dtype(0));
+                    APP<Dtype>::history_reg[L][col_of_rank_j] = new_reg;
+                    for (int i = 0; i < num_row; ++i) {
+                        reg_multiplier[i * num_col + col_of_rank_j] = new_reg;
+                    }
                 }
             }
-        }
-        // ----------------------------------------------------------------------------
         
+        // (2) Reg-L1_Col
+        } else if (APP<Dtype>::prune_coremthd == "Reg-L1") {
+            typedef std::pair<Dtype, int> mypair;
+            vector<mypair> col_score(num_col);
+            for (int j = 0; j < num_col; ++j) {
+                col_score[j].second = j;
+                if (APP<Dtype>::IF_col_pruned[L][j][0]) {
+                    col_score[j].first = INT_MAX;
+                    continue;
+                }
+                col_score[j].first  = 0;
+                for (int i = 0; i < num_row; ++i) {
+                    col_score[j].first += fabs(weight[i * num_col + j]);
+                }
+            }
+            sort(col_score.begin(), col_score.end());
+            
+            const Dtype k_L1 = (num_col_to_prune_ == 0) ? 0 : AA / (col_score[num_col_to_prune_].first - col_score[0].first);
+            cout << "step: " << this->iter_ + 1 << "  " << layer_name << " k_L1: " << k_L1 << endl;
+            for (int rk = 0; rk < num_col_; ++rk) {
+                const int col_of_rank_rk = col_score[rk].second;
+                const Dtype Delta = AA - k_L1 * (col_score[rk].first - col_score[0].first);
+                const Dtype old_reg = APP<Dtype>::history_reg[L][col_of_rank_rk];
+                const Dtype new_reg = std::max(old_reg + Delta, Dtype(0));
+                APP<Dtype>::history_reg[L][col_of_rank_rk] = new_reg;
+                
+                for (int i = 0; i < num_row; ++i) {
+                    reg_multiplier[i * num_col + col_of_rank_rk] = new_reg;
+                }
+                // Print
+                if (new_reg < old_reg) {
+                    cout << "reduce reg: " << layer_name << "-" << col_of_rank_rk 
+                         << "  old reg: "  << old_reg
+                         << "  new reg: "  << new_reg << endl;
+                }
+            }
+            
+            // Print
+            const int num_show = NUM_SHOW > num_col ? num_col : NUM_SHOW;
+            cout << layer_name << "-score: "; for (int rk = 0; rk < num_show; ++rk) { cout << col_score[rk].first  << " "; } cout << endl;
+            cout << layer_name << "  -col: "; for (int rk = 0; rk < num_show; ++rk) { cout << col_score[rk].second << " "; } cout << endl;
+            cout << layer_name << "  -reg: "; for (int rk = 0; rk < num_show; ++rk) { cout << APP<Dtype>::history_reg[L][col_score[rk].second] << " "; } cout << endl;
+        }
+        
+        // apply reg
         for (int i = 0; i < count; ++i) {
             net_params[param_id]->mutable_cpu_diff()[i] += reg_multiplier[i] * weight[i];
         }
@@ -678,7 +712,6 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[param_id].first];
         if (APP<Dtype>::layer_index.count(layer_name) == 0) { return; }
         const int L = APP<Dtype>::layer_index[layer_name];
-        
         
         // 2.
         const bool IF_want_prune  = APP<Dtype>::prune_method != "None" && APP<Dtype>::prune_ratio[L] > 0;
@@ -821,7 +854,6 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             assert (num_row_to_prune_ > 0 && num_row_to_prune_ < num_row);
             cout << "num_row_to_prune_: " <<num_row_to_prune_ << endl;
             const Dtype k_L1 = num_row_to_prune_ == 0 ? 0 : AA / (row_score[num_row_to_prune_].first - row_score[0].first);
-            vector<Dtype> reg_multiplier(count, -1);
             
             cout << "k_L1: " << k_L1 << endl;
             for (int rk = 0; rk < num_row_; ++rk) {
@@ -1049,7 +1081,7 @@ void SGDSolver<Dtype>::ComputeUpdateValue(int param_id, Dtype rate) {
 template <typename Dtype>
 void SGDSolver<Dtype>::ClearHistory(int param_id) {
     const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[param_id].first];
-    if (APP<Dtype>::layer_index.count(layer_name) == 0) { return; }
+    if (APP<Dtype>::layer_index.count(layer_name) == 0 || history_[param_id]->shape().size() == 1) { return; }
     const int L = APP<Dtype>::layer_index[layer_name];
     const int count = APP<Dtype>::masks[L].size();
     Dtype* tmp = new Dtype[count]; /// TODEBUG: Why cannot use bool?
@@ -1061,9 +1093,35 @@ void SGDSolver<Dtype>::ClearHistory(int param_id) {
               history_[param_id]->cpu_data(), 
               history_[param_id]->mutable_cpu_data());
     delete[] tmp;
+    cout << layer_name << "-ClearHistory done" << endl;
 }
 
-
+template <typename Dtype>
+void SGDSolver<Dtype>::ClearHistory() {
+    const vector<shared_ptr<Layer<Dtype> > >& layers = this->net_->layers();
+    int param_id = 0;
+    for (int i = 0; i < layers.size(); ++i) {
+    /// As long as layer i has masks, its history_ should be cleared. But only clear history_ of weights, since we only have masks for weights.
+    /// So the key is to relate layer i with corresponding param_id.
+        const int count = layers[i]->masks_.size();
+        
+        if (count) { 
+            while (history_[param_id]->count() != count) { 
+                ++ param_id; /// jump over biases
+            }
+            Dtype* tmp = new Dtype[count]; /// TODEBUG: Why cannot use bool?
+            for (int k = 0; k < count; ++k) {
+                tmp[k] = layers[i]->masks_[k];
+            }
+            caffe_mul(count, 
+                      (const Dtype*) tmp, 
+                      history_[param_id]->cpu_data(), 
+                      history_[param_id]->mutable_cpu_data());
+            delete[] tmp;
+            ++ param_id;
+        }
+    }
+}
 
 
 

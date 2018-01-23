@@ -125,9 +125,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 cout << "  pruned_ratio_row: " << APP<Dtype>::num_pruned_row[L] * 1.0 / num_row << "(" << APP<Dtype>::num_pruned_row[L] << ")"
                      << "  pruned_ratio_col: " << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << "(" << APP<Dtype>::num_pruned_col[L] << ")";
             }
-            cout << "  prune_ratio: "  << APP<Dtype>::prune_ratio[L] 
-                 << "  reg: " << APP<Dtype>::reg_to_distribute[L] 
-                 << "/" << ceil(APP<Dtype>::prune_ratio[L] * num_col) * APP<Dtype>::target_reg << endl; 
+            cout << "  prune_ratio: "  << APP<Dtype>::prune_ratio[L] << endl;
         }
         
         
