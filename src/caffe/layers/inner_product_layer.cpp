@@ -313,7 +313,7 @@ void InnerProductLayer<Dtype>::ComputeBlobMask() {
     else if (APP<Dtype>::prune_unit == "Col") { pruned_ratio = APP<Dtype>::pruned_ratio_col[L]; }
     if (pruned_ratio >= APP<Dtype>::prune_ratio[L]) {
         APP<Dtype>::iter_prune_finished[L] = -1; /// To check multi-GPU
-        cout << layer_name << " prune finished" << endl;
+        cout << L << ": " << layer_name << " prune finished" << endl;
     } else { 
         if (APP<Dtype>::prune_coremthd == "SPP") {
             RestorePruneProb(pruned_ratio);
