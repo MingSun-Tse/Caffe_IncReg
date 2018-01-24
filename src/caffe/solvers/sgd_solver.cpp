@@ -614,7 +614,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             */
             
             // Punishment Function
-            const int scheme = 2;
+            const int scheme = 1;
             if (scheme == 1) {
                 // scheme 1
                 const Dtype kk = APP<Dtype>::kk;
