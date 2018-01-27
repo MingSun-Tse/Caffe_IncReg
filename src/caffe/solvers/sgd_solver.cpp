@@ -260,22 +260,23 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                        net_params[param_id]->gpu_data(),
                        net_params[param_id]->mutable_gpu_diff());
 
-        // some occasions to return
-        const int L = param_id / 2; // TODO: improve
-        bool IF_find_layer_name = false;
-        std::map<string,int>::iterator it;
-        string layer_name;
-        for (it = APP<Dtype>::layer_index.begin(); it != APP<Dtype>::layer_index.end(); ++it) {
-            if (it->second == L) {
-                IF_find_layer_name = true;
-                layer_name = it->first;
-                break;
-            }
-        }
-        if (!IF_find_layer_name) { return; }
-        if (APP<Dtype>::iter_prune_finished[L] != INT_MAX) { return; }
+        
+        // Occasions to return
+        // 1. Get layer index and layer name, if not registered, don't reg it.
+        const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[param_id].first];
+        if (APP<Dtype>::layer_index.count(layer_name) == 0) { return; }
+        const int L = APP<Dtype>::layer_index[layer_name];
+        
+        // 2.
+        const bool IF_want_prune  = APP<Dtype>::prune_method != "None" && APP<Dtype>::prune_ratio[L] > 0;
+        const bool IF_been_pruned = APP<Dtype>::pruned_ratio[L] > 0;
+        const bool IF_enough_iter = APP<Dtype>::step_ >= APP<Dtype>::prune_begin_iter+1;
+        const bool IF_prune = IF_want_prune && (IF_been_pruned || IF_enough_iter);
+        if (!(IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX)) { return; }
+        
+        // 3. Do not reg biases
         const vector<int>& shape = net_params[param_id]->shape();
-        if (shape.size() != 4) { return; } // do not reg biases
+        if (shape.size() == 1) { return; } 
         
         const Dtype* weight = net_params[param_id]->cpu_data();
         const Dtype col_reg = APP<Dtype>::col_reg;
@@ -292,7 +293,6 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
           for (int i = 0; i < num_row; ++i) { 
             sqrted_energy[i * num_col + j] = (sum == 0) ? 1 : sqrt(sum); 
           }
-          
           if (j < NUM_SHOW) {
             const string mark = (j < 9) ? "c " : "c";
             cout << layer_name << "-" << mark << j+1 << ": " << 1 / sqrted_energy[j] << endl;
@@ -565,11 +565,20 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             // ***********************************************************
             // Sort 02: sort by history_rank
             vector<mypair> col_hrank(num_col); // the history_rank of each column, history_rank is like the new score
+            cout << "ave-magnitude " << this->iter_ << " " << layer_name << ":";
             for (int j = 0; j < num_col; ++j) {
+                
+                Dtype sum = 0; // for print ave magnitude
+                for (int i = 0; i < num_row; ++i) {
+                    sum += fabs(weight[i * num_col + j]);
+                }
+                cout << " " << sum;
+                
                 col_hrank[j].first  = APP<Dtype>::hrank[L][j];
                 col_hrank[j].second = j;
             }
             sort(col_hrank.begin(), col_hrank.end());
+            cout << endl;
             
             // for print
             vector<int> col_rank(num_col);
@@ -605,6 +614,8 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                 }
                 cout << endl;
             }
+            
+           
 
             // check order            
             /* TODEBUG: why this code generate two `_order.txt`? 
