@@ -490,7 +490,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                        net_params[param_id]->gpu_data(),
                        net_params[param_id]->mutable_gpu_diff());    
         
-        // Three occasions to return
+        // Occasions to return
         // 1. Get layer index and layer name, if not registered, don't reg it.
         const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[param_id].first];
         if (APP<Dtype>::layer_index.count(layer_name) == 0) { return; }
@@ -558,7 +558,10 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                 if (APP<Dtype>::IF_col_pruned[L][col_of_rank_rk][0]) { continue; }
                 APP<Dtype>::hrank[L][col_of_rank_rk] = ((n-1) * APP<Dtype>::hrank[L][col_of_rank_rk] + rk) / n;
             }
-
+            
+            // put this here, to let the hrank able to update even when not pruning
+            if (this->iter_ % APP<Dtype>::prune_interval != 0) { return; }
+            
             // ***********************************************************
             // Sort 02: sort by history_rank
             vector<mypair> col_hrank(num_col); // the history_rank of each column, history_rank is like the new score
@@ -567,13 +570,14 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                 col_hrank[j].second = j;
             }
             sort(col_hrank.begin(), col_hrank.end());
-
+            
             // for print
             vector<int> col_rank(num_col);
             for (int rk = 0; rk < num_col; ++rk) {
                 const int col_of_rank_rk = col_hrank[rk].second;
                 col_rank[col_of_rank_rk] = rk;
             }
+            
             
             // Print: Check rank, j is column number
             if (this->iter_ % 20 == 0) {
