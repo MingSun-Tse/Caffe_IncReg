@@ -53,7 +53,8 @@ public:
     static long last_time; // used to calculate training speed
     static long first_time;
     static int  first_iter;
-    static bool IF_alpf; 
+    static bool IF_alpf;
+    static bool IF_scheme1_when_Reg_rank;
     static bool IF_speedup_achieved;
     static bool IF_compRatio_achieved;
     
@@ -161,6 +162,7 @@ public:
     template<typename Dtype>  long   APP<Dtype>::last_time  = 0;
     template<typename Dtype>  long   APP<Dtype>::first_time = 0;
     template<typename Dtype>  int    APP<Dtype>::first_iter = 0;
+    template<typename Dtype>  bool  APP<Dtype>::IF_scheme1_when_Reg_rank;
     template<typename Dtype>  bool  APP<Dtype>::IF_alpf = false; /// if all layer prune finished
     template<typename Dtype>  bool  APP<Dtype>::IF_speedup_achieved   = false;
     template<typename Dtype>  bool  APP<Dtype>::IF_compRatio_achieved = false;

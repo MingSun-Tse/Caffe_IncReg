@@ -83,6 +83,7 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   APP<Dtype>::IF_update_row_col = param.if_update_row_col();
   APP<Dtype>::IF_speedup_count_fc = param.if_speedup_count_fc();
   APP<Dtype>::IF_compr_count_conv = param.if_compr_count_conv();
+  APP<Dtype>::IF_scheme1_when_Reg_rank = param.if_scheme1_when_reg_rank();
   APP<Dtype>::IF_eswpf = param_.if_eswpf(); /// if early stop when prune finished
   APP<Dtype>::prune_threshold = param_.prune_threshold();
   APP<Dtype>::num_iter_reg = 10000;

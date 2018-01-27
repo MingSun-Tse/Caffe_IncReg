@@ -614,8 +614,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             */
             
             // Punishment Function
-            const int scheme = 1;
-            if (scheme == 1) {
+            if (APP<Dtype>::IF_scheme1_when_Reg_rank) {
                 // scheme 1
                 const Dtype kk = APP<Dtype>::kk;
                 const Dtype alpha = log(2/kk) / (num_col_to_prune_ + 1);
@@ -630,8 +629,15 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                     for (int i = 0; i < num_row; ++i) {
                         reg_multiplier[i * num_col + col_of_rank_j] = new_reg;
                     }
+                    
+                    // Print
+                    if (new_reg < old_reg) {
+                        cout << "reduce reg: " << layer_name << "-" << col_of_rank_j 
+                             << "  old reg: "  << old_reg
+                             << "  new reg: "  << new_reg << endl;
+                    }
                 }
-            } else if (scheme == 2) {
+            } else {
                 // scheme 2, the dis-continual function
                 const Dtype kk2 = APP<Dtype>::kk2;
                 const Dtype alpha1 = (num_col_to_prune_ == 1)          ? 0 : log(1/kk2) / (num_col_to_prune_ - 1);
@@ -700,7 +706,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
       
       // ******************************************************************************************
       // Got idea from cvpr rebuttal, improve SelectiveReg: 1) use L1-norm rather than rank, 2) row prune
-      } else if (regularization_type == "Reg_Row") { 
+      } else if (regularization_type == "Reg_Row") {
         // add weight decay, weight decay still used
         caffe_gpu_axpy(net_params[param_id]->count(),
                        local_decay,
@@ -812,6 +818,12 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                     APP<Dtype>::history_reg[L][row_of_rank_rk] = new_reg;
                     for (int j = 0; j < num_col; ++j) {
                         reg_multiplier[row_of_rank_rk * num_col + j] = new_reg;
+                    }
+                    // Print
+                    if (new_reg < old_reg) {
+                        cout << "reduce reg: " << layer_name << "-" << row_of_rank_rk 
+                             << "  old reg: "  << old_reg
+                             << "  new reg: "  << new_reg << endl;
                     }
                 }
             } else if (scheme == 2) {
