@@ -253,7 +253,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         }
         std::cout << std::endl;
     
-      } else if (regularization_type == "SSL") {
+      } else if (regularization_type == "SSL" || regularization_type == "SSL_discriminative") {
         // add weight decay, weight decay still used
         caffe_gpu_axpy(net_params[param_id]->count(),
                        local_decay,
@@ -279,12 +279,14 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         if (shape.size() == 1) { return; } 
         
         const Dtype* weight = net_params[param_id]->cpu_data();
-        const Dtype col_reg = APP<Dtype>::col_reg;
         const int count = net_params[param_id]->count();
         const int num_row = net_params[param_id]->shape()[0];
         const int num_col = count / num_row;
+        vector<Dtype> reg_multiplier(count, APP<Dtype>::AA); // Note!! use AA to set column reg, weight decay remains weight decay.
       
         Dtype* sqrted_energy = (Dtype*) malloc (sizeof(Dtype*) * count); // demoninator of SSL reg
+        typedef std::pair<Dtype, int> mypair;
+        vector<mypair> col_score(num_col);
         cout << "ave-magnitude " << this->iter_ << " " << layer_name << ":";
         for (int j = 0; j < num_col; ++j) {
           Dtype sum  = 0;
@@ -295,30 +297,41 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
           }
           cout << " " << sum2/num_row;
           
-          for (int i = 0; i < num_row; ++i) { 
+          // col score
+          col_score[j].first  = APP<Dtype>::IF_col_pruned[L][j][0] ? INT_MAX : sum2;
+          col_score[j].second = j; 
+          
+          for (int i = 0; i < num_row; ++i) {
             sqrted_energy[i * num_col + j] = (sum == 0) ? 1 : sqrt(sum); // 1 for to avoid divide zero
           }
-          /*
-          if (j < NUM_SHOW) {
-            const string mark = (j < 9) ? "c " : "c";
-            cout << layer_name << "-" << mark << j+1 << ": " << 1 / sqrted_energy[j] << endl;
-          }
-          */
         }
         cout << endl;
-          
+        
+        // "SSL_discriminative" doesn't reg the `good` columns.
+        if (regularization_type == "SSL_discriminative") {
+            sort(col_score.begin(), col_score.end());
+            const int num_col_ = num_col - APP<Dtype>::num_pruned_col[L];
+            const int num_col_to_prune_ = ceil(num_col * APP<Dtype>::prune_ratio[L]) - APP<Dtype>::num_pruned_col[L];
+            for (int rk = num_col_to_prune_; rk < num_col_; ++rk) {
+                const int col_of_rank_rk = col_score[rk].second;
+                for (int i = 0; i < num_row; ++i) {
+                    reg_multiplier[i * num_col + col_of_rank_rk] = 0;
+                }
+            }
+        }
+
         // add SSL reg
         Dtype* scaled_weight = (Dtype*) malloc (sizeof(Dtype*) * count);
         caffe_div(count, 
                   net_params[param_id]->cpu_data(), 
                   (const Dtype*) sqrted_energy, 
                   scaled_weight); // degug here
-        
-        caffe_axpy(count, 
-                   col_reg, 
-                   (const Dtype*) scaled_weight, 
-                   net_params[param_id]->mutable_cpu_diff()); // degug here
-        
+
+        // Add Reg
+        for (int i = 0; i < count; ++i) {
+            net_params[param_id]->mutable_cpu_diff()[i] += reg_multiplier[i] * scaled_weight[i];
+        }
+
         free(scaled_weight);
         free(sqrted_energy);
       // ******************************************************************************************
