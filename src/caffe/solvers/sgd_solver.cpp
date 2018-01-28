@@ -285,37 +285,42 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         const int num_col = count / num_row;
       
         Dtype* sqrted_energy = (Dtype*) malloc (sizeof(Dtype*) * count); // demoninator of SSL reg
+        cout << "ave-magnitude " << this->iter_ << " " << layer_name << ":";
         for (int j = 0; j < num_col; ++j) {
-          Dtype sum = 0;
+          Dtype sum  = 0;
+          Dtype sum2 = 0;
           for (int i = 0; i < num_row; ++i) { 
-            sum += weight[i * num_col + j] * weight[i * num_col + j]; 
-          } 
-          for (int i = 0; i < num_row; ++i) { 
-            sqrted_energy[i * num_col + j] = (sum == 0) ? 1 : sqrt(sum); 
+            sum  += weight[i * num_col + j] * weight[i * num_col + j];
+            sum2 += fabs(weight[i * num_col + j]);
           }
+          cout << " " << sum2/num_row;
+          
+          for (int i = 0; i < num_row; ++i) { 
+            sqrted_energy[i * num_col + j] = (sum == 0) ? 1 : sqrt(sum); // 1 for to avoid divide zero
+          }
+          /*
           if (j < NUM_SHOW) {
             const string mark = (j < 9) ? "c " : "c";
             cout << layer_name << "-" << mark << j+1 << ": " << 1 / sqrted_energy[j] << endl;
           }
+          */
         }
-        const Dtype* sqrted_energy_const =  sqrted_energy;
+        cout << endl;
           
         // add SSL reg
         Dtype* scaled_weight = (Dtype*) malloc (sizeof(Dtype*) * count);
         caffe_div(count, 
                   net_params[param_id]->cpu_data(), 
-                  sqrted_energy_const, 
+                  (const Dtype*) sqrted_energy, 
                   scaled_weight); // degug here
-        const Dtype* scaled_weight_const = scaled_weight;
         
         caffe_axpy(count, 
                    col_reg, 
-                   scaled_weight_const, 
+                   (const Dtype*) scaled_weight, 
                    net_params[param_id]->mutable_cpu_diff()); // degug here
         
         free(scaled_weight);
         free(sqrted_energy);
-      
       // ******************************************************************************************
       } else if (regularization_type == "OptimalReg") {
        // add weight decay, weight decay still used
@@ -572,7 +577,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                 for (int i = 0; i < num_row; ++i) {
                     sum += fabs(weight[i * num_col + j]);
                 }
-                cout << " " << sum;
+                cout << " " << sum/num_row;
                 
                 col_hrank[j].first  = APP<Dtype>::hrank[L][j];
                 col_hrank[j].second = j;
@@ -586,7 +591,6 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                 const int col_of_rank_rk = col_hrank[rk].second;
                 col_rank[col_of_rank_rk] = rk;
             }
-            
             
             // Print: Check rank, j is column number
             if (this->iter_ % 20 == 0) {
