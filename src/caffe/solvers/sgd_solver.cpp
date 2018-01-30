@@ -800,10 +800,20 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             
             // Sort 02: sort by history_rank
             vector<mypair> row_hrank(num_row);
+            cout << "ave-magnitude " << this->iter_ << " " << layer_name << ":";
             for (int i = 0; i < num_row; ++i) {
+                
+                // print 
+                Dtype sum = 0;
+                for (int j = 0; i < num_col; ++j) {
+                    sum += weight[i * num_col +j];
+                }
+                cout << " " << sum/num_col;
+
                 row_hrank[i].first  = APP<Dtype>::hrank[L][i];
                 row_hrank[i].second = i;
             }
+            cout << endl;
             sort(row_hrank.begin(), row_hrank.end());
             
             // Print: Check rank
@@ -835,8 +845,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             
             // Punishment Function 
             assert (num_row_to_prune_ > 0);
-            const int scheme = 2;
-            if (scheme == 1) {
+            if (APP<Dtype>::IF_scheme1_when_Reg_rank) {
                 // scheme 1
                 const Dtype kk = APP<Dtype>::kk;
                 const Dtype alpha = log(2/kk) / (num_row_to_prune_ + 1);
@@ -858,7 +867,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                              << "  new reg: "  << new_reg << endl;
                     }
                 }
-            } else if (scheme == 2) {
+            } else {
                 // scheme 2, the dis-continual function
                 const Dtype kk2 = APP<Dtype>::kk2;
                 const Dtype alpha1 = (num_row_to_prune_ == 1)          ? 0 : log(1/kk2) / (num_row_to_prune_ - 1);
