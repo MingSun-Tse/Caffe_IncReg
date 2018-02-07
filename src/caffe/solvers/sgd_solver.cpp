@@ -287,7 +287,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         Dtype* sqrted_energy = (Dtype*) malloc (sizeof(Dtype*) * count); // demoninator of SSL reg
         typedef std::pair<Dtype, int> mypair;
         vector<mypair> col_score(num_col);
-        cout << "ave-magnitude " << this->iter_ << " " << layer_name << ":";
+        cout << "ave-magnitude_col " << this->iter_ << " " << layer_name << ":";
         for (int j = 0; j < num_col; ++j) {
           Dtype sum  = 0;
           Dtype sum2 = 0;
@@ -508,11 +508,11 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                        net_params[param_id]->gpu_data(),
                        net_params[param_id]->mutable_gpu_diff());    
         
-        // Occasions to return
-        // 1. Get layer index and layer name, if not registered, don't reg it.
+        
+        // If return
         const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[param_id].first];
-        if (APP<Dtype>::layer_index.count(layer_name) == 0) { return; }
-        const int L = APP<Dtype>::layer_index[layer_name];
+        const int L = GetLayerIndex(param_id);
+        if (L == -1) { return; }
         
         /* print for check
         cout << param_id << "  layer_name: " << layer_name << endl;
@@ -526,19 +526,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         cout << "my layer_index: " << L 
              << "  caffe's layer_index: " << layer_names_index[layer_name] << endl;
         */
-        
-        // 2.
-        const bool IF_want_prune  = APP<Dtype>::prune_method != "None" && APP<Dtype>::prune_ratio[L] > 0;
-        const bool IF_been_pruned = APP<Dtype>::pruned_ratio[L] > 0;
-        const bool IF_enough_iter = APP<Dtype>::step_ >= APP<Dtype>::prune_begin_iter+1;
-        const bool IF_prune = IF_want_prune && (IF_been_pruned || IF_enough_iter);
-        if (!(IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX)) { return; }
-        
-        // 3. Do not reg biases
-        const vector<int>& shape = net_params[param_id]->shape();
-        if (shape.size() == 1) { return; } 
-        
-        
+
         const Dtype* weight = net_params[param_id]->cpu_data();
         const int count   = net_params[param_id]->count();
         const int num_row = net_params[param_id]->shape()[0];
@@ -583,7 +571,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             // ***********************************************************
             // Sort 02: sort by history_rank
             vector<mypair> col_hrank(num_col); // the history_rank of each column, history_rank is like the new score
-            cout << "ave-magnitude " << this->iter_ << " " << layer_name << ":";
+            cout << "ave-magnitude_col " << this->iter_ << " " << layer_name << ":";
             for (int j = 0; j < num_col; ++j) {
                 
                 Dtype sum = 0; // for print ave magnitude
@@ -739,6 +727,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
       // ******************************************************************************************
       // Got idea from cvpr rebuttal, improve SelectiveReg: 1) use L1-norm rather than rank, 2) row prune
       } else if (regularization_type == "Reg_Row") {
+          
         // add weight decay, weight decay still used
         caffe_gpu_axpy(net_params[param_id]->count(),
                        local_decay,
@@ -800,20 +789,20 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             
             // Sort 02: sort by history_rank
             vector<mypair> row_hrank(num_row);
-            cout << "ave-magnitude " << this->iter_ << " " << layer_name << ":";
+            // cout << "ave-magnitude_row " << this->iter_ << " " << layer_name << ":";
             for (int i = 0; i < num_row; ++i) {
                 
                 // print 
-                Dtype sum = 0;
-                for (int j = 0; i < num_col; ++j) {
-                    sum += weight[i * num_col +j];
-                }
-                cout << " " << sum/num_col;
+                // Dtype sum = 0;
+                // for (int j = 0; i < num_col; ++j) {
+                    // sum += fabs(weight[i * num_col +j]);
+                // }
+                // cout << " " << sum/num_col;
 
                 row_hrank[i].first  = APP<Dtype>::hrank[L][i];
                 row_hrank[i].second = i;
             }
-            cout << endl;
+            //cout << endl;
             sort(row_hrank.begin(), row_hrank.end());
             
             // Print: Check rank
@@ -1256,6 +1245,29 @@ void SGDSolver<Dtype>::RestoreSolverStateFromBinaryProto(
   for (int i = 0; i < history_.size(); ++i) {
     history_[i]->FromProto(state.history(i));
   }
+}
+
+template <typename Dtype>
+int SGDSolver<Dtype>::GetLayerIndex(const int& param_id) {
+    // Three occasions to return, `-1` means return
+    // 1. Get layer index and layer name, if not registered, don't reg it.
+    const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[param_id].first];
+    if (APP<Dtype>::layer_index.count(layer_name) == 0) { return -1; }
+    const int L = APP<Dtype>::layer_index[layer_name];
+    
+    // 2.
+    const bool IF_want_prune  = APP<Dtype>::prune_method != "None" && APP<Dtype>::prune_ratio[L] > 0;
+    const bool IF_been_pruned = APP<Dtype>::pruned_ratio[L] > 0;
+    const bool IF_enough_iter = APP<Dtype>::step_ >= APP<Dtype>::prune_begin_iter+1;
+    const bool IF_prune = IF_want_prune && (IF_been_pruned || IF_enough_iter);
+    if (!(IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX)) { return -1; }
+    
+    // 3. Do not reg biases
+    const vector<int>& shape = this->net_->learnable_params()[param_id]->shape();
+    if (shape.size() == 1) { return -1; }
+    
+    return L;
+    
 }
 
 template <typename Dtype>

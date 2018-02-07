@@ -25,6 +25,7 @@ class SGDSolver : public Solver<Dtype> {
   bool Comparator(const std::pair<Dtype, int>& left, const std::pair<Dtype, int>& right);
   void ClearHistory(int param_id); // WANGHUAN
   void ClearHistory(); // WANGHUAN
+  int GetLayerIndex(const int& param_id); // WANGHUAN
 
  protected:
   void PreSolve();
