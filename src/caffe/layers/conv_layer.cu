@@ -96,14 +96,10 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         if (IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
             if (mthd == "FP_Row" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
                 FilterPrune(); 
-            } else if (mthd == "SPP_Col" && IF_hppf()) {
-                if (APP<Dtype>::prune_interval) {
-                    ProbPruneCol(APP<Dtype>::prune_interval);
-                } else {
-                    ProbPruneCol();
-                }
-            } else if (mthd == "SPP_Row" && IF_hppf()) {
-                ProbPruneRow();
+            } else if (mthd == "PP_Col" && IF_hppf()) {
+                ProbPruneCol(APP<Dtype>::prune_interval);
+            } else if (mthd == "PP_Row" && IF_hppf()) {
+                ProbPruneRow(APP<Dtype>::prune_interval);
             } else if (coremthd_ == "Reg") {
                 PruneMinimals();
             }
@@ -113,8 +109,30 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             }
         }
         
+        // Print weight magnitude
+        if (APP<Dtype>::prune_unit == "Col") {
+            cout << "ave-magnitude_col " << APP<Dtype>::step_ << " " << layer_name << ":";
+            for (int j = 0; j < num_col; ++j) {
+                Dtype sum = 0;
+                for (int i = 0; i < num_row; ++i) {
+                    sum += fabs(muweight[i*num_col + j]);
+                }
+                cout << " " << sum;
+            }
+            cout << endl;
+        } else if (APP<Dtype>::prune_unit == "Row") {
+            cout << "ave-magnitude_row " << APP<Dtype>::step_ << " " << layer_name << ":";
+            for (int i = 0; i < num_row; ++i) {
+                Dtype sum = 0;
+                for (int j = 0; j < num_col; ++j) {
+                    sum += fabs(muweight[i*num_col + j]);
+                }
+                cout << " " << sum;
+            }
+            cout << endl;
+        }
         
-        // Print 
+        // Summary print 
         if (mthd != "None" && L < SHOW_NUM_LAYER) {
             cout << layer_name << "  IF_prune: " << IF_prune 
                  << "  pruned_ratio: " << APP<Dtype>::pruned_ratio[L];
@@ -129,19 +147,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
         
         
-        // Weight logging
-        if (APP<Dtype>::num_log) {
-            const int num_log = APP<Dtype>::log_index[L].size();
-            for (int k = 0; k < num_log; ++k) {
-                const int index = APP<Dtype>::log_index[L][k];
-                Dtype sum = 0;
-                for (int i = 0; i < num_row; ++i) {
-                    sum += fabs(muweight[i * num_col + index]);
-                }
-                sum /= num_row;
-                APP<Dtype>::log_weight[L][k].push_back(sum);
-            }
-        }
+        
     } else if (this->phase_ == TEST) {
         if (IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX && mthd.substr(0, 2) == "PP") {
             Dtype rands[num_col];

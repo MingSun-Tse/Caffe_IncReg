@@ -162,7 +162,7 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
     if (mthd_ == "Reg") { // TODO: prune method name needs to be unified.
         info = "HistoryReg";
         info_data = APP<Dtype>::history_reg[L];
-    } else if (mthd_ == "SPP") {
+    } else if (mthd_ == "PP") {
         info = "HistoryProb";
         info_data = APP<Dtype>::history_prob[L];
     }
@@ -347,7 +347,6 @@ void ConvolutionLayer<Dtype>::TaylorPrune(const vector<Blob<Dtype>*>& top) {
     
 }
 
-
 template <typename Dtype> 
 void ConvolutionLayer<Dtype>::FilterPrune() {
     Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
@@ -383,108 +382,6 @@ void ConvolutionLayer<Dtype>::FilterPrune() {
 } 
 
 template <typename Dtype> 
-void ConvolutionLayer<Dtype>::ProbPruneCol() {
-    Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
-    const int count = this->blobs_[0]->count();
-    const int num_row = this->blobs_[0]->shape()[0];
-    const int num_col = count / num_row;
-    const string layer_name = this->layer_param_.name();
-    const int L = APP<Dtype>::layer_index[layer_name];
-    const int num_col_to_prune_ = ceil((APP<Dtype>::prune_ratio[L] + APP<Dtype>::delta[L]) * num_col); /// a little bit higher goal
-    const int iter_size = APP<Dtype>::iter_size;
-    const Dtype rgamma = APP<Dtype>::rgamma;
-    const Dtype rpower = APP<Dtype>::rpower;
-    const Dtype cgamma = APP<Dtype>::cgamma;
-    const Dtype cpower = APP<Dtype>::cpower;
-    const int group = APP<Dtype>::group[L];
-
-    /// Calculate history score
-    typedef std::pair<Dtype, int> mypair;
-    vector<mypair> col_score(num_col);
-    for (int j = 0; j < num_col; ++j) {
-        col_score[j].second = j; /// index
-        Dtype score = 0;
-        for (int i = 0; i < num_row; ++i) {
-            score += fabs(muweight[i * num_col +j]);
-        }
-        APP<Dtype>::hscore[L][j] = APP<Dtype>::score_decay * APP<Dtype>::hscore[L][j] + score;
-        col_score[j].first = APP<Dtype>::hscore[L][j];
-        if (APP<Dtype>::IF_col_pruned[L][j][0]) { col_score[j].first = INT_MAX; } /// make the pruned columns "float" up
-    }
-    sort(col_score.begin(), col_score.end());
-    
-    /// Recover the best columns, according to some probabilities
-    Dtype p_recover;
-    caffe_rng_uniform(1, (Dtype)0, (Dtype)1, &p_recover);
-    if (rgamma > 0 && pow(rgamma + 0.00027 * APP<Dtype>::step_, rpower) > p_recover * iter_size) {
-
-        /// Print and check
-        cout << "recover prob: " << layer_name << "  step: " << APP<Dtype>::step_ << endl;
-        cout << " score: ";   for (int j = 0; j < SHOW_NUM; ++j) { cout << col_score[j].first  << " "; }
-        cout << "\ncolumn: "; for (int j = 0; j < SHOW_NUM; ++j) { cout << col_score[j].second << " "; }
-        cout << "\n  prob: "; for (int j = 0; j < SHOW_NUM; ++j) { cout << APP<Dtype>::history_prob[L][col_score[j].second] << " "; }
-        cout << "\n";                    
-        
-        for (int j = num_col_to_prune_ - APP<Dtype>::num_pruned_col[L] - 1; 
-                 j < num_col - APP<Dtype>::num_pruned_col[L]; ++j) {
-            const int col_of_rank_j = col_score[j].second;
-            //cout << "recover col: " << col_of_rank_j 
-                 //<< "  its prob: " << APP<Dtype>::history_prob[L][col_of_rank_j] 
-                 //<< "  step: " << APP<Dtype>::step_ << endl;
-            APP<Dtype>::history_prob[L][col_of_rank_j] = 1;
-        }
-    }
-
-    /// Update history_prob, according to some probabilities
-    Dtype p_prune;
-    caffe_rng_uniform(1, (Dtype)0, (Dtype)1, &p_prune);
-    /// if ((APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {  
-    if (pow(cgamma + 0.0008 * APP<Dtype>::step_, cpower) > p_prune * iter_size) { 
-    /// if (std::min(Dtype(APP<Dtype>::learning_speed), (Dtype)0.004) * 4 > p_prune) {  
-    
-        /// Print and check
-        cout << "update prob: " << layer_name << " step: " << APP<Dtype>::step_ << endl;
-        cout << " score: ";   for (int j = 0; j < SHOW_NUM; ++j) { cout << col_score[j].first  << " "; }
-        cout << "\ncolumn: "; for (int j = 0; j < SHOW_NUM; ++j) { cout << col_score[j].second << " "; }
-        cout << "\n  prob: "; for (int j = 0; j < SHOW_NUM; ++j) { cout << APP<Dtype>::history_prob[L][col_score[j].second] << " "; }
-        cout << "\n";
-    
-        /// Calculate functioning probability of each weight
-        const Dtype AA = APP<Dtype>::AA; 
-        const Dtype aa = AA / 10.0;
-        const Dtype alpha = -log(aa/AA) / (num_col_to_prune_ - APP<Dtype>::num_pruned_col[L] - 1);  /// adjust alpha according to the remainder of cloumns
-        for (int j = 0; j < num_col_to_prune_ - APP<Dtype>::num_pruned_col[L]; ++j) {               /// note the range of j: only undermine those not-good-enough columns
-            const int col_of_rank_j = col_score[j].second;
-            APP<Dtype>::history_prob[L][col_of_rank_j] = std::max(APP<Dtype>::history_prob[L][col_of_rank_j] - AA * exp(-j * alpha), (Dtype)0);  
-            if (APP<Dtype>::history_prob[L][col_of_rank_j] == 0) {
-                APP<Dtype>::num_pruned_col[L] += 1;
-                for (int g = 0; g < group; ++g) {
-                    APP<Dtype>::IF_col_pruned[L][col_of_rank_j][g] = true;
-                }
-                for (int i = 0; i < num_row; ++i) { 
-                    muweight[i * num_col + col_of_rank_j] = 0;
-                } /// once pruned, zero out weights
-            }
-        } 
-    }
-
-    // With probability updated, generate masks and do pruning
-    Dtype rands[num_col];
-    caffe_rng_uniform(num_col, (Dtype)0, (Dtype)1, rands);
-    for (int i = 0; i < count; ++i) {
-        const bool cond1 = rands[i % num_col] < APP<Dtype>::history_prob[L][i % num_col];
-        const bool cond2 = !APP<Dtype>::IF_row_pruned[L][i / num_col];
-        APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
-        this->weight_backup[i] = muweight[i];
-        muweight[i] *= APP<Dtype>::masks[L][i];
-    }
-    this->IF_restore = true;
-    for (int i = 0; i < count; ++i) { 
-        muweight[i] *= APP<Dtype>::masks[L][i]; 
-    }
-}
-
-template <typename Dtype> 
 void ConvolutionLayer<Dtype>::ProbPruneCol(const int& prune_interval) {
     Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
     const int count = this->blobs_[0]->count();
@@ -513,13 +410,6 @@ void ConvolutionLayer<Dtype>::ProbPruneCol(const int& prune_interval) {
 
     /// Update history_prob
     if ((APP<Dtype>::step_ - 1) % prune_interval == 0 && APP<Dtype>::inner_iter == 0) {
-        /// Print and check
-        cout << "update prob: " << layer_name << " step: " << APP<Dtype>::step_ << endl;
-        cout << " score: ";   for (int j = 0; j < SHOW_NUM; ++j) { cout << col_score[j].first  << " "; }
-        cout << "\ncolumn: "; for (int j = 0; j < SHOW_NUM; ++j) { cout << col_score[j].second << " "; }
-        cout << "\n  prob: "; for (int j = 0; j < SHOW_NUM; ++j) { cout << APP<Dtype>::history_prob[L][col_score[j].second] << " "; }
-        cout << "\n";
-    
         /// Calculate functioning probability of each weight
         const Dtype AA = APP<Dtype>::AA;
         const Dtype kk = APP<Dtype>::kk;
@@ -531,7 +421,7 @@ void ConvolutionLayer<Dtype>::ProbPruneCol(const int& prune_interval) {
             
             const int col_of_rank_j = col_score[j].second;
             Dtype delta = j < N1 ? AA * exp(-alpha * j) : -AA * exp(-alpha * (2*N1-j)) + 2*kk*AA;
-            if (APP<Dtype>::prune_method == "PPc_l") {
+            if (APP<Dtype>::prune_method == "PP-linear_Col") {
                 delta = AA - k_ * j; /// linear punishment
             }            
             const Dtype old_prob = APP<Dtype>::history_prob[L][col_of_rank_j];
@@ -573,10 +463,84 @@ void ConvolutionLayer<Dtype>::ProbPruneCol(const int& prune_interval) {
     }
 }
 
-
-
 template <typename Dtype> 
-void ConvolutionLayer<Dtype>::ProbPruneRow() {}
+void ConvolutionLayer<Dtype>::ProbPruneRow(const int& prune_interval) {
+    Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
+    const int count = this->blobs_[0]->count();
+    const int num_row = this->blobs_[0]->shape()[0];
+    const int num_col = count / num_row;
+    const string layer_name = this->layer_param_.name();
+    const int L = APP<Dtype>::layer_index[layer_name];
+    const int num_row_to_prune_ = ceil(APP<Dtype>::prune_ratio[L] * num_row);
+
+    /// Calculate history score
+    typedef std::pair<Dtype, int> mypair;
+    vector<mypair> row_score(num_row);
+    for (int i = 0; i < num_row; ++i) {
+        row_score[i].second = i;
+        if (APP<Dtype>::IF_row_pruned[L][i]) { 
+            row_score[i].first = INT_MAX; // make the pruned columns "float" up
+            continue;
+        } 
+        Dtype score = 0;
+        for (int j = 0; j < num_col; ++j) {
+            score += fabs(muweight[i * num_col +j]);
+        }
+        APP<Dtype>::hscore[L][i] = APP<Dtype>::score_decay * APP<Dtype>::hscore[L][i] + score;
+        row_score[i].first = APP<Dtype>::hscore[L][i];
+    }
+    sort(row_score.begin(), row_score.end());
+    
+    /// Update history_prob
+    if ((APP<Dtype>::step_ - 1) % prune_interval == 0 && APP<Dtype>::inner_iter == 0) {
+
+        /// Calculate functioning probability of each weight
+        const Dtype AA = APP<Dtype>::AA;
+        const Dtype kk = APP<Dtype>::kk;
+        const Dtype alpha = log(2/kk) / (num_row_to_prune_ - APP<Dtype>::num_pruned_row[L]);
+        const Dtype N1 = -log(kk)/alpha;
+        
+        for (int rk = 0; rk < num_row - APP<Dtype>::num_pruned_row[L]; ++rk) {
+            const int row_of_rank_rk = row_score[rk].second;
+            Dtype delta = rk < N1 ? AA * exp(-alpha * rk) : -AA * exp(-alpha * (2*N1-rk)) + 2*kk*AA;
+            const Dtype old_prob = APP<Dtype>::history_prob[L][row_of_rank_rk];
+            const Dtype new_prob = std::min(std::max(old_prob - delta, Dtype(0)), Dtype(1));
+            APP<Dtype>::history_prob[L][row_of_rank_rk] = new_prob;
+            
+            if (new_prob == 0) {
+                ++ APP<Dtype>::num_pruned_row[L];
+                APP<Dtype>::IF_row_pruned[L][row_of_rank_rk] = true;  
+                for (int j = 0; j < num_col; ++j) { 
+                    muweight[row_of_rank_rk * num_col + j] = 0; // once pruned, zero out weights
+                } 
+                if (L != APP<Dtype>::conv_layer_cnt - 1) {
+                    APP<Dtype>::pruned_rows.push_back(row_of_rank_rk);
+                }
+            }
+            
+            // Print
+            if (new_prob > old_prob) {
+                cout << "recover prob: " << layer_name << "-" << row_of_rank_rk 
+                     << "  old prob: " << old_prob
+                     << "  new prob: " << new_prob << endl;
+            }
+        }
+    }
+
+    // With probability updated, generate masks and do pruning
+    Dtype rands[num_row];
+    caffe_rng_uniform(num_row, (Dtype)0, (Dtype)1, rands);
+    for (int i = 0; i < count; ++i) {
+        const int row_index = i / num_col;
+        const int col_index = i % num_col;
+        const bool cond1 = rands[row_index] < APP<Dtype>::history_prob[L][row_index];
+        const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
+        APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0; // Only when the row is assigned with mask 1 and the col is not pruned, the weight gets mask 1.
+        this->weight_backup[i] = muweight[i];
+        muweight[i] *= APP<Dtype>::masks[L][i];
+    }
+    this->IF_restore = true;
+}
 
 template <typename Dtype> 
 void ConvolutionLayer<Dtype>::CleanWorkForPP() {
@@ -590,8 +554,8 @@ void ConvolutionLayer<Dtype>::CleanWorkForPP() {
     const int num_row_per_g = num_row / APP<Dtype>::group[L];
     
     for (int i = 0; i < count; ++i) {
-        const int k = (APP<Dtype>::prune_method == "PPr") ? i / num_col : i % num_col;
-        const bool cond = (APP<Dtype>::prune_method == "PPr") ? APP<Dtype>::IF_col_pruned[L][i % num_col][i / num_col / num_row_per_g]
+        const int k = (APP<Dtype>::prune_method == "PP_Row") ? i / num_col : i % num_col;
+        const bool cond = (APP<Dtype>::prune_method == "PP_Row") ? APP<Dtype>::IF_col_pruned[L][i % num_col][i / num_col / num_row_per_g]
                                                        : APP<Dtype>::IF_row_pruned[L][i / num_col]; /// if i is pruned
         if (APP<Dtype>::history_prob[L][k] > 0) {
             muweight[i] *= APP<Dtype>::history_prob[L][k];
@@ -709,7 +673,7 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask() {
                     for (int i = g * num_row_per_g; i < (g+1) * num_row_per_g; ++i) { 
                         APP<Dtype>::masks[L][i * num_col + j] = 0;
                     }
-                    if (mthd == "PPc") {
+                    if (mthd == "PP_Col") {
                         APP<Dtype>::history_prob[L][j] = 0; /// TODO: count group;
                     }
                 }
@@ -728,7 +692,7 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask() {
                 for (int j = 0; j < num_col; ++j) { 
                     APP<Dtype>::masks[L][i * num_col + j] = 0; 
                 }
-                if (mthd == "PPr") {
+                if (mthd == "PP_Row") {
                     APP<Dtype>::history_prob[L][i] = 0; /// TODO: count group;
                 }
             }
@@ -748,7 +712,7 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask() {
         APP<Dtype>::iter_prune_finished[L] = -1; /// To check multi-GPU
         cout << L << ": " << layer_name << " prune finished" << endl;
     } else { 
-        if (APP<Dtype>::prune_coremthd == "SPP" || APP<Dtype>::prune_coremthd.substr(0,3) == "Reg") {
+        if (APP<Dtype>::prune_coremthd == "PP" || APP<Dtype>::prune_coremthd.substr(0,3) == "Reg") {
             RestorePruneProb(pruned_ratio);
         }
     }
@@ -842,7 +806,7 @@ void ConvolutionLayer<Dtype>::RestorePruneProb(const Dtype& pruned_r) {
         while (getline(state_stream, line, ' ')) {
             state.push_back(atof(line.c_str()));
         }
-        if (APP<Dtype>::prune_coremthd == "SPP"){
+        if (APP<Dtype>::prune_coremthd == "PP"){
             assert(state.size() == APP<Dtype>::history_prob[L].size());
             for (int i = 0; i < state.size(); ++i) {
                 APP<Dtype>::history_prob[L][i] = state[i];

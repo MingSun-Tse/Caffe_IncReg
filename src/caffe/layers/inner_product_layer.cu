@@ -19,6 +19,8 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     // Added by WANGHUAN for pruning
     Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
     const int count = this->blobs_[0]->count();
+    const int num_row = this->blobs_[0]->shape()[0];
+    const int num_col = count / num_row;
     const string layer_name = this->layer_param_.name();
     const string mthd = APP<Dtype>::prune_method;
     char* coremthd = new char[strlen(APP<Dtype>::prune_coremthd.c_str()) + 1];
@@ -84,7 +86,7 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         
         // Print, before masked
         if (L == LAYER_PRINTED && APP<Dtype>::step_ % SHOW_INTERVAL == 0) {
-            Print(L, 'f');
+            //Print(L, 'f');
         }
         
         // Update masks
@@ -98,8 +100,30 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             }
         }
         
+        // Print weight magnitude
+        if (APP<Dtype>::prune_unit == "Col") {
+            cout << "ave-magnitude_col " << APP<Dtype>::step_ << " " << layer_name << ":";
+            for (int j = 0; j < num_col; ++j) {
+                Dtype sum = 0;
+                for (int i = 0; i < num_row; ++i) {
+                    sum += fabs(muweight[i*num_col + j]);
+                }
+                cout << " " << sum;
+            }
+            cout << endl;
+        } else if (APP<Dtype>::prune_unit == "Row") {
+            cout << "ave-magnitude_row " << APP<Dtype>::step_ << " " << layer_name << ":";
+            for (int i = 0; i < num_row; ++i) {
+                Dtype sum = 0;
+                for (int j = 0; j < num_col; ++j) {
+                    sum += fabs(muweight[i*num_col + j]);
+                }
+                cout << " " << sum;
+            }
+            cout << endl;
+        }
         
-        // After update, print current pruning state
+        // Summary print
         if (mthd != "None" && L < SHOW_NUM_LAYER) {
                cout << layer_name << "  IF_prune: " << IF_prune 
                  << "  pruned_ratio: " << APP<Dtype>::pruned_ratio[L] 

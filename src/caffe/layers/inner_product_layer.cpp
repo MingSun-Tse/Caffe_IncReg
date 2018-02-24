@@ -107,7 +107,7 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
     if (mthd_ == "Reg") {
         info = "HistoryReg";
         info_data = APP<Dtype>::history_reg[L];
-    } else if (mthd_ == "SPP") {
+    } else if (mthd_ == "PP") {
         info = "HistoryProb";
         info_data = APP<Dtype>::history_prob[L];
     }
@@ -134,11 +134,13 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
         
     } else if (APP<Dtype>::prune_unit == "Col") {
         const int show_num = SHOW_NUM > num_col ? num_col : SHOW_NUM;
+        cout << show_num << endl;
         for (int j = 0; j < show_num; ++j) {
             // print Index
             cout.width(3); cout << "c"; 
             cout.width(2); cout << j+1 << "   ";
             
+            cout << "22" << endl;
             // print blob
             Dtype sum_w = 0, sum_d = 0;
             for (int i = 0; i < num_row; ++i) {
@@ -155,8 +157,12 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
             // print Mask
             cout.width(4);  cout << APP<Dtype>::masks[L][j] << "   ";
             
+            cout << "33" << endl;
+            
             // print info
             cout.width(info.size());  cout << info_data[j] << endl;
+            
+            cout << "44" << endl;
         }
     } else if (APP<Dtype>::prune_unit == "Weight") {
         for (int i = 0; i < SHOW_NUM; ++i) {
@@ -276,7 +282,7 @@ void InnerProductLayer<Dtype>::ComputeBlobMask() {
                     for (int i = g * num_row_per_g; i < (g+1) * num_row_per_g; ++i) { 
                         APP<Dtype>::masks[L][i * num_col + j] = 0;
                     }
-                    if (mthd == "PPc") {
+                    if (mthd == "PP_Col") {
                         APP<Dtype>::history_prob[L][j] = 0; /// TODO: count group;
                     }
                 }
@@ -295,7 +301,7 @@ void InnerProductLayer<Dtype>::ComputeBlobMask() {
                 for (int j = 0; j < num_col; ++j) { 
                     APP<Dtype>::masks[L][i * num_col + j] = 0; 
                 }
-                if (mthd == "PPr") {
+                if (mthd == "PP_Row") {
                     APP<Dtype>::history_prob[L][i] = 0; /// TODO: count group;
                 }
             }
@@ -315,7 +321,7 @@ void InnerProductLayer<Dtype>::ComputeBlobMask() {
         APP<Dtype>::iter_prune_finished[L] = -1; /// To check multi-GPU
         cout << L << ": " << layer_name << " prune finished" << endl;
     } else { 
-        if (APP<Dtype>::prune_coremthd == "SPP") {
+        if (APP<Dtype>::prune_coremthd == "PP") {
             RestorePruneProb(pruned_ratio);
         }
     }

@@ -83,9 +83,8 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
   virtual void RestorePruneProb(const Dtype& pruned_r);
   virtual void FilterPrune(); 
   virtual void TaylorPrune(const vector<Blob<Dtype>*>& top);
-  virtual void ProbPruneCol();
   virtual void ProbPruneCol(const int& prune_interval);
-  virtual void ProbPruneRow();
+  virtual void ProbPruneRow(const int& prune_interval);
   virtual void PruneMinimals();
   virtual void CleanWorkForPP();
   virtual void UpdateNumPrunedRow(); 
