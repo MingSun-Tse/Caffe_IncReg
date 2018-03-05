@@ -137,6 +137,24 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         
     } else if (this->phase_ == TEST) {
         if (IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX && coremthd_ == "PP") {
+            // use the old mask-generating mechanism
+            const int num_unit = (APP<Dtype>::prune_unit == "Row") ? num_row : num_col;
+            Dtype rands[num_unit];
+            caffe_rng_uniform(num_unit, (Dtype)0, (Dtype)1, rands);
+            for (int i = 0; i < count; ++i) {
+                const int row_index = i / num_col;
+                const int col_index = i % num_col;
+                const bool cond1 = (APP<Dtype>::prune_unit == "Row") ? rands[row_index] < APP<Dtype>::history_prob[L][row_index]
+                                                                     : rands[col_index] < APP<Dtype>::history_prob[L][col_index];
+                const bool cond2 = (APP<Dtype>::prune_unit == "Row") ? !APP<Dtype>::IF_col_pruned[L][col_index][0]
+                                                                     : !APP<Dtype>::IF_row_pruned[L][row_index];
+                APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
+                this->weight_backup[i] = muweight[i]; // backup weights
+                muweight[i] *= APP<Dtype>::masks[L][i];
+            }
+            this->IF_restore = true;
+            
+            /*
             // use the new mask-generating mechanism: the weights in the same weight group don't share the mask
             Dtype rands[count];
             caffe_rng_uniform(count, (Dtype)0, (Dtype)1, rands);
@@ -152,6 +170,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 muweight[i] *= APP<Dtype>::masks[L][i];
             }
             this->IF_restore = true;
+            */
         }
     }
   /// ------------------------------------------------------
@@ -169,9 +188,11 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             }
         }
     }
-    /// this->bottom_dim_: bottom feature map size, input
-    /// this->top_dim_: top feature map size, output
-    /// this->num_: batch size
+    /*
+    this->bottom_dim_: bottom feature map size, input
+    this->top_dim_: top feature map size, output
+    this->num_: batch size
+    */
     
     /// Print feature map to check --------
     /// If row 3 and 8 are pruned in previous layer, then channel 3 and 8 will be only biases in this layer's feature map.

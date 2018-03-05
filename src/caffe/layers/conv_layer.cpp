@@ -154,15 +154,15 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
     cout.width(4);  cout << "Mask" << "   ";
     
     // print additional info
-    char* mthd = new char[strlen(APP<Dtype>::prune_coremthd.c_str()) + 1];
-    strcpy(mthd, APP<Dtype>::prune_coremthd.c_str());
-    const string mthd_ = strtok(mthd, "-");
+    char* coremthd = new char[strlen(APP<Dtype>::prune_coremthd.c_str()) + 1];
+    strcpy(coremthd, APP<Dtype>::prune_coremthd.c_str());
+    const string coremthd_ = strtok(coremthd, "-");
     string info = "Unknown";
     vector<Dtype> info_data; 
-    if (mthd_ == "Reg") { // TODO: prune method name needs to be unified.
+    if (coremthd_ == "Reg") { // TODO: prune method name needs to be unified.
         info = "HistoryReg";
         info_data = APP<Dtype>::history_reg[L];
-    } else if (mthd_ == "PP") {
+    } else if (coremthd_ == "PP") {
         info = "HistoryProb";
         info_data = APP<Dtype>::history_prob[L];
     }
@@ -176,10 +176,17 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
             cout.width(2); cout << i+1 << "   ";
             
             // print blob
-            char s[10]; sprintf(s, "%7.5f", d[i * num_col]); // TODO: improve the print for row prune
-            if (mode == 'f') { sprintf(s, "%f", fabs(w[i * num_col])); }
+            Dtype sum_w = 0, sum_d = 0;
+            for (int j = 0; j < num_col; ++j) {
+                sum_w += fabs(w[i * num_col + j]);
+                sum_d += fabs(d[i * num_col + j]);
+            }
+            sum_w /= num_col; /// average abs weight
+            sum_d /= num_col; /// average abs diff
+            char s[20]; sprintf(s, "%7.5f", sum_d);
+            if (mode == 'f') { sprintf(s, "%f", sum_w); }
             cout.width(blob.size()); cout << s << "   ";
-            
+                        
             // print Mask
             cout.width(4);  cout << APP<Dtype>::masks[L][i * num_col] << "   ";
             
@@ -202,8 +209,7 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
             }
             sum_w /= num_row; /// average abs weight
             sum_d /= num_row; /// average abs diff
-            const Dtype reg_force = APP<Dtype>::history_reg[L][j] * sum_w;
-            char s[20]; sprintf(s, "%7.5f(%7.5f)", sum_d, reg_force);
+            char s[20]; sprintf(s, "%7.5f", sum_d);
             if (mode == 'f') { sprintf(s, "%f", sum_w); }
             cout.width(blob.size()); cout << s << "   ";
             
@@ -220,8 +226,7 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
             cout.width(2); cout << i+1 << "   ";
             
             // print blob
-            const Dtype reg_force = APP<Dtype>::history_reg[L][i] * fabs(w[i]);
-            char s[20]; sprintf(s, "%7.5f(%7.5f)", fabs(d[i]), reg_force);
+            char s[20]; sprintf(s, "%7.5f", fabs(d[i]));
             if (mode == 'f') { sprintf(s, "%f", fabs(w[i])); }
             cout.width(blob.size()); cout << s << "   ";
             
@@ -529,7 +534,6 @@ void ConvolutionLayer<Dtype>::ProbPruneRow(const int& prune_interval) {
 
     // With probability updated, generate masks and do pruning
     // old mask-generating mechanism: the weights in the same weight group share the same mask, which will cause too much dynamics, harmful to training.
-    /*
     Dtype rands[num_row];
     caffe_rng_uniform(num_row, (Dtype)0, (Dtype)1, rands);
     for (int i = 0; i < count; ++i) {
@@ -542,8 +546,8 @@ void ConvolutionLayer<Dtype>::ProbPruneRow(const int& prune_interval) {
         muweight[i] *= APP<Dtype>::masks[L][i];
     }
     this->IF_restore = true;
-    */
     
+    /*
     // new mask-generating mechanism
     Dtype rands[count];
     caffe_rng_uniform(count, (Dtype)0, (Dtype)1, rands);
@@ -557,6 +561,7 @@ void ConvolutionLayer<Dtype>::ProbPruneRow(const int& prune_interval) {
         muweight[i] *= APP<Dtype>::masks[L][i];
     }
     this->IF_restore = true;
+    */
 }
 
 template <typename Dtype> 
