@@ -533,6 +533,7 @@ void ConvolutionLayer<Dtype>::ProbPruneRow(const int& prune_interval) {
     }
 
     // With probability updated, generate masks and do pruning
+    /*
     // old mask-generating mechanism: the weights in the same weight group share the same mask, which will cause too much dynamics, harmful to training.
     Dtype rands[num_row];
     caffe_rng_uniform(num_row, (Dtype)0, (Dtype)1, rands);
@@ -546,9 +547,10 @@ void ConvolutionLayer<Dtype>::ProbPruneRow(const int& prune_interval) {
         muweight[i] *= APP<Dtype>::masks[L][i];
     }
     this->IF_restore = true;
+    */
     
     /*
-    // new mask-generating mechanism
+    // new mask-generating mechanism (1) 
     Dtype rands[count];
     caffe_rng_uniform(count, (Dtype)0, (Dtype)1, rands);
     for (int i = 0; i < count; ++i) {
@@ -562,6 +564,24 @@ void ConvolutionLayer<Dtype>::ProbPruneRow(const int& prune_interval) {
     }
     this->IF_restore = true;
     */
+    
+    // new mask-generating mechanism (2)
+    const int num = this->blobs_[0]->count(0, 2);
+    const int kernel_spatial_size = this->blobs_[0]->count(2);
+    cout << layer_name << " num == " << num << " " << kernel_spatial_size << endl;
+    Dtype rands[num];
+    caffe_rng_uniform(num, (Dtype)0, (Dtype)1, rands);
+    for (int i = 0; i < count; ++i) {
+        const int row_index = i / num_col;
+        const int col_index = i % num_col;
+        const int chl_index = i / kernel_spatial_size; // channel index
+        const bool cond1 = rands[chl_index] < APP<Dtype>::history_prob[L][row_index];
+        const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
+        APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
+        this->weight_backup[i] = muweight[i];
+        muweight[i] *= APP<Dtype>::masks[L][i];
+    }
+    this->IF_restore = true;
 }
 
 template <typename Dtype> 
