@@ -60,16 +60,10 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 
                 if (layer_finish || net_finish_speed || net_finish_param) {
                     APP<Dtype>::iter_prune_finished[L] = APP<Dtype>::step_ - 1;
-                    
-                    char* mthd = new char[strlen(APP<Dtype>::prune_method.c_str()) + 1];
-                    strcpy(mthd, APP<Dtype>::prune_method.c_str());
-                    const string mthd_ = strtok(mthd, "_"); // mthd is like "Reg_Col", the first split is `Reg`
-                    if (mthd_ == "SPP") { CleanWorkForPP(); } // last time, do some clean work
+                    if (coremthd_ == "PP") { CleanWorkForPP(); } // last time, do some clean work
                     
                     // print to log
-                    char rlayer[10];
-                    char rrow[10];
-                    char rcol[10];
+                    char rlayer[10], rrow[10], rcol[10];
                     sprintf(rlayer, "%6.4f", APP<Dtype>::pruned_ratio[L]);
                     sprintf(rrow,   "%6.4f", APP<Dtype>::pruned_ratio_row[L]);
                     sprintf(rcol,   "%6.4f", APP<Dtype>::pruned_ratio_col[L]);
@@ -136,32 +130,28 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         if (mthd != "None" && L < SHOW_NUM_LAYER) {
             cout << layer_name << "  IF_prune: " << IF_prune 
                  << "  pruned_ratio: " << APP<Dtype>::pruned_ratio[L];
-            if (mthd == "PPr" || mthd == "FP" || mthd == "TP") {
-                cout << "  pruned_ratio_col: " << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << "(" << APP<Dtype>::num_pruned_col[L] << ")"
-                     << "  pruned_ratio_row: " << APP<Dtype>::num_pruned_row[L] * 1.0 / num_row << "(" << APP<Dtype>::num_pruned_row[L] << ")";
-            } else {
-                cout << "  pruned_ratio_row: " << APP<Dtype>::num_pruned_row[L] * 1.0 / num_row << "(" << APP<Dtype>::num_pruned_row[L] << ")"
-                     << "  pruned_ratio_col: " << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << "(" << APP<Dtype>::num_pruned_col[L] << ")";
-            }
+            cout << "  pruned_ratio_row: " << APP<Dtype>::num_pruned_row[L] * 1.0 / num_row << "(" << APP<Dtype>::num_pruned_row[L] << ")"
+                 << "  pruned_ratio_col: " << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << "(" << APP<Dtype>::num_pruned_col[L] << ")";
             cout << "  prune_ratio: "  << APP<Dtype>::prune_ratio[L] << endl;
         }
         
-        
-        
     } else if (this->phase_ == TEST) {
-        if (IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX && mthd.substr(0, 2) == "PP") {
-            Dtype rands[num_col];
-            caffe_rng_uniform(num_col, (Dtype)0, (Dtype)1, rands);
+        if (IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX && coremthd_ == "PP") {
+            // use the new mask-generating mechanism: the weights in the same weight group don't share the mask
+            Dtype rands[count];
+            caffe_rng_uniform(count, (Dtype)0, (Dtype)1, rands);
             for (int i = 0; i < count; ++i) {
-                APP<Dtype>::masks[L][i] = rands[i % num_col] < APP<Dtype>::history_prob[L][i % num_col] ? 1 : 0; /// generate masks
-            }              
-            for (int i = 0; i < count; ++i) { 
-                this->weight_backup[i] = muweight[i]; /// backup weights
-            } 
+                const int row_index = i / num_col;
+                const int col_index = i % num_col;
+                const bool cond1 = (APP<Dtype>::prune_unit == "Row") ? rands[i] < APP<Dtype>::history_prob[L][row_index]
+                                                                     : rands[i] < APP<Dtype>::history_prob[L][col_index];
+                const bool cond2 = (APP<Dtype>::prune_unit == "Row") ? !APP<Dtype>::IF_col_pruned[L][col_index][0]
+                                                                     : !APP<Dtype>::IF_row_pruned[L][row_index];
+                APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
+                this->weight_backup[i] = muweight[i]; // backup weights
+                muweight[i] *= APP<Dtype>::masks[L][i];
+            }
             this->IF_restore = true;
-            for (int i = 0; i < count; ++i) { 
-                muweight[i] *= APP<Dtype>::masks[L][i]; /// apply masks
-            } 
         }
     }
   /// ------------------------------------------------------

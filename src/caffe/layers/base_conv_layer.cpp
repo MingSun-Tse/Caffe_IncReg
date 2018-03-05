@@ -14,17 +14,21 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   ConvolutionParameter conv_param = this->layer_param_.convolution_param();
   force_nd_im2col_ = conv_param.force_nd_im2col();
   channel_axis_ = bottom[0]->CanonicalAxisIndex(conv_param.axis());
-    //cout << "channel_axis_: " << channel_axis_ << endl;
-  const int first_spatial_axis = channel_axis_ + 1;
+
+  // std::cout << "conv_param.axis(): " << conv_param.axis() << std::endl;
+  // std::cout << "channel_axis_: " << channel_axis_ << std::endl;
+    
+  const int first_spatial_axis = channel_axis_ + 1; // first_spatial_axis in 2D conv is height, its index is 2rd, the 1st is channel_axis_
   const int num_axes = bottom[0]->num_axes();
-    //cout << "num_axes: " << num_axes << endl;
-  num_spatial_axes_ = num_axes - first_spatial_axis;
-    //cout << "num_spatial_axes_: " << num_spatial_axes_ << endl;
+  num_spatial_axes_ = num_axes - first_spatial_axis; // typically, 4 - 2
   CHECK_GE(num_spatial_axes_, 0);
   vector<int> bottom_dim_blob_shape(1, num_spatial_axes_ + 1);
   vector<int> spatial_dim_blob_shape(1, std::max(num_spatial_axes_, 1));
   // Setup filter kernel dimensions (kernel_shape_).
   kernel_shape_.Reshape(spatial_dim_blob_shape);
+ 
+  // std::cout << "spatial_dim_blob_shape  " << spatial_dim_blob_shape[0] << std::endl; 
+ 
   int* kernel_shape_data = kernel_shape_.mutable_cpu_data();
   if (conv_param.has_kernel_h() || conv_param.has_kernel_w()) {
     CHECK_EQ(num_spatial_axes_, 2)
@@ -120,7 +124,7 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   channels_ = bottom[0]->shape(channel_axis_);
   num_output_ = this->layer_param_.convolution_param().num_output();
   CHECK_GT(num_output_, 0);
-  group_ = this->layer_param_.convolution_param().group(); // layer_param_要从protobuf中来
+  group_ = this->layer_param_.convolution_param().group();
   CHECK_EQ(channels_ % group_, 0);
   CHECK_EQ(num_output_ % group_, 0)
       << "Number of output should be multiples of group.";
@@ -191,7 +195,7 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
 template <typename Dtype>
 void BaseConvolutionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-  const int first_spatial_axis = channel_axis_ + 1;
+  const int first_spatial_axis = channel_axis_ + 1; 
   CHECK_EQ(bottom[0]->num_axes(), first_spatial_axis + num_spatial_axes_)
       << "bottom num_axes may not change.";
   num_ = bottom[0]->count(0, channel_axis_);
@@ -275,11 +279,7 @@ void BaseConvolutionLayer<Dtype>::forward_cpu_gemm(const Dtype* input,
         (Dtype)1., weights + weight_offset_ * g, col_buff + col_offset_ * g,
         (Dtype)0., output + output_offset_ * g);
     /*
-     * 注意这里caffe_cpu_gemm
-     * group_是什么？默认是1
-     * caffe/util/math_functions.cpp中实现
      * (output + output_offset_ * g) = (weights + weight_offset_ * g) * (col_buff + col_offset_ * g)
-     * 当 g=0，则output = weights * col_buff
      */
   }
 }

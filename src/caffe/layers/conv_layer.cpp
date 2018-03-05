@@ -528,6 +528,8 @@ void ConvolutionLayer<Dtype>::ProbPruneRow(const int& prune_interval) {
     }
 
     // With probability updated, generate masks and do pruning
+    // old mask-generating mechanism: the weights in the same weight group share the same mask, which will cause too much dynamics, harmful to training.
+    /*
     Dtype rands[num_row];
     caffe_rng_uniform(num_row, (Dtype)0, (Dtype)1, rands);
     for (int i = 0; i < count; ++i) {
@@ -536,6 +538,21 @@ void ConvolutionLayer<Dtype>::ProbPruneRow(const int& prune_interval) {
         const bool cond1 = rands[row_index] < APP<Dtype>::history_prob[L][row_index];
         const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
         APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0; // Only when the row is assigned with mask 1 and the col is not pruned, the weight gets mask 1.
+        this->weight_backup[i] = muweight[i];
+        muweight[i] *= APP<Dtype>::masks[L][i];
+    }
+    this->IF_restore = true;
+    */
+    
+    // new mask-generating mechanism
+    Dtype rands[count];
+    caffe_rng_uniform(count, (Dtype)0, (Dtype)1, rands);
+    for (int i = 0; i < count; ++i) {
+        const int row_index = i / num_col;
+        const int col_index = i % num_col;
+        const bool cond1 = rands[i] < APP<Dtype>::history_prob[L][row_index];
+        const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
+        APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
         this->weight_backup[i] = muweight[i];
         muweight[i] *= APP<Dtype>::masks[L][i];
     }
@@ -554,13 +571,17 @@ void ConvolutionLayer<Dtype>::CleanWorkForPP() {
     const int num_row_per_g = num_row / APP<Dtype>::group[L];
     
     for (int i = 0; i < count; ++i) {
-        const int k = (APP<Dtype>::prune_method == "PP_Row") ? i / num_col : i % num_col;
-        const bool cond = (APP<Dtype>::prune_method == "PP_Row") ? APP<Dtype>::IF_col_pruned[L][i % num_col][i / num_col / num_row_per_g]
-                                                       : APP<Dtype>::IF_row_pruned[L][i / num_col]; /// if i is pruned
+        const int row_index = i / num_col;
+        const int col_index = i % num_col;
+        const int k = (APP<Dtype>::prune_unit == "Row") ? row_index : col_index;
         if (APP<Dtype>::history_prob[L][k] > 0) {
-            muweight[i] *= APP<Dtype>::history_prob[L][k];
-            APP<Dtype>::history_prob[L][k] = 1; 
+            const bool cond = (APP<Dtype>::prune_unit == "Row") ? APP<Dtype>::IF_col_pruned[L][col_index][row_index/num_row_per_g]
+                                                                : APP<Dtype>::IF_row_pruned[L][row_index];
+            // muweight[i] *= APP<Dtype>::history_prob[L][k];
+            // APP<Dtype>::history_prob[L][k] = 1;
             APP<Dtype>::masks[L][i] = cond ? 0 : 1;
+        } else {
+            APP<Dtype>::masks[L][i] = 0;
         }
     }
 }
