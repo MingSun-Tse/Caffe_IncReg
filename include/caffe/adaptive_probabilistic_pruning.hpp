@@ -140,7 +140,7 @@ public:
     template<typename Dtype>  Dtype   APP<Dtype>::cpower;
     template<typename Dtype>  int     APP<Dtype>::prune_begin_iter;
     template<typename Dtype>  int     APP<Dtype>::iter_size;
-    template<typename Dtype>  Dtype   APP<Dtype>::score_decay = 0;
+    template<typename Dtype>  Dtype   APP<Dtype>::score_decay = 0.9;
     template<typename Dtype>  Dtype   APP<Dtype>::AA;
     template<typename Dtype>  Dtype   APP<Dtype>::kk;
     template<typename Dtype>  Dtype   APP<Dtype>::kk2;
