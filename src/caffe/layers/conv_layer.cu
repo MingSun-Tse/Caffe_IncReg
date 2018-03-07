@@ -96,7 +96,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 ProbPruneRow(APP<Dtype>::prune_interval);
             } else if (coremthd_ == "Reg") {
                 PruneMinimals();
-            }
+            } 
             UpdatePrunedRatio();
             if (L == APP<Dtype>::conv_layer_cnt - 1) { // To avoid the first fc from updating col
                 APP<Dtype>::pruned_rows.clear();
@@ -136,7 +136,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
         
     } else if (this->phase_ == TEST && IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX && coremthd_ == "PP") {
-        /*
+        
         // use the old mask-generating mechanism
         const int num_unit = (APP<Dtype>::prune_unit == "Row") ? num_row : num_col;
         Dtype rands[num_unit];
@@ -153,7 +153,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             muweight[i] *= APP<Dtype>::masks[L][i];
         }
         this->IF_restore = true;
-        */
+        
         
         /*
         // use the new mask-generating mechanism (1)
@@ -173,6 +173,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         this->IF_restore = true;
         */
         
+        /*
         // new mask-generating mechanism (2)
         const int num = this->blobs_[0]->count(0, 2);
         const int kernel_spatial_size = this->blobs_[0]->count(2);
@@ -191,6 +192,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             muweight[i] *= APP<Dtype>::masks[L][i];
         }
         this->IF_restore = true;
+        */
     }
   /// ------------------------------------------------------
   
@@ -206,7 +208,21 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 this->forward_gpu_bias(top_data + n * this->top_dim_, bias);
             }
         }
+    } 
+    
+    // ProbPruneRow-2, use feature map to measure importance
+    if (this->phase_ == TRAIN && APP<Dtype>::inner_iter == 0) {
+        if (IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
+            if (mthd == "PP-fm_Row") {
+                ProbPruneRow_fm(top, APP<Dtype>::prune_interval);
+            }
+            UpdatePrunedRatio();
+            if (L == APP<Dtype>::conv_layer_cnt - 1) { // To avoid the first fc from updating col
+                APP<Dtype>::pruned_rows.clear();
+            }
+        }
     }
+    
     /*
     this->bottom_dim_: bottom feature map size, input
     this->top_dim_: top feature map size, output
@@ -241,8 +257,6 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     }
     */
     /// -----------------------------------
-    
-    
     
     /// Restore weights ----------------
     if (this->IF_restore) {
