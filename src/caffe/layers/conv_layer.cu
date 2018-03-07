@@ -96,7 +96,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 ProbPruneRow(APP<Dtype>::prune_interval);
             } else if (coremthd_ == "Reg") {
                 PruneMinimals();
-            }
+            } 
             UpdatePrunedRatio();
             if (L == APP<Dtype>::conv_layer_cnt - 1) { // To avoid the first fc from updating col
                 APP<Dtype>::pruned_rows.clear();
@@ -209,19 +209,19 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             }
         }
     } 
-	
-	// ProbPruneRow-2, use feature map to measure importance
+    
+    // ProbPruneRow-2, use feature map to measure importance
     if (this->phase_ == TRAIN && APP<Dtype>::inner_iter == 0) {
-		if (IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
-			if (mthd == "PP-fm_Row") {
-				ProbPruneRow_fm(top);
-			}
-			UpdatePrunedRatio();
+        if (IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
+            if (mthd == "PP-fm_Row") {
+                ProbPruneRow_fm(top, APP<Dtype>::prune_interval);
+            }
+            UpdatePrunedRatio();
             if (L == APP<Dtype>::conv_layer_cnt - 1) { // To avoid the first fc from updating col
                 APP<Dtype>::pruned_rows.clear();
             }
-		}
-	}
+        }
+    }
     
     /*
     this->bottom_dim_: bottom feature map size, input
