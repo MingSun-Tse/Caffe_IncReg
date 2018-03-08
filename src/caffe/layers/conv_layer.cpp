@@ -608,7 +608,7 @@ void ConvolutionLayer<Dtype>::ProbPruneRow(const int& prune_interval) {
         for (int rk = 0; rk < num_row_; ++rk) {
             const int row_of_rank_rk = row_score[rk].second;
 			const Dtype Delta = (rk <= num_row_to_prune_) ? AA - k1*(row_score[rk].first - row_score[0].first) 
-														  : -(k2*(row_score[rk].first - row_score[num_row_to_prune_].first))
+														  : -(k2*(row_score[rk].first - row_score[num_row_to_prune_].first));
             const Dtype old_prob = APP<Dtype>::history_prob[L][row_of_rank_rk];
             const Dtype new_prob = std::min(std::max(old_prob - Delta, Dtype(0)), Dtype(1));
             APP<Dtype>::history_prob[L][row_of_rank_rk] = new_prob;
