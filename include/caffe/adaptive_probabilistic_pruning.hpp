@@ -100,6 +100,7 @@ public:
     static vector<vector<int> > log_index;
     static string snapshot_prefix;
     static string prune_state_dir;
+    static string mask_generate_mechanism;
     /// --------------------------------
     
     static int window_size;
@@ -205,12 +206,13 @@ public:
     template<typename Dtype>  vector<Dtype>  APP<Dtype>::reg_to_distribute;
     
     // 3. Logging
-    template<typename Dtype>  int     APP<Dtype>::num_log = 0;
+    template<typename Dtype>  int     APP<Dtype>::num_log = 1; // > 0: logging is true
     template<typename Dtype>  vector<vector<vector<Dtype> > >  APP<Dtype>::log_weight;
     template<typename Dtype>  vector<vector<vector<Dtype> > >  APP<Dtype>::log_diff;
     template<typename Dtype>  vector<vector<int> >    APP<Dtype>::log_index;
     template<typename Dtype>  string  APP<Dtype>::snapshot_prefix;
     template<typename Dtype>  string  APP<Dtype>::prune_state_dir = "/PruneStateSnapshot/";
+    template<typename Dtype>  string  APP<Dtype>::mask_generate_mechanism = "channel-wise";
     /// --------------------------------
 
     // use window proposal or score decay ----- legacy

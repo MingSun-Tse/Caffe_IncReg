@@ -598,17 +598,17 @@ void ConvolutionLayer<Dtype>::ProbPruneRow(const int& prune_interval) {
     if (APP<Dtype>::step_ % prune_interval == 0 && APP<Dtype>::inner_iter == 0) {
 
         /// Calculate functioning probability of each weight
-		/// use two linear functions
+        /// use two linear functions
         const Dtype AA = APP<Dtype>::AA;
-		const int num_row_to_prune_ = ceil(APP<Dtype>::prune_ratio[L] * num_row) - APP<Dtype>::num_pruned_row[L];
-		const int num_row_ = num_row - APP<Dtype>::num_pruned_row[L];
-		const Dtype k1 = AA / (row_score[num_row_to_prune_].first - row_score[0].first);
-		const Dtype k2 = AA / (row_score[num_row_-1].first - row_score[num_row_to_prune_].first);
-		
+        const int num_row_to_prune_ = ceil(APP<Dtype>::prune_ratio[L] * num_row) - APP<Dtype>::num_pruned_row[L];
+        const int num_row_ = num_row - APP<Dtype>::num_pruned_row[L];
+        const Dtype k1 = AA / (row_score[num_row_to_prune_].first - row_score[0].first);
+        const Dtype k2 = AA / (row_score[num_row_-1].first - row_score[num_row_to_prune_].first);
+        
         for (int rk = 0; rk < num_row_; ++rk) {
             const int row_of_rank_rk = row_score[rk].second;
-			const Dtype Delta = (rk <= num_row_to_prune_) ? AA - k1*(row_score[rk].first - row_score[0].first) 
-														  : -(k2*(row_score[rk].first - row_score[num_row_to_prune_].first));
+            const Dtype Delta = (rk <= num_row_to_prune_) ? AA - k1*(row_score[rk].first - row_score[0].first) 
+                                                          : -(k2*(row_score[rk].first - row_score[num_row_to_prune_].first));
             const Dtype old_prob = APP<Dtype>::history_prob[L][row_of_rank_rk];
             const Dtype new_prob = std::min(std::max(old_prob - Delta, Dtype(0)), Dtype(1));
             APP<Dtype>::history_prob[L][row_of_rank_rk] = new_prob;
@@ -634,57 +634,53 @@ void ConvolutionLayer<Dtype>::ProbPruneRow(const int& prune_interval) {
     }
 
     // With probability updated, generate masks and do pruning
-    
-    // old mask-generating mechanism: the weights in the same weight group share the same mask, which will cause too much dynamics, harmful to training.
-    Dtype rands[num_row];
-    caffe_rng_uniform(num_row, (Dtype)0, (Dtype)1, rands);
-    for (int i = 0; i < count; ++i) {
-        const int row_index = i / num_col;
-        const int col_index = i % num_col;
-        const bool cond1 = rands[row_index] < APP<Dtype>::history_prob[L][row_index];
-        const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
-        APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0; // Only when the row is assigned with mask 1 and the col is not pruned, the weight gets mask 1.
-        this->weight_backup[i] = muweight[i];
-        muweight[i] *= APP<Dtype>::masks[L][i];
+    if (APP<Dtype>::mask_generate_mechanism == "filter-wise") {
+        // old mask-generating mechanism: the weights in the same weight group share the same mask, which will cause too much dynamics, harmful to training.
+        Dtype rands[num_row];
+        caffe_rng_uniform(num_row, (Dtype)0, (Dtype)1, rands);
+        for (int i = 0; i < count; ++i) {
+            const int row_index = i / num_col;
+            const int col_index = i % num_col;
+            const bool cond1 = rands[row_index] < APP<Dtype>::history_prob[L][row_index];
+            const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
+            APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0; // Only when the row is assigned with mask 1 and the col is not pruned, the weight gets mask 1.
+            this->weight_backup[i] = muweight[i];
+            muweight[i] *= APP<Dtype>::masks[L][i];
+        }
+    } else if (APP<Dtype>::mask_generate_mechanism == "element-wise") {
+        // new mask-generating mechanism (1) 
+        Dtype rands[count];
+        caffe_rng_uniform(count, (Dtype)0, (Dtype)1, rands);
+        for (int i = 0; i < count; ++i) {
+            const int row_index = i / num_col;
+            const int col_index = i % num_col;
+            const bool cond1 = rands[i] < APP<Dtype>::history_prob[L][row_index];
+            const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
+            APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
+            this->weight_backup[i] = muweight[i];
+            muweight[i] *= APP<Dtype>::masks[L][i];
+        }
+    } else if (APP<Dtype>::mask_generate_mechanism == "channel-wise") {
+        // new mask-generating mechanism (2)
+        const int num = this->blobs_[0]->count(0, 2);
+        const int kernel_spatial_size = this->blobs_[0]->count(2);
+        Dtype rands[num];
+        caffe_rng_uniform(num, (Dtype)0, (Dtype)1, rands);
+        for (int i = 0; i < count; ++i) {
+            const int row_index = i / num_col;
+            const int col_index = i % num_col;
+            const int chl_index = i / kernel_spatial_size; // channel index
+            const bool cond1 = rands[chl_index] < APP<Dtype>::history_prob[L][row_index];
+            const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
+            APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
+            this->weight_backup[i] = muweight[i];
+            muweight[i] *= APP<Dtype>::masks[L][i];
+        }
+    } else {
+        LOG(INFO) << "Wrong, unknown mask_generate_mechanism";
+        exit(1);
     }
     this->IF_restore = true;
-    
-    
-    /*
-    // new mask-generating mechanism (1) 
-    Dtype rands[count];
-    caffe_rng_uniform(count, (Dtype)0, (Dtype)1, rands);
-    for (int i = 0; i < count; ++i) {
-        const int row_index = i / num_col;
-        const int col_index = i % num_col;
-        const bool cond1 = rands[i] < APP<Dtype>::history_prob[L][row_index];
-        const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
-        APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
-        this->weight_backup[i] = muweight[i];
-        muweight[i] *= APP<Dtype>::masks[L][i];
-    }
-    this->IF_restore = true;
-    */
-    
-    /*
-    // new mask-generating mechanism (2)
-    const int num = this->blobs_[0]->count(0, 2);
-    const int kernel_spatial_size = this->blobs_[0]->count(2);
-    cout << layer_name << " num == " << num << " " << kernel_spatial_size << endl;
-    Dtype rands[num];
-    caffe_rng_uniform(num, (Dtype)0, (Dtype)1, rands);
-    for (int i = 0; i < count; ++i) {
-        const int row_index = i / num_col;
-        const int col_index = i % num_col;
-        const int chl_index = i / kernel_spatial_size; // channel index
-        const bool cond1 = rands[chl_index] < APP<Dtype>::history_prob[L][row_index];
-        const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
-        APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
-        this->weight_backup[i] = muweight[i];
-        muweight[i] *= APP<Dtype>::masks[L][i];
-    }
-    this->IF_restore = true;
-    */
 }
 
 

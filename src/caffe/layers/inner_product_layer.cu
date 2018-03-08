@@ -101,6 +101,7 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
         
         // Print weight magnitude
+	if (APP<Dtype>::num_log > 0) {
         if (APP<Dtype>::prune_unit == "Col") {
             cout << "ave-magnitude_col " << APP<Dtype>::step_ << " " << layer_name << ":";
             for (int j = 0; j < num_col; ++j) {
@@ -122,7 +123,7 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             }
             cout << endl;
         }
-        
+        }
         // Summary print
         if (mthd != "None" && L < SHOW_NUM_LAYER) {
                cout << layer_name << "  IF_prune: " << IF_prune 
