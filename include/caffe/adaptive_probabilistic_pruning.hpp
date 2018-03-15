@@ -22,6 +22,7 @@ public:
     static string prune_method;
     static string prune_unit;
     static string prune_coremthd;
+    static string prune_coremthd_;  // if prune_method == "Reg-L1_Col", then prune_unit = "Col", prune_coremthd = "Reg-L1", prune_coremthd_ = "Reg"
     static string criteria; 
     static int num_once_prune;
     static int prune_interval;
@@ -132,6 +133,7 @@ public:
     template<typename Dtype>  string  APP<Dtype>::prune_method   = "None"; /// initialized for caffe test, which has no solver but this info is still needed in layer.
     template<typename Dtype>  string  APP<Dtype>::prune_unit     = "None";
     template<typename Dtype>  string  APP<Dtype>::prune_coremthd = "None";
+    template<typename Dtype>  string  APP<Dtype>::prune_coremthd_ = "None";
     template<typename Dtype>  string  APP<Dtype>::criteria;
     template<typename Dtype>  int     APP<Dtype>::num_once_prune;
     template<typename Dtype>  int     APP<Dtype>::prune_interval;
@@ -206,13 +208,13 @@ public:
     template<typename Dtype>  vector<Dtype>  APP<Dtype>::reg_to_distribute;
     
     // 3. Logging
-    template<typename Dtype>  int     APP<Dtype>::num_log = 1; // > 0: logging is true
+    template<typename Dtype>  int     APP<Dtype>::num_log = 0; // > 0: logging is true
     template<typename Dtype>  vector<vector<vector<Dtype> > >  APP<Dtype>::log_weight;
     template<typename Dtype>  vector<vector<vector<Dtype> > >  APP<Dtype>::log_diff;
     template<typename Dtype>  vector<vector<int> >    APP<Dtype>::log_index;
     template<typename Dtype>  string  APP<Dtype>::snapshot_prefix;
     template<typename Dtype>  string  APP<Dtype>::prune_state_dir = "/PruneStateSnapshot/";
-    template<typename Dtype>  string  APP<Dtype>::mask_generate_mechanism = "channel-wise";
+    template<typename Dtype>  string  APP<Dtype>::mask_generate_mechanism = "element-wise";
     /// --------------------------------
 
     // use window proposal or score decay ----- legacy

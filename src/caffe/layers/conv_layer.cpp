@@ -551,19 +551,36 @@ void ConvolutionLayer<Dtype>::ProbPruneCol(const int& prune_interval) {
     }
 
     // With probability updated, generate masks and do pruning
-    Dtype rands[num_col];
-    caffe_rng_uniform(num_col, (Dtype)0, (Dtype)1, rands);
-    for (int i = 0; i < count; ++i) {
-        const bool cond1 = rands[i % num_col] < APP<Dtype>::history_prob[L][i % num_col];
-        const bool cond2 = !APP<Dtype>::IF_row_pruned[L][i / num_col];
-        APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
-        this->weight_backup[i] = muweight[i];
-        muweight[i] *= APP<Dtype>::masks[L][i];
+    assert(APP<Dtype>::mask_generate_mechanism != "channel-wise");
+    if (APP<Dtype>::mask_generate_mechanism == "group-wise") {
+        Dtype rands[num_col];
+        caffe_rng_uniform(num_col, (Dtype)0, (Dtype)1, rands);
+        for (int i = 0; i < count; ++i) {
+            const int row_index = i / num_col;
+            const int col_index = i % num_col;
+            const bool cond1 = rands[col_index] < APP<Dtype>::history_prob[L][col_index];
+            const bool cond2 = !APP<Dtype>::IF_row_pruned[L][row_index];
+            APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0; 
+            this->weight_backup[i] = muweight[i];
+            muweight[i] *= APP<Dtype>::masks[L][i];
+        }
+    } else if (APP<Dtype>::mask_generate_mechanism == "element-wise") {
+        Dtype rands[count];
+        caffe_rng_uniform(count, (Dtype)0, (Dtype)1, rands);
+        for (int i = 0; i < count; ++i) {
+            const int row_index = i / num_col;
+            const int col_index = i % num_col;
+            const bool cond1 = rands[i] < APP<Dtype>::history_prob[L][col_index];
+            const bool cond2 = !APP<Dtype>::IF_row_pruned[L][row_index];
+            APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
+            this->weight_backup[i] = muweight[i];
+            muweight[i] *= APP<Dtype>::masks[L][i];
+        }
+    } else {
+	LOG(INFO) << "Wrong: unknown mask_generate_mechanism, please check";
+	exit(1);
     }
     this->IF_restore = true;
-    for (int i = 0; i < count; ++i) { 
-        muweight[i] *= APP<Dtype>::masks[L][i]; 
-    }
 }
 
 template <typename Dtype> 
@@ -603,7 +620,8 @@ void ConvolutionLayer<Dtype>::ProbPruneRow(const int& prune_interval) {
         const int num_row_to_prune_ = ceil(APP<Dtype>::prune_ratio[L] * num_row) - APP<Dtype>::num_pruned_row[L];
         const int num_row_ = num_row - APP<Dtype>::num_pruned_row[L];
         const Dtype k1 = AA / (row_score[num_row_to_prune_].first - row_score[0].first);
-        const Dtype k2 = AA / (row_score[num_row_-1].first - row_score[num_row_to_prune_].first);
+        const Dtype k2 = AA / (row_score[num_row_ - 1].first - row_score[num_row_to_prune_].first);
+        cout << k1 << "  " << k2 << endl;
         
         for (int rk = 0; rk < num_row_; ++rk) {
             const int row_of_rank_rk = row_score[rk].second;
@@ -634,7 +652,7 @@ void ConvolutionLayer<Dtype>::ProbPruneRow(const int& prune_interval) {
     }
 
     // With probability updated, generate masks and do pruning
-    if (APP<Dtype>::mask_generate_mechanism == "filter-wise") {
+    if (APP<Dtype>::mask_generate_mechanism == "group-wise") {
         // old mask-generating mechanism: the weights in the same weight group share the same mask, which will cause too much dynamics, harmful to training.
         Dtype rands[num_row];
         caffe_rng_uniform(num_row, (Dtype)0, (Dtype)1, rands);
@@ -759,7 +777,7 @@ void ConvolutionLayer<Dtype>::UpdateNumPrunedCol() {
     const int num_col = count / num_row;
     const int num_chl = this->blobs_[0]->shape()[1];
     const int num_row_per_g = num_row / APP<Dtype>::group[L];
-    const int filter_area = this->blobs_[0]->shape()[2] * this->blobs_[0]->shape()[3];
+    const int filter_area = this->blobs_[0]->count(2);
     Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
     
     cout << "        " << this->layer_param_.name() << " in UpdateNumPrunedCol" << endl;
@@ -862,8 +880,11 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask() {
     if (pruned_ratio >= APP<Dtype>::prune_ratio[L]) {
         APP<Dtype>::iter_prune_finished[L] = -1; /// To check multi-GPU
         cout << L << ": " << layer_name << " prune finished" << endl;
-    } else { 
-        if (APP<Dtype>::prune_coremthd == "PP" || APP<Dtype>::prune_coremthd.substr(0,3) == "Reg") {
+    } else {
+        char* coremthd = new char[strlen(APP<Dtype>::prune_coremthd.c_str()) + 1];
+        strcpy(coremthd, APP<Dtype>::prune_coremthd.c_str());
+        const string coremthd_ = strtok(coremthd, "-");
+        if ((coremthd_ == "PP" || coremthd_ == "Reg") && APP<Dtype>::step_ > 1) { // since resuming, the step should be larger than 1
             RestorePruneProb(pruned_ratio);
         }
     }

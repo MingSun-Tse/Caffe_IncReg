@@ -64,6 +64,10 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
       strcpy(mthd, APP<Dtype>::prune_method.c_str());
       APP<Dtype>::prune_coremthd = strtok(mthd, "_"); // mthd is like "Reg_Col", the first split is `Reg`
       APP<Dtype>::prune_unit = strtok(NULL, "_"); // TODO: put this in APP's member function
+
+      char* coremthd = new char[strlen(APP<Dtype>::prune_coremthd.c_str()) + 1];
+      strcpy(coremthd, APP<Dtype>::prune_coremthd.c_str());
+      APP<Dtype>::prune_coremthd_ = strtok(coremthd, "-");
   }
   APP<Dtype>::criteria = "L1-norm";
   APP<Dtype>::num_once_prune = param_.num_once_prune();

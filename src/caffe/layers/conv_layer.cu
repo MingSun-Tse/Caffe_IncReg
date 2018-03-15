@@ -1,7 +1,7 @@
 #include <vector>
 #include "caffe/layers/conv_layer.hpp"
 #include "caffe/adaptive_probabilistic_pruning.hpp"
-#define SHOW_INTERVAL 10
+#define SHOW_INTERVAL 1
 #define SHOW_NUM_LAYER 5
 #define LAYER_PRINTED 0
 
@@ -62,7 +62,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                     APP<Dtype>::iter_prune_finished[L] = APP<Dtype>::step_ - 1;
                     if (coremthd_ == "PP") { CleanWorkForPP(); } // last time, do some clean work
                     
-                    // print to log
+                    // print when finished
                     char rlayer[10], rrow[10], rcol[10];
                     sprintf(rlayer, "%6.4f", APP<Dtype>::pruned_ratio[L]);
                     sprintf(rrow,   "%6.4f", APP<Dtype>::pruned_ratio_row[L]);
@@ -83,7 +83,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         // Print and check, before update probs
         // put this outside, to print even when we do not prune
         if (L == LAYER_PRINTED && APP<Dtype>::step_ % SHOW_INTERVAL == 0) {
-            Print(L, 'f');
+            //Print(L, 'f');
         }
 
         // Update masks and apply masks
@@ -96,7 +96,10 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 ProbPruneRow(APP<Dtype>::prune_interval);
             } else if (coremthd_ == "Reg") {
                 PruneMinimals();
-            } 
+            } else {
+                LOG(INFO) << "Wrong: unknown prune_method";
+                exit(1);
+            }
             UpdatePrunedRatio();
             if (L == APP<Dtype>::conv_layer_cnt - 1) { // To avoid the first fc from updating col
                 APP<Dtype>::pruned_rows.clear();
@@ -104,7 +107,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
         
         // Print weight magnitude
-	if (APP<Dtype>::num_log > 0) {
+    if (APP<Dtype>::num_log > 0) {
         if (APP<Dtype>::prune_unit == "Col") {
             cout << "ave-magnitude_col " << APP<Dtype>::step_ << " " << layer_name << ":";
             for (int j = 0; j < num_col; ++j) {
@@ -137,7 +140,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
         
     } else if (this->phase_ == TEST && IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX && coremthd_ == "PP") {
-        if (APP<Dtype>::mask_generate_mechanism == "filter-wise") {
+        if (APP<Dtype>::mask_generate_mechanism == "group-wise") {
             // use the old mask-generating mechanism
             const int num_unit = (APP<Dtype>::prune_unit == "Row") ? num_row : num_col;
             Dtype rands[num_unit];
@@ -170,7 +173,8 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             }
         } else if (APP<Dtype>::mask_generate_mechanism == "channel-wise") {
             // new mask-generating mechanism (2)
-            const int num = this->blobs_[0]->count(0, 2);
+	    assert(APP<Dtype>::prune_unit != "Col");
+            const int num = this->blobs_[0]->count(0, 2); // number of channel
             const int kernel_spatial_size = this->blobs_[0]->count(2);
             Dtype rands[num];
             caffe_rng_uniform(num, (Dtype)0, (Dtype)1, rands);
@@ -178,10 +182,8 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 const int row_index = i / num_col;
                 const int col_index = i % num_col;
                 const int chl_index = i / kernel_spatial_size; // channel index
-                const bool cond1 = (APP<Dtype>::prune_unit == "Row") ? rands[chl_index] < APP<Dtype>::history_prob[L][row_index]
-                                                                     : rands[col_index] < APP<Dtype>::history_prob[L][col_index];
-                const bool cond2 = (APP<Dtype>::prune_unit == "Row") ? !APP<Dtype>::IF_col_pruned[L][col_index][0]
-                                                                     : !APP<Dtype>::IF_row_pruned[L][row_index];
+                const bool cond1 = rands[chl_index] < APP<Dtype>::history_prob[L][row_index];
+                const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
                 APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
                 this->weight_backup[i] = muweight[i]; // backup weights
                 muweight[i] *= APP<Dtype>::masks[L][i];
@@ -208,6 +210,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
     } 
     
+    /*
     // ProbPruneRow-2, use feature map to measure importance
     if (this->phase_ == TRAIN && APP<Dtype>::inner_iter == 0) {
         if (IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
@@ -220,6 +223,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             }
         }
     }
+    */
     
     /*
     this->bottom_dim_: bottom feature map size, input
@@ -357,7 +361,7 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     
     // Print and check
     if (L == LAYER_PRINTED && APP<Dtype>::step_ % SHOW_INTERVAL == 0 && APP<Dtype>::inner_iter == 0) {
-        Print(L, 'b');
+        //Print(L, 'b');
     }
     
     if (APP<Dtype>::prune_method != "None" && APP<Dtype>::pruned_ratio[L] > 0) { 
