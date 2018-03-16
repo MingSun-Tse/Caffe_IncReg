@@ -2,7 +2,7 @@
 #include "caffe/layers/conv_layer.hpp"
 #include "caffe/adaptive_probabilistic_pruning.hpp"
 #define SHOW_INTERVAL 1
-#define SHOW_NUM_LAYER 5
+#define SHOW_NUM_LAYER 20
 #define LAYER_PRINTED 0
 
 using namespace std;
@@ -129,7 +129,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             }
             cout << endl;
         }
-        }
+    }
         // Summary print 
         if (mthd != "None" && L < SHOW_NUM_LAYER) {
             cout << layer_name << "  IF_prune: " << IF_prune 
@@ -158,13 +158,15 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             }
         } else if (APP<Dtype>::mask_generate_mechanism == "element-wise") {
             // use the new mask-generating mechanism (1)
-            Dtype rands[count];
-            caffe_rng_uniform(count, (Dtype)0, (Dtype)1, rands);
+            Dtype rands[count/10];
             for (int i = 0; i < count; ++i) {
+		if (i % (count/10) == 0) {
+			caffe_rng_uniform(count/10, (Dtype)0, (Dtype)1, rands);
+		}
                 const int row_index = i / num_col;
                 const int col_index = i % num_col;
-                const bool cond1 = (APP<Dtype>::prune_unit == "Row") ? rands[i] < APP<Dtype>::history_prob[L][row_index]
-                                                                     : rands[i] < APP<Dtype>::history_prob[L][col_index];
+                const bool cond1 = (APP<Dtype>::prune_unit == "Row") ? rands[i%(count/10)] < APP<Dtype>::history_prob[L][row_index]
+                                                                     : rands[i%(count/10)] < APP<Dtype>::history_prob[L][col_index];
                 const bool cond2 = (APP<Dtype>::prune_unit == "Row") ? !APP<Dtype>::IF_col_pruned[L][col_index][0]
                                                                      : !APP<Dtype>::IF_row_pruned[L][row_index];
                 APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
@@ -173,7 +175,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             }
         } else if (APP<Dtype>::mask_generate_mechanism == "channel-wise") {
             // new mask-generating mechanism (2)
-	    assert(APP<Dtype>::prune_unit != "Col");
+            assert(APP<Dtype>::prune_unit != "Col");
             const int num = this->blobs_[0]->count(0, 2); // number of channel
             const int kernel_spatial_size = this->blobs_[0]->count(2);
             Dtype rands[num];

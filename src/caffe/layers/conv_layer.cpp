@@ -494,7 +494,7 @@ void ConvolutionLayer<Dtype>::ProbPruneCol(const int& prune_interval) {
     const int L = APP<Dtype>::layer_index[layer_name];
     const int num_col_to_prune_ = ceil((APP<Dtype>::prune_ratio[L] + APP<Dtype>::delta[L]) * num_col); /// a little bit higher goal
     const int group = APP<Dtype>::group[L];
-
+    
     /// Calculate history score
     typedef std::pair<Dtype, int> mypair;
     vector<mypair> col_score(num_col);
@@ -565,20 +565,22 @@ void ConvolutionLayer<Dtype>::ProbPruneCol(const int& prune_interval) {
             muweight[i] *= APP<Dtype>::masks[L][i];
         }
     } else if (APP<Dtype>::mask_generate_mechanism == "element-wise") {
-        Dtype rands[count];
-        caffe_rng_uniform(count, (Dtype)0, (Dtype)1, rands);
+        Dtype rands[count/10]; // Because `count` may be so large (like 2 million) that `caffe_rng_uniform` will report segmengt default, generate rands for 10 times.
         for (int i = 0; i < count; ++i) {
+	    if (i % (count/10) == 0) {
+                caffe_rng_uniform(count/10, (Dtype)0, (Dtype)1, rands);
+	    }
             const int row_index = i / num_col;
             const int col_index = i % num_col;
-            const bool cond1 = rands[i] < APP<Dtype>::history_prob[L][col_index];
+            const bool cond1 = rands[i % (count/10)] < APP<Dtype>::history_prob[L][col_index];
             const bool cond2 = !APP<Dtype>::IF_row_pruned[L][row_index];
             APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
             this->weight_backup[i] = muweight[i];
             muweight[i] *= APP<Dtype>::masks[L][i];
         }
     } else {
-	LOG(INFO) << "Wrong: unknown mask_generate_mechanism, please check";
-	exit(1);
+        LOG(INFO) << "Wrong: unknown mask_generate_mechanism, please check";
+        exit(1);
     }
     this->IF_restore = true;
 }
