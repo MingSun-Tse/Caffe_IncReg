@@ -655,7 +655,6 @@ void ConvolutionLayer<Dtype>::ProbPruneRow(const int& prune_interval) {
 
     // With probability updated, generate masks and do pruning
     if (APP<Dtype>::mask_generate_mechanism == "group-wise") {
-        // old mask-generating mechanism: the weights in the same weight group share the same mask, which will cause too much dynamics, harmful to training.
         Dtype rands[num_row];
         caffe_rng_uniform(num_row, (Dtype)0, (Dtype)1, rands);
         for (int i = 0; i < count; ++i) {
@@ -663,18 +662,20 @@ void ConvolutionLayer<Dtype>::ProbPruneRow(const int& prune_interval) {
             const int col_index = i % num_col;
             const bool cond1 = rands[row_index] < APP<Dtype>::history_prob[L][row_index];
             const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
-            APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0; // Only when the row is assigned with mask 1 and the col is not pruned, the weight gets mask 1.
+            APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
             this->weight_backup[i] = muweight[i];
             muweight[i] *= APP<Dtype>::masks[L][i];
         }
     } else if (APP<Dtype>::mask_generate_mechanism == "element-wise") {
         // new mask-generating mechanism (1) 
-        Dtype rands[count];
-        caffe_rng_uniform(count, (Dtype)0, (Dtype)1, rands);
+        Dtype rands[count/10];
         for (int i = 0; i < count; ++i) {
+	    if (i % (count/10) == 0) {
+	    	caffe_rng_uniform(count/10, (Dtype)0, (Dtype)1, rands);
+	    }
             const int row_index = i / num_col;
             const int col_index = i % num_col;
-            const bool cond1 = rands[i] < APP<Dtype>::history_prob[L][row_index];
+            const bool cond1 = rands[i%(count/10)] < APP<Dtype>::history_prob[L][row_index];
             const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
             APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
             this->weight_backup[i] = muweight[i];

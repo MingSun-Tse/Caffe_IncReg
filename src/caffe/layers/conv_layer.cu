@@ -83,7 +83,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         // Print and check, before update probs
         // put this outside, to print even when we do not prune
         if (L == LAYER_PRINTED && APP<Dtype>::step_ % SHOW_INTERVAL == 0) {
-            //Print(L, 'f');
+            Print(L, 'f');
         }
 
         // Update masks and apply masks
@@ -363,7 +363,7 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     
     // Print and check
     if (L == LAYER_PRINTED && APP<Dtype>::step_ % SHOW_INTERVAL == 0 && APP<Dtype>::inner_iter == 0) {
-        //Print(L, 'b');
+       Print(L, 'b');
     }
     
     if (APP<Dtype>::prune_method != "None" && APP<Dtype>::pruned_ratio[L] > 0) { 

@@ -93,6 +93,7 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   APP<Dtype>::num_iter_reg = 10000;
   APP<Dtype>::reg_cushion_iter = 2000;
   APP<Dtype>::hrank_momentum = 0.999;
+ // APP<Dtype>::mask_generate_mechanism = param_.mask_generate_mechanism();
   
   // APP<Dtype>::score_decay = param_.score_decay();
   APP<Dtype>::snapshot_prefix = param_.snapshot_prefix();

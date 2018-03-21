@@ -263,6 +263,7 @@ message SolverParameter {
   optional bool IF_speedup_count_fc = 63 [default = true];
   optional bool IF_compr_count_conv = 64 [default = true];
   optional bool IF_scheme1_when_Reg_rank = 65 [default = true];
+  //optional string mask_generate_mechanism = 66 [default = "group-wise"];
  
   // decrease weight decay
   optional string dwd_mode = 44 [default = "None"];
