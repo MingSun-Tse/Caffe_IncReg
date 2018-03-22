@@ -963,7 +963,11 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         const int num_weight_to_prune = ceil(count * APP<Dtype>::prune_ratio[L]);
         const int num_pruned_weight = APP<Dtype>::num_pruned_weight[L];
         // if (num_pruned_weight >= num_weight_to_prune) { return; }
-        
+       
+        for (int i = 0; i < 20; ++i) {
+            cout << weight[i] << " ";
+        }
+        cout << endl;
         // ***********************************************************
         // Sort 01: sort by L1-norm
         typedef std::pair<Dtype, int> mypair;
@@ -1065,6 +1069,78 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         }
         
       
+      } else if (regularization_type == "Reg_Weight") {
+        // SR used to compress large DNN, not using ranking 
+        
+        // add weight decay, weight decay still used
+        caffe_gpu_axpy(net_params[param_id]->count(),
+                       local_decay,
+                       net_params[param_id]->gpu_data(),
+                       net_params[param_id]->mutable_gpu_diff());    
+        
+        
+        // If return
+        const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[param_id].first];
+        const int L = GetLayerIndex(param_id);
+        if (L == -1) { return; }
+        
+        const Dtype* weight = net_params[param_id]->cpu_data();
+        Dtype* muweight = net_params[param_id]->mutable_cpu_data();
+        const int count = net_params[param_id]->count();
+        
+        // estimate threhold score
+        Dtype score_min = 999;
+        Dtype score_max = -1;
+        for (int i = 0; i < count; ++i) {
+            if (i < 20) {
+                cout << muweight[i] << " ";
+            }
+            if (fabs(muweight[i]) > score_max) {
+                score_max = fabs(muweight[i]);
+            }
+            if (fabs(muweight[i]) < score_min) {
+                score_min = fabs(muweight[i]);
+            }
+        }
+        cout << endl;
+        // Dtype score_max=0.246919, score_min=1.91997e-05;
+        const Dtype u = (score_max + score_min) / 2; // mean
+        const Dtype sigma = (score_max - score_min) / 8; //stddev assumption: all weights are included in 4-sigma scope
+        const Dtype prune_ratio = (APP<Dtype>::prune_ratio[L] < 0.5) ? 1 - APP<Dtype>::prune_ratio[L] : APP<Dtype>::prune_ratio[L]; // the lookup table only contains half of the normal distribution
+        const Dtype normalized_prune_ratio = round(prune_ratio / 0.05) * 0.05; // e.g. 0.63 -> 0.65; 0.05 is the prune ratio step 
+        const int index = int((normalized_prune_ratio - 0.5) / 0.05);
+        const Dtype normal_lookup_table[10] = {0, 0.125, 0.255, 0.385, 0.525, 0.675, 0.845, 1.035, 1.285, 1.645};
+        const Dtype score_thr = APP<Dtype>::prune_ratio[L] > 0.5
+                                    ? u + normal_lookup_table[index] * sigma
+                                    : u - normal_lookup_table[index] * sigma;
+        assert(score_thr < score_max && score_thr > score_min);
+        cout << layer_name << " u=" << u << " sigma=" << sigma 
+                           << " | score_thr=" << score_thr << " score_max=" << score_max << " score_min=" << score_min << endl;
+
+        // assign Delta
+        const Dtype AA = APP<Dtype>::AA;
+        const Dtype k1 = AA / (score_thr - score_min);
+        const Dtype k2 = AA / (score_max - score_thr);
+        vector<Dtype> reg_multiplier(count, -1);
+        for (int i = 0; i < count; ++i) {
+            const Dtype Delta = fabs(weight[i]) < score_thr 
+                                    ? AA - k1 * (fabs(weight[i]) - score_min)
+                                    : k2 * (score_thr - fabs(weight[i]));
+            const Dtype old_reg = APP<Dtype>::history_reg[L][i];
+            const Dtype new_reg = max(old_reg + Delta, Dtype(0));
+            APP<Dtype>::history_reg[L][i] = new_reg;
+            reg_multiplier[i] = new_reg;
+            
+            if (new_reg < old_reg) {
+                cout << "recover reg: " << layer_name << "-" << i 
+                     << "  old reg: " << old_reg
+                     << "  new reg: " << new_reg << endl;
+            }
+        }
+        for (int i = 0; i < count; ++i) {
+            net_params[param_id]->mutable_cpu_diff()[i] += reg_multiplier[i] * weight[i];
+        }
+
       } else {
           LOG(FATAL) << "Unknown regularization type: " << regularization_type;
       }
