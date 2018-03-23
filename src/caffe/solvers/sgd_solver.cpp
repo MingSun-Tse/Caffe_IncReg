@@ -540,7 +540,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         vector<Dtype> reg_multiplier(count, -1);
         
         // (1) Reg-rank_Col
-        if (APP<Dtype>::prune_coremthd == "Reg-rank") {
+        if (APP<Dtype>::prune_coremthd == "Reg-rank" || APP<Dtype>::prune_coremthd == "Reg") {
             // ***********************************************************
             // Sort 01: sort by L1-norm
             typedef std::pair<Dtype, int> mypair;
@@ -619,19 +619,6 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                 }
                 cout << endl;
             }
-            
-           
-
-            // check order            
-            /* TODEBUG: why this code generate two `_order.txt`? 
-            ostringstream stream;
-            stream << APP<Dtype>::snapshot_prefix << layer_name << "_order.txt";
-            const char* dd = stream.str().c_str();
-            ofstream col_score_order(dd, ofstream::app); // dd must be char*, ofstream::app
-            if (!col_score_order.is_open()) { 
-                cerr << "file open failed: layer_name = " << layer_name << endl; 
-            } else {
-            */
             
             // Punishment Function
             if (APP<Dtype>::IF_scheme1_when_Reg_rank) {
@@ -791,18 +778,9 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             vector<mypair> row_hrank(num_row);
             // cout << "ave-magnitude_row " << this->iter_ << " " << layer_name << ":";
             for (int i = 0; i < num_row; ++i) {
-                
-                // print 
-                // Dtype sum = 0;
-                // for (int j = 0; i < num_col; ++j) {
-                    // sum += fabs(weight[i * num_col +j]);
-                // }
-                // cout << " " << sum/num_col;
-
                 row_hrank[i].first  = APP<Dtype>::hrank[L][i];
                 row_hrank[i].second = i;
             }
-            //cout << endl;
             sort(row_hrank.begin(), row_hrank.end());
             
             // Print: Check rank
@@ -964,10 +942,6 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         const int num_pruned_weight = APP<Dtype>::num_pruned_weight[L];
         // if (num_pruned_weight >= num_weight_to_prune) { return; }
        
-        for (int i = 0; i < 20; ++i) {
-            cout << weight[i] << " ";
-        }
-        cout << endl;
         // ***********************************************************
         // Sort 01: sort by L1-norm
         typedef std::pair<Dtype, int> mypair;

@@ -134,13 +134,11 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
         
     } else if (APP<Dtype>::prune_unit == "Col") {
         const int show_num = SHOW_NUM > num_col ? num_col : SHOW_NUM;
-        cout << show_num << endl;
         for (int j = 0; j < show_num; ++j) {
             // print Index
             cout.width(3); cout << "c"; 
             cout.width(2); cout << j+1 << "   ";
             
-            cout << "22" << endl;
             // print blob
             Dtype sum_w = 0, sum_d = 0;
             for (int i = 0; i < num_row; ++i) {
@@ -157,12 +155,9 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
             // print Mask
             cout.width(4);  cout << APP<Dtype>::masks[L][j] << "   ";
             
-            cout << "33" << endl;
-            
             // print info
             cout.width(info.size());  cout << info_data[j] << endl;
-            
-            cout << "44" << endl;
+           
         }
     } else if (APP<Dtype>::prune_unit == "Weight") {
         for (int i = 0; i < SHOW_NUM; ++i) {

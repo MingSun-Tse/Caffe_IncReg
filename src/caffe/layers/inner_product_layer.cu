@@ -3,9 +3,7 @@
 #include "caffe/layers/inner_product_layer.hpp"
 #include "caffe/util/math_functions.hpp"
 #include "caffe/adaptive_probabilistic_pruning.hpp"
-#define LAYER_PRINTED 3
-#define SHOW_INTERVAL 10
-#define SHOW_NUM_LAYER 5
+#define LAYER_PRINTED 6
 
 namespace caffe {
 
@@ -85,8 +83,8 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
         
         // Print, before masked
-        if (L == LAYER_PRINTED && APP<Dtype>::step_ % SHOW_INTERVAL == 0) {
-            //Print(L, 'f');
+        if (L == LAYER_PRINTED && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0) {
+            Print(L, 'f');
         }
         
         // Update masks
@@ -125,7 +123,7 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
         }
         // Summary print
-        if (mthd != "None" && L < SHOW_NUM_LAYER) {
+        if (mthd != "None" && L < APP<Dtype>::show_num_layer) {
                cout << layer_name << "  IF_prune: " << IF_prune 
                  << "  pruned_ratio: " << APP<Dtype>::pruned_ratio[L] 
                  << "  prune_ratio: " << APP<Dtype>::prune_ratio[L] << endl;
@@ -178,7 +176,7 @@ void InnerProductLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     const int L = APP<Dtype>::layer_index[this->layer_param_.name()];
     if (APP<Dtype>::prune_method != "None" && APP<Dtype>::pruned_ratio[L] > 0) {
         // Print
-        if (L == LAYER_PRINTED && APP<Dtype>::step_ % SHOW_INTERVAL == 0 && APP<Dtype>::inner_iter == 0) {
+        if (L == LAYER_PRINTED && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0 && APP<Dtype>::inner_iter == 0) {
             Print(L, 'b');
         }
         

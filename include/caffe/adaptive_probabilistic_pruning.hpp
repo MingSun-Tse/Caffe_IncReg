@@ -102,6 +102,10 @@ public:
     static string snapshot_prefix;
     static string prune_state_dir;
     static string mask_generate_mechanism;
+    
+    static int show_interval;
+    static int show_num_layer;
+    
     /// --------------------------------
     
     static int window_size;
@@ -215,6 +219,9 @@ public:
     template<typename Dtype>  string  APP<Dtype>::snapshot_prefix;
     template<typename Dtype>  string  APP<Dtype>::prune_state_dir = "/PruneStateSnapshot/";
     template<typename Dtype>  string  APP<Dtype>::mask_generate_mechanism = "element-wise";
+    
+    template<typename Dtype>  int APP<Dtype>::show_interval = 10;
+    template<typename Dtype>  int APP<Dtype>::show_num_layer = 20;
     /// --------------------------------
 
     // use window proposal or score decay ----- legacy

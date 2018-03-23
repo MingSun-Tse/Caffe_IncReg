@@ -1,9 +1,7 @@
 #include <vector>
 #include "caffe/layers/conv_layer.hpp"
 #include "caffe/adaptive_probabilistic_pruning.hpp"
-#define SHOW_INTERVAL 1
-#define SHOW_NUM_LAYER 20
-#define LAYER_PRINTED 0
+#define LAYER_PRINTED 1
 
 using namespace std;
 namespace caffe {
@@ -82,7 +80,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         
         // Print and check, before update probs
         // put this outside, to print even when we do not prune
-        if (L == LAYER_PRINTED && APP<Dtype>::step_ % SHOW_INTERVAL == 0) {
+        if (L == LAYER_PRINTED && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0) {
             Print(L, 'f');
         }
 
@@ -131,7 +129,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
     }
         // Summary print 
-        if (mthd != "None" && L < SHOW_NUM_LAYER) {
+        if (mthd != "None" && L < APP<Dtype>::show_num_layer) {
             cout << layer_name << "  IF_prune: " << IF_prune 
                  << "  pruned_ratio: " << APP<Dtype>::pruned_ratio[L];
             cout << "  pruned_ratio_row: " << APP<Dtype>::num_pruned_row[L] * 1.0 / num_row << "(" << APP<Dtype>::num_pruned_row[L] << ")"
@@ -362,7 +360,7 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     }
     
     // Print and check
-    if (L == LAYER_PRINTED && APP<Dtype>::step_ % SHOW_INTERVAL == 0 && APP<Dtype>::inner_iter == 0) {
+    if (L == LAYER_PRINTED && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0 && APP<Dtype>::inner_iter == 0) {
        Print(L, 'b');
     }
     
