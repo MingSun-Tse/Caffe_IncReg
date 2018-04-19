@@ -1,7 +1,6 @@
 #include <vector>
 #include "caffe/layers/conv_layer.hpp"
 #include "caffe/adaptive_probabilistic_pruning.hpp"
-#define LAYER_PRINTED 1
 
 using namespace std;
 namespace caffe {
@@ -80,7 +79,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         
         // Print and check, before update probs
         // put this outside, to print even when we do not prune
-        if (L == LAYER_PRINTED && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0) {
+        if (L == APP<Dtype>::show_layer && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0) {
             Print(L, 'f');
         }
 
@@ -360,7 +359,7 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     }
     
     // Print and check
-    if (L == LAYER_PRINTED && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0 && APP<Dtype>::inner_iter == 0) {
+    if (L == APP<Dtype>::show_layer && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0 && APP<Dtype>::inner_iter == 0) {
        Print(L, 'b');
     }
     

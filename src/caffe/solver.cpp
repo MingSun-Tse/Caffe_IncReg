@@ -72,6 +72,7 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   APP<Dtype>::criteria = "L1-norm";
   APP<Dtype>::num_once_prune = param_.num_once_prune();
   APP<Dtype>::prune_interval = param_.prune_interval();
+  APP<Dtype>::clear_history_interval = 1;
   APP<Dtype>::rgamma = 30;   //param_.rgamma();
   APP<Dtype>::rpower = -1.3; //param_.rpower();
   APP<Dtype>::cgamma = 70;   //param_.cgamma();

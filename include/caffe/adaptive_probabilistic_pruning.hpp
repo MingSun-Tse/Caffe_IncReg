@@ -26,6 +26,7 @@ public:
     static string criteria; 
     static int num_once_prune;
     static int prune_interval;
+    static int clear_history_interval;
     static Dtype rgamma;
     static Dtype rpower;
     static Dtype cgamma;
@@ -104,7 +105,9 @@ public:
     static string mask_generate_mechanism;
     
     static int show_interval;
+    static int show_layer;
     static int show_num_layer;
+    static int show_num_weight;
     
     /// --------------------------------
     
@@ -141,6 +144,7 @@ public:
     template<typename Dtype>  string  APP<Dtype>::criteria;
     template<typename Dtype>  int     APP<Dtype>::num_once_prune;
     template<typename Dtype>  int     APP<Dtype>::prune_interval;
+    template<typename Dtype>  int     APP<Dtype>::clear_history_interval;
     template<typename Dtype>  Dtype   APP<Dtype>::rgamma;
     template<typename Dtype>  Dtype   APP<Dtype>::rpower;
     template<typename Dtype>  Dtype   APP<Dtype>::cgamma;
@@ -221,7 +225,9 @@ public:
     template<typename Dtype>  string  APP<Dtype>::mask_generate_mechanism = "element-wise";
     
     template<typename Dtype>  int APP<Dtype>::show_interval = 10;
-    template<typename Dtype>  int APP<Dtype>::show_num_layer = 20;
+    template<typename Dtype>  int APP<Dtype>::show_layer = 10; // The layer index of which the weights will be printed.
+    template<typename Dtype>  int APP<Dtype>::show_num_layer = 100;
+    template<typename Dtype>  int APP<Dtype>::show_num_weight = 20;
     /// --------------------------------
 
     // use window proposal or score decay ----- legacy

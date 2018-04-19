@@ -3,7 +3,6 @@
 #include "caffe/layers/inner_product_layer.hpp"
 #include "caffe/util/math_functions.hpp"
 #include "caffe/adaptive_probabilistic_pruning.hpp"
-#define LAYER_PRINTED 6
 
 namespace caffe {
 
@@ -83,7 +82,7 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
         
         // Print, before masked
-        if (L == LAYER_PRINTED && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0) {
+        if (L == APP<Dtype>::show_layer + APP<Dtype>::conv_layer_cnt && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0) {
             Print(L, 'f');
         }
         
@@ -99,28 +98,28 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
         
         // Print weight magnitude
-	if (APP<Dtype>::num_log > 0) {
-        if (APP<Dtype>::prune_unit == "Col") {
-            cout << "ave-magnitude_col " << APP<Dtype>::step_ << " " << layer_name << ":";
-            for (int j = 0; j < num_col; ++j) {
-                Dtype sum = 0;
-                for (int i = 0; i < num_row; ++i) {
-                    sum += fabs(muweight[i*num_col + j]);
-                }
-                cout << " " << sum;
-            }
-            cout << endl;
-        } else if (APP<Dtype>::prune_unit == "Row") {
-            cout << "ave-magnitude_row " << APP<Dtype>::step_ << " " << layer_name << ":";
-            for (int i = 0; i < num_row; ++i) {
-                Dtype sum = 0;
+        if (APP<Dtype>::num_log > 0) {
+            if (APP<Dtype>::prune_unit == "Col") {
+                cout << "ave-magnitude_col " << APP<Dtype>::step_ << " " << layer_name << ":";
                 for (int j = 0; j < num_col; ++j) {
-                    sum += fabs(muweight[i*num_col + j]);
+                    Dtype sum = 0;
+                    for (int i = 0; i < num_row; ++i) {
+                        sum += fabs(muweight[i*num_col + j]);
+                    }
+                    cout << " " << sum;
                 }
-                cout << " " << sum;
+                cout << endl;
+            } else if (APP<Dtype>::prune_unit == "Row") {
+                cout << "ave-magnitude_row " << APP<Dtype>::step_ << " " << layer_name << ":";
+                for (int i = 0; i < num_row; ++i) {
+                    Dtype sum = 0;
+                    for (int j = 0; j < num_col; ++j) {
+                        sum += fabs(muweight[i*num_col + j]);
+                    }
+                    cout << " " << sum;
+                }
+                cout << endl;
             }
-            cout << endl;
-        }
         }
         // Summary print
         if (mthd != "None" && L < APP<Dtype>::show_num_layer) {
@@ -176,7 +175,7 @@ void InnerProductLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     const int L = APP<Dtype>::layer_index[this->layer_param_.name()];
     if (APP<Dtype>::prune_method != "None" && APP<Dtype>::pruned_ratio[L] > 0) {
         // Print
-        if (L == LAYER_PRINTED && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0 && APP<Dtype>::inner_iter == 0) {
+        if (L == APP<Dtype>::show_layer && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0 && APP<Dtype>::inner_iter == 0) {
             Print(L, 'b');
         }
         

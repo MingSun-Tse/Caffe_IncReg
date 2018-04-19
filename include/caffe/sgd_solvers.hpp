@@ -44,8 +44,7 @@ class SGDSolver : public Solver<Dtype> {
   // update maintains update related data and is not needed in snapshots.
   // temp maintains other information that might be needed in computation
   //   of gradients/updates and is not needed in snapshots
-  vector<shared_ptr<Blob<Dtype> > > history_, update_, temp_;
-  vector<vector<Dtype> > history_reg_; /// WANGHUAN
+  vector<shared_ptr<Blob<Dtype> > > history_, update_, temp_, history_reg_, tmp_; // @mingsuntse: `history_reg_, tmp_` for pruning using regularization
 
   DISABLE_COPY_AND_ASSIGN(SGDSolver);
 };
