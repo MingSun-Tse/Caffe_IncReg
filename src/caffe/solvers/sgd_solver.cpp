@@ -1075,8 +1075,7 @@ void SGDSolver<Dtype>::RestoreSolverStateFromBinaryProto(
   SolverState state;
   ReadProtoFromBinaryFile(state_file, &state);
   this->iter_ = state.iter();
-  std::cout << " -- restore proto -- " << std::endl;
-  
+  APP<Dtype>::step_ = this->iter_ + 1;
   if (state.has_learned_net()) {
     NetParameter net_param;
     ReadNetParamsFromBinaryFileOrDie(state.learned_net().c_str(), &net_param);

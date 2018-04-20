@@ -801,11 +801,6 @@ void ConvolutionLayer<Dtype>::UpdateNumPrunedCol() {
     APP<Dtype>::pruned_rows.clear();
 }
 
-
-
-
-
-
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::ComputeBlobMask() {
     /** Restore pruning state when retrain
@@ -883,13 +878,8 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask() {
     if (pruned_ratio >= APP<Dtype>::prune_ratio[L]) {
         APP<Dtype>::iter_prune_finished[L] = -1; /// To check multi-GPU
         cout << L << ": " << layer_name << " prune finished" << endl;
-    } else {
-        char* coremthd = new char[strlen(APP<Dtype>::prune_coremthd.c_str()) + 1];
-        strcpy(coremthd, APP<Dtype>::prune_coremthd.c_str());
-        const string coremthd_ = strtok(coremthd, "-");
-        if ((coremthd_ == "PP" || coremthd_ == "Reg") && APP<Dtype>::step_ > 1) { // since resuming, the step should be larger than 1
+    } else if ((APP<Dtype>::prune_coremthd.substr(0, 2) == "PP" || APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg") && APP<Dtype>::step_ > 1) { // since resuming, the step should be larger than 1
             RestorePruneProb(pruned_ratio);
-        }
     }
     LOG(INFO) << "    Masks restored, num_pruned_col = " << APP<Dtype>::num_pruned_col[L]
               << "  num_pruned_row = " << APP<Dtype>::num_pruned_row[L]
@@ -961,8 +951,6 @@ void ConvolutionLayer<Dtype>::PruneMinimals() {
     }
 }
 
-
-
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::RestorePruneProb(const Dtype& pruned_r) {
     const string layer_name = this->layer_param_.name();
@@ -972,16 +960,22 @@ void ConvolutionLayer<Dtype>::RestorePruneProb(const Dtype& pruned_r) {
     ifstream state_stream;
     state_stream.open(inFile.data());
     if (!state_stream.is_open()) {
-        LOG(INFO) << "Error, failed to restore prune_prob, the prune_prob file cannot be opened: `" 
+        LOG(INFO) << "Error: failed to restore prune_prob, the prune_prob file cannot be opened: `" 
              << inFile << "`" << endl;
+        exit(1);
     } else {
         string line;
         getline(state_stream, line); /// the first line is iteration
+        const int previous_iter = atof(line.c_str());
+        if (previous_iter != APP<Dtype>::step_ - 1) {
+            LOG(INFO) << "Wrong: current iter is not consistent with the previos iter when saving the pruning state";
+            exit(1);
+        }
         vector<Dtype> state;
         while (getline(state_stream, line, ' ')) {
             state.push_back(atof(line.c_str()));
         }
-        if (APP<Dtype>::prune_coremthd == "PP"){
+        if (APP<Dtype>::prune_coremthd.substr(0,2) == "PP"){
             assert(state.size() == APP<Dtype>::history_prob[L].size());
             for (int i = 0; i < state.size(); ++i) {
                 APP<Dtype>::history_prob[L][i] = state[i];

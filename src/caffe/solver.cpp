@@ -254,6 +254,8 @@ void Solver<Dtype>::Step(int iters) {
   smoothed_loss_ = 0;
 
   while (iter_ < stop_iter) {
+    APP<Dtype>::step_ = iter_ + 1;
+    
     // zero-init the params
     net_->ClearParamDiffs();
     if (param_.test_interval() && iter_ % param_.test_interval() == 0
@@ -310,8 +312,7 @@ void Solver<Dtype>::Step(int iters) {
     if (APP<Dtype>::prune_unit == "Weight") {
         APP<Dtype>::IF_compRatio_achieved = num_param_origin/num_param_left >= APP<Dtype>::compRatio;
     }
-    
-    APP<Dtype>::step_ = iter_ + 1;
+
     cout << "\n**** Step " << APP<Dtype>::step_ << ": " 
          << GFLOPs_origin / GFLOPs_left << "/" << APP<Dtype>::speedup << " "
          << num_param_origin / num_param_left << "/" << APP<Dtype>::compRatio
@@ -378,7 +379,7 @@ void Solver<Dtype>::Step(int iters) {
 
     // Increment the internal iter_ counter -- its value should always indicate
     // the number of times the weights have been updated.
-    ++iter_;    
+    ++iter_;
     
     SolverAction::Enum request = GetRequestedAction();
 
@@ -413,7 +414,6 @@ void Solver<Dtype>::Solve(const char* resume_file) {
     Restore(resume_file);
   }
   
-
     // After restore, calculate GFLOPs and determine whether the prune finished
     // WANGHUAN TODO 
     Dtype GFLOPs_left   = 0;
@@ -433,8 +433,7 @@ void Solver<Dtype>::Solve(const char* resume_file) {
         num_param_origin += APP<Dtype>::num_param[i];
     }
     APP<Dtype>::IF_compRatio_achieved = num_param_origin/num_param_left >= APP<Dtype>::compRatio;
-  
-  
+
     if (APP<Dtype>::IF_speedup_achieved || APP<Dtype>::IF_compRatio_achieved) {
         for (int i = 0; i < APP<Dtype>::layer_index.size(); ++i) {
             APP<Dtype>::iter_prune_finished[i] = -1; 
@@ -454,8 +453,7 @@ void Solver<Dtype>::Solve(const char* resume_file) {
     Snapshot();
   }
   if (requested_early_exit_) {
-    if (APP<Dtype>::num_log) { Logshot(); }
-    if (APP<Dtype>::prune_coremthd == "SPP" || APP<Dtype>::prune_coremthd.substr(0,3) == "Reg") { PruneStateShot(); }
+    if (APP<Dtype>::prune_coremthd.substr(0, 2) == "PP" || APP<Dtype>::prune_coremthd.substr(0,3) == "Reg") { PruneStateShot(); }
     if (APP<Dtype>::prune_method != "None") { PrintFinalPrunedRatio(); }
     LOG(INFO) << "Optimization stopped early.";
     return;
@@ -478,15 +476,14 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   if (param_.test_interval() && iter_ % param_.test_interval() == 0) {
     TestAll();
   }
-  if (APP<Dtype>::num_log) { Logshot(); }
-  if (APP<Dtype>::prune_coremthd == "SPP" || APP<Dtype>::prune_coremthd.substr(0,3) == "Reg") { PruneStateShot(); }
+  if (APP<Dtype>::prune_coremthd.substr(0, 2) == "PP" || APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg") { PruneStateShot(); } //TODO(mingsuntse): When retraining, this is not necessary
   if (APP<Dtype>::prune_method != "None") { PrintFinalPrunedRatio(); }
   LOG(INFO) << "Optimization Done.";
 }
 
 template <typename Dtype>
 void Solver<Dtype>::PrintFinalPrunedRatio() {
-    cout << "Print final pruned ratio of all layers:" << endl;
+    cout << "Print final pruned ratio of all layers:";
     map<string, int>::iterator it_m;
     for (it_m = APP<Dtype>::layer_index.begin(); it_m != APP<Dtype>::layer_index.end(); ++it_m) {
         const int L = it_m->second;
@@ -608,7 +605,7 @@ void Solver<Dtype>::PruneStateShot() {
     for (it_m = APP<Dtype>::layer_index.begin(); it_m != APP<Dtype>::layer_index.end(); ++it_m) {
         const string prune_state_dir = param_.snapshot_prefix() + APP<Dtype>::prune_state_dir;
         if (access(prune_state_dir.c_str(), 0)) {
-            LOG(INFO) << "Prune state dir `" << prune_state_dir << "` doesn't exist, now make it." << endl;
+            LOG(INFO) << "Prune state dir: `" << prune_state_dir << "` doesn't exist, now make it." << endl;
             mkdir(prune_state_dir.c_str(), S_IRWXU);
         }
         const string outfile = param_.snapshot_prefix() + APP<Dtype>::prune_state_dir + it_m->first + ".txt";
@@ -642,7 +639,7 @@ void Solver<Dtype>::PruneStateShot() {
     
 }
 
-
+// Deprecated
 template <typename Dtype>
 void Solver<Dtype>::Logshot() {
     const time_t t = time(NULL);
