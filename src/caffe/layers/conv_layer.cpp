@@ -4,8 +4,6 @@
 #include <cstdlib>
 #include <cmath>
 #define NSUM 50
-#define SHOW_INTERVAL 20
-#define SHOW_NUM 20
 
 namespace caffe {
 using namespace std;
@@ -16,7 +14,9 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     const int count   = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
-    this->weight_backup.resize(count); /// still used in TEST phase when using PP
+    this->weight_backup.resize(count); // still used in TEST phase when using PP
+    APP<Dtype>::prune_ratio.push_back(prune_param.prune_ratio());
+    APP<Dtype>::pruned_ratio.push_back(0); // used in TEST
     
     // Get layer_index
     const string layer_name = this->layer_param_.name();
@@ -37,10 +37,8 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     // Note: the varibales below can ONLY be used in training.
     // Note: These varibales will be called for every GPU, whereas since we use `layer_index` to index, so it doesn't matter.
     // Set up prune parameters of layer
-    APP<Dtype>::prune_ratio.push_back(prune_param.prune_ratio());
     APP<Dtype>::delta.push_back(prune_param.delta()); // TODO: abolish delta
     APP<Dtype>::IF_update_row_col_layer.push_back(prune_param.if_update_row_col());
-    APP<Dtype>::pruned_ratio.push_back(0);
     APP<Dtype>::pruned_ratio_col.push_back(0);
     APP<Dtype>::pruned_ratio_row.push_back(0);
     APP<Dtype>::GFLOPs.push_back(this->blobs_[0]->shape()[0] * this->blobs_[0]->shape()[1] 
@@ -172,7 +170,7 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
     cout.width(info.size()); cout << info << " - " << this->layer_param_.name() << endl;
     
     if (APP<Dtype>::prune_unit == "Row") {
-        const int show_num = SHOW_NUM > num_row ? num_row : SHOW_NUM;
+        const int show_num = APP<Dtype>::show_num_weight > num_row ? num_row : APP<Dtype>::show_num_weight;
         for (int i = 0; i < show_num; ++i) {
             // print Index
             cout.width(3); cout << "r"; 
@@ -198,7 +196,7 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
         }
         
     } else if (APP<Dtype>::prune_unit == "Col") {
-        const int show_num = SHOW_NUM > num_col ? num_col : SHOW_NUM;
+        const int show_num = APP<Dtype>::show_num_weight > num_col ? num_col : APP<Dtype>::show_num_weight;
         for (int j = 0; j < show_num; ++j) {
             // print Index
             cout.width(3); cout << "c"; 
@@ -223,7 +221,7 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
             cout.width(info.size());  cout << info_data[j] << endl;
         }
     } else if (APP<Dtype>::prune_unit == "Weight") {
-        for (int i = 0; i < SHOW_NUM; ++i) {
+        for (int i = 0; i < APP<Dtype>::show_num_weight; ++i) {
             // print Index
             cout.width(3); cout << "w";
             cout.width(2); cout << i+1 << "   ";
@@ -588,6 +586,9 @@ void ConvolutionLayer<Dtype>::ProbPruneCol(const int& prune_interval) {
     this->IF_restore = true;
 }
 
+/*
+TODO(mingsuntse): check, why does ProbPruneCol_chl work so poor?
+*/
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::ProbPruneCol_chl(const int& prune_interval) {
     Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
@@ -630,9 +631,11 @@ void ConvolutionLayer<Dtype>::ProbPruneCol_chl(const int& prune_interval) {
             const int chl_of_rank_rk = chl_score[rk].second;
             Dtype delta = rk < N1 ? AA * exp(-alpha * rk) : -AA * exp(-alpha * (2*N1-rk)) + 2*kk*AA;
            
-            const Dtype old_prob = APP<Dtype>::history_prob[L][chl_of_rank_rk];
+            const Dtype old_prob = APP<Dtype>::history_prob[L][chl_of_rank_rk * kernel_spatial_size];
             const Dtype new_prob = std::min(std::max(old_prob - delta, Dtype(0)), Dtype(1));
-            APP<Dtype>::history_prob[L][chl_of_rank_rk] = new_prob;
+            for (int j = chl_of_rank_rk * kernel_spatial_size; j < (chl_of_rank_rk + 1) * kernel_spatial_size; ++j) {
+                APP<Dtype>::history_prob[L][j] = new_prob;
+            }
             
             if (new_prob == 0) {
                 APP<Dtype>::num_pruned_col[L] += kernel_spatial_size;
@@ -1060,8 +1063,6 @@ void ConvolutionLayer<Dtype>::PruneMinimals() {
             }
         }
     }
-    
-    cout << "layer index: " << L << "wan 02" << endl;
 }
 
 template <typename Dtype>

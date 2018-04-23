@@ -151,7 +151,7 @@ public:
     template<typename Dtype>  Dtype   APP<Dtype>::cpower;
     template<typename Dtype>  int     APP<Dtype>::prune_begin_iter;
     template<typename Dtype>  int     APP<Dtype>::iter_size;
-    template<typename Dtype>  Dtype   APP<Dtype>::score_decay = 0.9;
+    template<typename Dtype>  Dtype   APP<Dtype>::score_decay = 0;
     template<typename Dtype>  Dtype   APP<Dtype>::AA;
     template<typename Dtype>  Dtype   APP<Dtype>::kk;
     template<typename Dtype>  Dtype   APP<Dtype>::kk2;
@@ -222,12 +222,12 @@ public:
     template<typename Dtype>  vector<vector<int> >    APP<Dtype>::log_index;
     template<typename Dtype>  string  APP<Dtype>::snapshot_prefix;
     template<typename Dtype>  string  APP<Dtype>::prune_state_dir = "/PruneStateSnapshot/";
-    template<typename Dtype>  string  APP<Dtype>::mask_generate_mechanism = "element-wise";
+    template<typename Dtype>  string  APP<Dtype>::mask_generate_mechanism = "group-wise";
     
     template<typename Dtype>  int APP<Dtype>::show_interval = 10; 
-    template<typename Dtype>  int APP<Dtype>::show_layer = 3; // The layer index of which the weights will be printed.
+    template<typename Dtype>  int APP<Dtype>::show_layer = 0; // The layer index of which the weights will be printed.
     template<typename Dtype>  int APP<Dtype>::show_num_layer = 100;
-    template<typename Dtype>  int APP<Dtype>::show_num_weight = 20;
+    template<typename Dtype>  int APP<Dtype>::show_num_weight = 40;
     /// --------------------------------
 
     // use window proposal or score decay ----- legacy
@@ -253,8 +253,6 @@ public:
     template<typename Dtype>  Dtype  APP<Dtype>::loss_decay = 0.7;
     template<typename Dtype>  Dtype  APP<Dtype>::Delta_loss_history = 0;
     template<typename Dtype>  Dtype  APP<Dtype>::learning_speed = 0;
-
-
 }
 
 #endif

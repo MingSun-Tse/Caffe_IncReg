@@ -16,9 +16,6 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const int num_col = count / num_row;
     const string layer_name = this->layer_param_.name();
     const string mthd = APP<Dtype>::prune_method;
-    char* coremthd = new char[strlen(APP<Dtype>::prune_coremthd.c_str()) + 1];
-    strcpy(coremthd, APP<Dtype>::prune_coremthd.c_str());
-    const string coremthd_ = strtok(coremthd, "-");
     const int L = APP<Dtype>::layer_index[layer_name];
     this->IF_restore = false;
     
@@ -57,7 +54,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 
                 if (layer_finish || net_finish_speed || net_finish_param) {
                     APP<Dtype>::iter_prune_finished[L] = APP<Dtype>::step_ - 1;
-                    if (coremthd_ == "PP") { CleanWorkForPP(); } // last time, do some clean work
+                    // if (APP<Dtype>::prune_coremthd.substr(0, 2) == "PP") { CleanWorkForPP(); } // last time, do some clean work
                     
                     // print when finished
                     char rlayer[10], rrow[10], rcol[10];
@@ -91,7 +88,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 ProbPruneCol(APP<Dtype>::prune_interval);
             } else if (mthd == "PP_Row" && IF_hppf()) {
                 ProbPruneRow(APP<Dtype>::prune_interval);
-            } else if (coremthd_ == "Reg") {
+            } else if (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg") {
                 PruneMinimals();
             } else if (mthd == "PP-chl_Col" && IF_hppf()) {
                 ProbPruneCol_chl(APP<Dtype>::prune_interval);
@@ -138,7 +135,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             cout << "  prune_ratio: "  << APP<Dtype>::prune_ratio[L] << endl;
         }
         
-    } else if (this->phase_ == TEST && IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX && coremthd_ == "PP") {
+    } else if (this->phase_ == TEST && IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX && APP<Dtype>::prune_coremthd.substr(0, 2) == "PP") {
         if (APP<Dtype>::mask_generate_mechanism == "group-wise") {
             // use the old mask-generating mechanism
             const int num_unit = (APP<Dtype>::prune_unit == "Row") ? num_row : num_col;
@@ -159,9 +156,9 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             // use the new mask-generating mechanism (1)
             Dtype rands[count/10];
             for (int i = 0; i < count; ++i) {
-		if (i % (count/10) == 0) {
-			caffe_rng_uniform(count/10, (Dtype)0, (Dtype)1, rands);
-		}
+        if (i % (count/10) == 0) {
+            caffe_rng_uniform(count/10, (Dtype)0, (Dtype)1, rands);
+        }
                 const int row_index = i / num_col;
                 const int col_index = i % num_col;
                 const bool cond1 = (APP<Dtype>::prune_unit == "Row") ? rands[i%(count/10)] < APP<Dtype>::history_prob[L][row_index]

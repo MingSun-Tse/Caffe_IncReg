@@ -2,7 +2,6 @@
 #include "caffe/filler.hpp"
 #include "caffe/layers/inner_product_layer.hpp"
 #include "caffe/adaptive_probabilistic_pruning.hpp"
-#define SHOW_NUM 20
 
 namespace caffe {
 using namespace std;
@@ -58,10 +57,11 @@ void InnerProductLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     } else if (APP<Dtype>::prune_unit == "Row") {
         num_ = num_row;
     }
-    APP<Dtype>::hscore.push_back( vector<Dtype>(num_, 0) );
-    APP<Dtype>::hrank.push_back( vector<Dtype>(num_, 0) );
-    APP<Dtype>::hhrank.push_back( vector<Dtype>(num_, 0) );
-    APP<Dtype>::history_reg.push_back( vector<Dtype>(num_, 0) );
+    APP<Dtype>::hscore.push_back(vector<Dtype>(num_, 0));
+    APP<Dtype>::hrank.push_back(vector<Dtype>(num_, 0));
+    APP<Dtype>::hhrank.push_back(vector<Dtype>(num_, 0));
+    APP<Dtype>::history_reg.push_back(vector<Dtype>(num_, 0));
+    APP<Dtype>::history_prob.push_back(vector<Dtype>(num_, 1));
 
     // Info shared among layers
     APP<Dtype>::group.push_back(1);
@@ -99,15 +99,12 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
     cout.width(4);  cout << "Mask" << "   ";
     
     // print additional info
-    char* mthd = new char[strlen(APP<Dtype>::prune_coremthd.c_str()) + 1];
-    strcpy(mthd, APP<Dtype>::prune_coremthd.c_str());
-    const string mthd_ = strtok(mthd, "-");
     string info = "Unknown";;
     vector<Dtype> info_data; 
-    if (mthd_ == "Reg") {
+    if (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg") {
         info = "HistoryReg";
         info_data = APP<Dtype>::history_reg[L];
-    } else if (mthd_ == "PP") {
+    } else if (APP<Dtype>::prune_coremthd.substr(0, 2) == "PP") {
         info = "HistoryProb";
         info_data = APP<Dtype>::history_prob[L];
     } else {
@@ -117,7 +114,7 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
     cout.width(info.size()); cout << info << " - " << this->layer_param_.name() << endl;
     
     if (APP<Dtype>::prune_unit == "Row") {
-        const int show_num = SHOW_NUM > num_row ? num_row : SHOW_NUM;
+        const int show_num = APP<Dtype>::show_num_weight > num_row ? num_row : APP<Dtype>::show_num_weight;
         for (int i = 0; i < show_num; ++i) {
             // print Index
             cout.width(3); cout << "r"; 
@@ -136,7 +133,7 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
         }
         
     } else if (APP<Dtype>::prune_unit == "Col") {
-        const int show_num = SHOW_NUM > num_col ? num_col : SHOW_NUM;
+        const int show_num = APP<Dtype>::show_num_weight > num_col ? num_col : APP<Dtype>::show_num_weight;
         for (int j = 0; j < show_num; ++j) {
             // print Index
             cout.width(3); cout << "c"; 
@@ -150,20 +147,18 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
             }
             sum_w /= num_row; /// average abs weight
             sum_d /= num_row; /// average abs diff
-            const Dtype reg_force = APP<Dtype>::history_reg[L][j] * sum_w;
-            char s[50]; sprintf(s, "%7.5f(%7.5f)", sum_d, reg_force);
+            char s[50]; sprintf(s, "%7.5f", sum_d);
             if (mode == 'f') { sprintf(s, "%f", sum_w); }
             cout.width(blob.size()); cout << s << "   ";
             
             // print Mask
             cout.width(4);  cout << APP<Dtype>::masks[L][j] << "   ";
-            
             // print info
             cout.width(info.size());  cout << info_data[j] << endl;
            
         }
     } else if (APP<Dtype>::prune_unit == "Weight") {
-        for (int i = 0; i < SHOW_NUM; ++i) {
+        for (int i = 0; i < APP<Dtype>::show_num_weight; ++i) {
             // print Index
             cout.width(3); cout << "w";
             cout.width(2); cout << i+1 << "   ";
