@@ -82,18 +82,18 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
 
         // Update masks and apply masks
         if (IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
-            if (mthd == "FP_Row" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
+            if (APP<Dtype>::prune_coremthd.substr(0, 2) == "FP" && APP<Dtype>::prune_unit == "Row" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
                 FilterPrune(); 
             } else if (mthd == "PP_Col" && IF_hppf()) {
                 ProbPruneCol(APP<Dtype>::prune_interval);
             } else if (mthd == "PP_Row" && IF_hppf()) {
                 ProbPruneRow(APP<Dtype>::prune_interval);
-            } else if (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg") {
+            } else if (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg" && IF_hppf()) {
                 PruneMinimals();
-            } else if (mthd == "PP-chl_Col" && IF_hppf()) {
+            } else if ((mthd == "PP-chl_Col" || mthd == "PP-chl-linear_Col") && IF_hppf()) { // TODO(mingsuntse): improve prune method name
                 ProbPruneCol_chl(APP<Dtype>::prune_interval);
             } else {
-                LOG(INFO) << "Wrong: unknown prune_method";
+                LOG(FATAL) << "Wrong: unknown prune_method";
                 exit(1);
             }
             UpdatePrunedRatio();
