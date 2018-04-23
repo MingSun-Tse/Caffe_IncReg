@@ -110,6 +110,9 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
     } else if (mthd_ == "PP") {
         info = "HistoryProb";
         info_data = APP<Dtype>::history_prob[L];
+    } else {
+        info = "HistoryReg";
+        info_data = APP<Dtype>::history_reg[L];
     }
     cout.width(info.size()); cout << info << " - " << this->layer_param_.name() << endl;
     

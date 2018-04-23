@@ -427,6 +427,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                                  << "  new reg: "  << new_reg << endl;
                         }
                     }
+                    
                 } else {
                     // scheme 2, the dis-continual function
                     const Dtype kk2 = APP<Dtype>::kk2;
@@ -488,6 +489,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                 cout << layer_name << "  -col: "; for (int rk = 0; rk < num_show; ++rk) { cout << col_score[rk].second << " "; } cout << endl;
                 cout << layer_name << "  -reg: "; for (int rk = 0; rk < num_show; ++rk) { cout << APP<Dtype>::history_reg[L][col_score[rk].second] << " "; } cout << endl;
             }
+            
         }
         #ifdef ShowTimingLog
         cout  << "  after calculate reg term: " << (double)(clock() - t1)/CLOCKS_PER_SEC << "s" << endl;

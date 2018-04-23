@@ -602,25 +602,26 @@ void Solver<Dtype>::Snapshot() {
 template <typename Dtype>
 void Solver<Dtype>::PruneStateShot() {
     map<string, int>::iterator it_m;
+    const string prune_state_dir = param_.snapshot_prefix() + APP<Dtype>::prune_state_dir;
+    if (access(prune_state_dir.c_str(), 0)) {
+        LOG(INFO) << "Prune state dir: `" << prune_state_dir << "` doesn't exist, now make it." << endl;
+        mkdir(prune_state_dir.c_str(), S_IRWXU);
+    }
     for (it_m = APP<Dtype>::layer_index.begin(); it_m != APP<Dtype>::layer_index.end(); ++it_m) {
-        const string prune_state_dir = param_.snapshot_prefix() + APP<Dtype>::prune_state_dir;
-        if (access(prune_state_dir.c_str(), 0)) {
-            LOG(INFO) << "Prune state dir: `" << prune_state_dir << "` doesn't exist, now make it." << endl;
-            mkdir(prune_state_dir.c_str(), S_IRWXU);
-        }
+        if (APP<Dtype>::iter_prune_finished[it_m->second] != INT_MAX) { continue; }
         const string outfile = param_.snapshot_prefix() + APP<Dtype>::prune_state_dir + it_m->first + ".txt";
         ofstream state_stream(outfile.c_str(), ios::out);
         if (!state_stream.is_open()) {
             LOG(INFO) << "Error: cannot open file `" << outfile << "`" << endl;
         } else {
             state_stream << iter_ << "\n";
-            if (APP<Dtype>::prune_coremthd == "SPP") {
+            if (APP<Dtype>::prune_coremthd.substr(0, 2) == "PP") {
                 vector<Dtype> state_punish = APP<Dtype>::history_prob[it_m->second];
                 typename vector<Dtype>::iterator it;
                 for (it = state_punish.begin(); it != state_punish.end(); ++it) {
                     state_stream << *it << " ";
                 }
-            } else if (APP<Dtype>::prune_coremthd.substr(0,3) == "Reg") {
+            } else if (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg") {
                 vector<Dtype> state_score  = APP<Dtype>::hrank[it_m->second];
                 vector<Dtype> state_punish = APP<Dtype>::history_reg[it_m->second];
                 typename vector<Dtype>::iterator it;

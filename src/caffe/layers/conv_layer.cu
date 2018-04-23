@@ -93,6 +93,8 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 ProbPruneRow(APP<Dtype>::prune_interval);
             } else if (coremthd_ == "Reg") {
                 PruneMinimals();
+            } else if (mthd == "PP-chl_Col" && IF_hppf()) {
+                ProbPruneCol_chl(APP<Dtype>::prune_interval);
             } else {
                 LOG(INFO) << "Wrong: unknown prune_method";
                 exit(1);

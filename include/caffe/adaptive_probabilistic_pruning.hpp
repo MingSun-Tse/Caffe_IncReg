@@ -224,8 +224,8 @@ public:
     template<typename Dtype>  string  APP<Dtype>::prune_state_dir = "/PruneStateSnapshot/";
     template<typename Dtype>  string  APP<Dtype>::mask_generate_mechanism = "element-wise";
     
-    template<typename Dtype>  int APP<Dtype>::show_interval = 10;
-    template<typename Dtype>  int APP<Dtype>::show_layer = 10; // The layer index of which the weights will be printed.
+    template<typename Dtype>  int APP<Dtype>::show_interval = 10; 
+    template<typename Dtype>  int APP<Dtype>::show_layer = 3; // The layer index of which the weights will be printed.
     template<typename Dtype>  int APP<Dtype>::show_num_layer = 100;
     template<typename Dtype>  int APP<Dtype>::show_num_weight = 20;
     /// --------------------------------
