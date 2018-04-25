@@ -626,11 +626,15 @@ void ConvolutionLayer<Dtype>::ProbPruneCol_chl(const int& prune_interval) {
         const Dtype kk = APP<Dtype>::kk;
         const Dtype alpha = log(2/kk) / (num_chl_to_prune - APP<Dtype>::num_pruned_col[L] / kernel_spatial_size);
         const Dtype N1 = -log(kk)/alpha;
+        const Dtype k_ = AA / (num_chl_to_prune - APP<Dtype>::num_pruned_col[L] / kernel_spatial_size); /// linear punishment
         
         for (int rk = 0; rk < (num_col - APP<Dtype>::num_pruned_col[L])/kernel_spatial_size; ++rk) {
             const int chl_of_rank_rk = chl_score[rk].second;
             Dtype delta = rk < N1 ? AA * exp(-alpha * rk) : -AA * exp(-alpha * (2*N1-rk)) + 2*kk*AA;
-           
+            if (APP<Dtype>::prune_method == "PP-chl-linear_Col") {
+                delta = AA - k_ * rk; /// linear punishment
+            } 
+            
             const Dtype old_prob = APP<Dtype>::history_prob[L][chl_of_rank_rk * kernel_spatial_size];
             const Dtype new_prob = std::min(std::max(old_prob - delta, Dtype(0)), Dtype(1));
             for (int j = chl_of_rank_rk * kernel_spatial_size; j < (chl_of_rank_rk + 1) * kernel_spatial_size; ++j) {
