@@ -310,14 +310,15 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         const int count   = net_params[param_id]->count();
         const int num_row = net_params[param_id]->shape()[0];
         const int num_col = count / num_row;
-        
         const int num_pruned_col = APP<Dtype>::num_pruned_col[L];
         const int num_col_to_prune_ = ceil(num_col * APP<Dtype>::prune_ratio[L]) - num_pruned_col;
         const int num_col_ = num_col - num_pruned_col;
         assert (num_col_to_prune_ > 0);
+        if (num_col_to_prune_ <= 0) {
+            LOG(FATAL) << "num_col_to_prune_ <= 0";
+            exit(1);
+        }
         const Dtype AA = APP<Dtype>::AA;
-        vector<Dtype> reg_multiplier(count, -1);
-        
         
         if (APP<Dtype>::prune_interval == 0) {
             cout << "Wrong: prune_interval not set, please check" << endl;
@@ -406,13 +407,13 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                 // Punishment Function
                 if (APP<Dtype>::IF_scheme1_when_Reg_rank) {
                     // scheme 1
-                    const Dtype kk = APP<Dtype>::kk;
-                    const Dtype alpha = log(2/kk) / (num_col_to_prune_ + 1);
+                    const Dtype kk = APP<Dtype>::kk; // $mu$ in the paper
+                    const Dtype alpha = log(2/kk) / num_col_to_prune_;
                     const Dtype N1 = -log(kk)/alpha; // symmetry point
                     
                     for (int j = 0; j < num_col_; ++j) { // j: rank 
                         const int col_of_rank_j = col_hrank[j + num_pruned_col].second; // Note the real rank is j + num_pruned_col
-                        const Dtype Delta = j < N1 ? AA * exp(-alpha * j) : -AA * exp(-alpha * (2*N1-j)) + 2*kk*AA;
+                        const Dtype Delta = j < N1 ? AA * exp(-alpha * j) : 2*kk*AA - AA * exp(-alpha * (2 * N1 - j));
                         const Dtype old_reg = APP<Dtype>::history_reg[L][col_of_rank_j];
                         const Dtype new_reg = std::max(old_reg + Delta, Dtype(0));
                         APP<Dtype>::history_reg[L][col_of_rank_j] = new_reg;
