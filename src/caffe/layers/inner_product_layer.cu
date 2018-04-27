@@ -188,11 +188,11 @@ void InnerProductLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
             Print(L, 'b');
         }
         
-        const int count = this->blobs_[0]->count();
-        Dtype* muweight_diff = this->blobs_[0]->mutable_cpu_diff();
-        for (int i = 0; i < count; ++i) {
-            muweight_diff[i] *= APP<Dtype>::masks[L][i];
-        }
+        // Apply masks
+        caffe_gpu_mul(this->blobs_[0]->count(), 
+                      this->blobs_[0]->gpu_diff(),
+                      this->masks_[0]->gpu_data(),
+                      this->blobs_[0]->mutable_gpu_diff());
     }
     // -------------------------------------------------
     

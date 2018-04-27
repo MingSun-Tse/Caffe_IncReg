@@ -130,12 +130,14 @@ void SGDSolver<Dtype>::ApplyUpdate() {
   cout << "  after ClipGradients: " << (double)(clock() - t1) / CLOCKS_PER_SEC << endl;
   #endif
   
+  /*
   if (*max_element(APP<Dtype>::pruned_ratio.begin(), APP<Dtype>::pruned_ratio.end()) > 0 && APP<Dtype>::step_ % APP<Dtype>::clear_history_interval == 0) {  
     ClearHistory(); // There is no need to ClearHistory each iteration.
   }
   #ifdef ShowTimingLog
   cout << "  after ClearHistory: " << (double)(clock() - t1) / CLOCKS_PER_SEC << endl;
   #endif
+  */
   
   for (int param_id = 0; param_id < this->net_->learnable_params().size();
        ++param_id) {
