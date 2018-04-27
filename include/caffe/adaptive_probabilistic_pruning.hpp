@@ -225,9 +225,9 @@ public:
     template<typename Dtype>  string  APP<Dtype>::mask_generate_mechanism = "group-wise";
     
     template<typename Dtype>  int APP<Dtype>::show_interval = 10; 
-    template<typename Dtype>  int APP<Dtype>::show_layer = 0; // The layer index of which the weights will be printed.
+    template<typename Dtype>  int APP<Dtype>::show_layer = 2; // The layer index of which the weights will be printed.
     template<typename Dtype>  int APP<Dtype>::show_num_layer = 100;
-    template<typename Dtype>  int APP<Dtype>::show_num_weight = 40;
+    template<typename Dtype>  int APP<Dtype>::show_num_weight = 20;
     /// --------------------------------
 
     // use window proposal or score decay ----- legacy

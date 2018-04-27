@@ -76,7 +76,7 @@ class Layer {
   }
 
 
-  // added by WANGHUAN
+  // added by mingsuntse
   void kmeans_cluster(vector<int> &cLabel, vector<Dtype> &cCentro, Dtype *cWeights, int nWeights, \
     vector<bool> &mask, int nCluster,  int max_iter);
 
@@ -84,13 +84,8 @@ class Layer {
   // 这个虚函数是必要的，因为只有卷积和FC层需要pruning，但是net.cpp中接口都是layers_，所以如果只能在这一层就定义好，然后在卷积和FC层具体实现
   // 其他例如loss、pool层就不实现
   virtual void ComputeBlobMask() {}
-  virtual void just_test() {}
   
-  // added by WANGHUAN
-  vector<bool> masks_;
-  Blob<Dtype> blobmasks;
-  vector<int> indices_;
-  vector<Dtype> centroids_;
+  // added by mingsuntse
   int num_pruned_col;
   int num_pruned_row;
   int num_pruned_weight;
@@ -107,10 +102,8 @@ class Layer {
   vector<bool> IF_col_pruned;
   vector<bool> IF_row_pruned;
   
-  vector<int> random_col_perm;
   vector<Dtype> history_diff;
-  //const string get_layer_name() { return layer_param_.name(); }
-  
+
 
   /**
    * @brief Does layer-specific setup: your layer should implement this function
@@ -372,6 +365,7 @@ class Layer {
   Phase phase_;
   /** The vector that stores the learnable parameters as a set of blobs. */
   vector<shared_ptr<Blob<Dtype> > > blobs_;
+  vector<shared_ptr<Blob<Dtype> > > masks_; // @mingsuntse: for pruning
   /** Vector indicating whether to compute the diff of each param blob. */
   vector<bool> param_propagate_down_;
 

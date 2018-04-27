@@ -128,6 +128,15 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                  << "  prune_ratio: " << APP<Dtype>::prune_ratio[L] << endl;
         }
         
+        // Apply masks
+        bool IF_masks_updated = true;
+        if (IF_masks_updated) {
+            caffe_gpu_mul(count, 
+                          this->blobs_[0]->gpu_data(),
+                          this->masks_[0]->gpu_data(),
+                          this->blobs_[0]->mutable_gpu_data());
+        }
+        
     } else if (this->phase_ == TEST) {
         
     }

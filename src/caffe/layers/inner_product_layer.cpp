@@ -344,8 +344,10 @@ void InnerProductLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   } else {
     if (bias_term_) {
       this->blobs_.resize(2);
+      this->masks_.resize(2);
     } else {
       this->blobs_.resize(1);
+      this->masks_.resize(1);
     }
     // Initialize the weights
     vector<int> weight_shape(2);
@@ -357,6 +359,8 @@ void InnerProductLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       weight_shape[1] = K_;
     }
     this->blobs_[0].reset(new Blob<Dtype>(weight_shape));
+    this->masks_[0].reset(new Blob<Dtype>(weight_shape)); // @mingsuntse: added for pruning
+    
     // fill the weights
     shared_ptr<Filler<Dtype> > weight_filler(GetFiller<Dtype>(
         this->layer_param_.inner_product_param().weight_filler()));
@@ -365,14 +369,25 @@ void InnerProductLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     if (bias_term_) {
       vector<int> bias_shape(1, N_);
       this->blobs_[1].reset(new Blob<Dtype>(bias_shape));
+      this->masks_[1].reset(new Blob<Dtype>(bias_shape));
       shared_ptr<Filler<Dtype> > bias_filler(GetFiller<Dtype>(
           this->layer_param_.inner_product_param().bias_filler()));
       bias_filler->Fill(this->blobs_[1].get());
     }
+    
+    // @mingsuntse: initialize masks
+    caffe_set(this->masks_[0]->count(),
+              (Dtype) 1,
+              this->masks_[0]->mutable_cpu_data());
+    
+    caffe_set(this->masks_[1]->count(),
+              (Dtype) 1,
+              this->masks_[1]->mutable_cpu_data());
+    
   }  // parameter initialization
   this->param_propagate_down_.resize(this->blobs_.size(), true);
   
-  // Added by WANGHUAN for pruning
+  // @mingsuntse: for pruning
   PruneSetUp(this->layer_param_.prune_param());
   
 }
