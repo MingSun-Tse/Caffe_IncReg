@@ -191,10 +191,11 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     caffe_set(this->masks_[0]->count(),
               (Dtype) 1,
               this->masks_[0]->mutable_cpu_data());
-    
-    caffe_set(this->masks_[1]->count(),
-              (Dtype) 1,
-              this->masks_[1]->mutable_cpu_data()); // TODO(mingsuntse): replace this with GPU set
+    if (bias_term_) {
+        caffe_set(this->masks_[1]->count(),
+                  (Dtype) 1,
+                  this->masks_[1]->mutable_cpu_data()); // TODO(mingsuntse): replace this with GPU set
+    }
   }
   kernel_dim_ = this->blobs_[0]->count(1); 
   weight_offset_ = conv_out_channels_ * kernel_dim_ / group_;
