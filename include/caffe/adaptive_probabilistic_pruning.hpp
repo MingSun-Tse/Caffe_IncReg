@@ -6,7 +6,7 @@
 #include <map>
 #define NUM_OF_WEIGHT_BUCKET 2
 #define RATIO 0.5
-#define ShowTimingLog 1
+//#define ShowTimingLog 1
 
 namespace caffe {
 using namespace std;

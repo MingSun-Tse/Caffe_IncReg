@@ -93,7 +93,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 ProbPruneCol(APP<Dtype>::prune_interval);
             } else if (mthd == "PP_Row" && IF_hppf()) {
                 ProbPruneRow(APP<Dtype>::prune_interval);
-            } else if (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg" && IF_hppf() &&  (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
+            } else if (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg" && IF_hppf() && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
                 PruneMinimals();
             } else if ((mthd == "PP-chl_Col" || mthd == "PP-chl-linear_Col") && IF_hppf()) { // TODO(mingsuntse): improve prune method name
                 ProbPruneCol_chl(APP<Dtype>::prune_interval);
