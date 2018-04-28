@@ -301,7 +301,6 @@ void Solver<Dtype>::Step(int iters) {
         APP<Dtype>::IF_speedup_achieved = GFLOPs_origin/GFLOPs_left >= APP<Dtype>::speedup;
     }
     
-    
     Dtype num_param_left   = 0;
     Dtype num_param_origin = 0;
     const int num_layer_begin = APP<Dtype>::IF_compr_count_conv ? 0 : APP<Dtype>::conv_layer_cnt;
@@ -323,12 +322,17 @@ void Solver<Dtype>::Step(int iters) {
          << "  Total num_param_origin: " << num_param_origin << endl;
     /// ----------------------------------------------------------------------
     
+    // Speed check
+    cout << "--- Solver begins timing" << endl;
+    clock_t t1 = clock();
+    
     APP<Dtype>::inner_iter = 0;
     for (int i = 0; i < param_.iter_size(); ++i) {
       loss += net_->ForwardBackward();
       ++ APP<Dtype>::inner_iter; /// WANGHUAN
     }
-
+    cout << "--- after ForwardBackward: " << (double)(clock() - t1) / CLOCKS_PER_SEC << endl;
+    
     loss /= param_.iter_size();
     // average the loss across iterations for smoothed reporting
     UpdateSmoothedLoss(loss, start_iter, average_loss);
@@ -376,6 +380,7 @@ void Solver<Dtype>::Step(int iters) {
     }
     
     ApplyUpdate(); /// Virtual Function
+    cout << "--- after ApplyUpdate: " << (double)(clock() - t1) / CLOCKS_PER_SEC << endl;
 
     // Increment the internal iter_ counter -- its value should always indicate
     // the number of times the weights have been updated.

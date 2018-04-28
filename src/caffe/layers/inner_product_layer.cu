@@ -14,6 +14,11 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   
     // ------------------------------------------------
     // Added by WANGHUAN for pruning
+    #ifdef ShowTimingLog
+    clock_t t1 = clock();
+    cout << this->layer_param_.name() << ": forward GPU begins timing" << endl;
+    #endif
+    
     Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
     const int count = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
@@ -88,7 +93,7 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         
         // Update masks
         if (IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
-            if (coremthd_ == "Reg") {
+            if (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
                 PruneMinimals();
             }
             UpdatePrunedRatio();
@@ -96,6 +101,9 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 APP<Dtype>::pruned_rows.clear();
             }
         }
+        #ifdef ShowTimingLog
+        cout << "  after updating masks: " << (double)(clock() - t1) / CLOCKS_PER_SEC << endl;
+        #endif
         
         // Print weight magnitude
         if (APP<Dtype>::num_log > 0) {
@@ -121,6 +129,7 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 cout << endl;
             }
         }
+        
         // Summary print
         if (mthd != "None" && L < APP<Dtype>::show_num_layer) {
                cout << layer_name << "  IF_prune: " << IF_prune 
@@ -129,13 +138,16 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
         
         // Apply masks
-        bool IF_masks_updated = true;
-        if (IF_masks_updated) {
+        if (this->IF_masks_updated) {
             caffe_gpu_mul(count, 
                           this->blobs_[0]->gpu_data(),
                           this->masks_[0]->gpu_data(),
                           this->blobs_[0]->mutable_gpu_data());
+            this->IF_masks_updated = false;
         }
+        #ifdef ShowTimingLog
+        cout << "  after applying masks: " << (double)(clock() - t1) / CLOCKS_PER_SEC << endl;
+        #endif
         
     } else if (this->phase_ == TEST) {
         
@@ -182,13 +194,13 @@ void InnerProductLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     }
     // -------------------------------------------------
     const int L = APP<Dtype>::layer_index[this->layer_param_.name()];
+    // Print
+    if (L == APP<Dtype>::show_layer && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0 && APP<Dtype>::inner_iter == 0) {
+        Print(L, 'b');
+    }
+    
+    // Apply masks
     if (APP<Dtype>::prune_method != "None" && APP<Dtype>::pruned_ratio[L] > 0) {
-        // Print
-        if (L == APP<Dtype>::show_layer && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0 && APP<Dtype>::inner_iter == 0) {
-            Print(L, 'b');
-        }
-        
-        // Apply masks
         caffe_gpu_mul(this->blobs_[0]->count(), 
                       this->blobs_[0]->gpu_diff(),
                       this->masks_[0]->gpu_data(),

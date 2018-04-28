@@ -116,7 +116,7 @@ void SGDSolver<Dtype>::ClipGradients() {
 template <typename Dtype>
 void SGDSolver<Dtype>::ApplyUpdate() {
   #ifdef ShowTimingLog
-  cout << "ApplyUpdate start timing" << endl;
+  cout << "ApplyUpdate begins timing" << endl;
   clock_t t1 = clock();
   #endif
     

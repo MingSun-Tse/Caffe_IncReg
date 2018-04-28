@@ -165,29 +165,43 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   } else {
     if (bias_term_) {
       this->blobs_.resize(2);
-    } else {
+      this->masks_.resize(2);
+      } else {
       this->blobs_.resize(1);
+      this->masks_.resize(1);
     }
     // Initialize and fill the weights:
     // output channels x input channels per-group x kernel height x kernel width
     this->blobs_[0].reset(new Blob<Dtype>(weight_shape));
+    this->masks_[0].reset(new Blob<Dtype>(weight_shape));
+    
     shared_ptr<Filler<Dtype> > weight_filler(GetFiller<Dtype>(
         this->layer_param_.convolution_param().weight_filler()));
     weight_filler->Fill(this->blobs_[0].get());
     // If necessary, initialize and fill the biases.
     if (bias_term_) {
       this->blobs_[1].reset(new Blob<Dtype>(bias_shape));
+      this->masks_[1].reset(new Blob<Dtype>(bias_shape));
       shared_ptr<Filler<Dtype> > bias_filler(GetFiller<Dtype>(
           this->layer_param_.convolution_param().bias_filler()));
       bias_filler->Fill(this->blobs_[1].get());
     }
+    
+    /// @mingsuntse: initialize masks
+    caffe_set(this->masks_[0]->count(),
+              (Dtype) 1,
+              this->masks_[0]->mutable_cpu_data());
+    
+    caffe_set(this->masks_[1]->count(),
+              (Dtype) 1,
+              this->masks_[1]->mutable_cpu_data()); // TODO(mingsuntse): replace this with GPU set
   }
   kernel_dim_ = this->blobs_[0]->count(1); 
   weight_offset_ = conv_out_channels_ * kernel_dim_ / group_;
   // Propagate gradients to the parameters (as directed by backward pass).
   this->param_propagate_down_.resize(this->blobs_.size(), true);
   
-  /// WANGHUAN
+  /// @mingsuntse: for pruning
   this->PruneSetUp(this->layer_param_.prune_param());
   
 }

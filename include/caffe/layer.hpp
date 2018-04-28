@@ -96,6 +96,7 @@ class Layer {
   Dtype delta;
   bool IF_restore;
   bool IF_prune;
+  bool IF_masks_updated;
   vector<Dtype> history_score;
 
   vector<Dtype> weight_backup;

@@ -230,11 +230,20 @@ void InnerProductLayer<Dtype>::UpdatePrunedRatio() {
     }
     APP<Dtype>::pruned_ratio_col[L] = APP<Dtype>::num_pruned_col[L] / num_col;
     APP<Dtype>::pruned_ratio_row[L] = APP<Dtype>::num_pruned_row[L] * 1.0 / num_row;
+    
     if (APP<Dtype>::prune_unit == "Weight") {
-        APP<Dtype>::pruned_ratio[L] = APP<Dtype>::num_pruned_weight[L] * 1.0 / count;
+        const Dtype new_pruned_ratio = APP<Dtype>::num_pruned_weight[L] * 1.0 / count;
+        if (new_pruned_ratio > APP<Dtype>::pruned_ratio[L]) {
+            this->IF_masks_updated = true;
+            APP<Dtype>::pruned_ratio[L] = new_pruned_ratio;
+        }
     } else {
-        APP<Dtype>::pruned_ratio[L] =  (APP<Dtype>::pruned_ratio_col[L] + APP<Dtype>::pruned_ratio_row[L]) 
-                               - APP<Dtype>::pruned_ratio_col[L] * APP<Dtype>::pruned_ratio_row[L];
+        const Dtype new_pruned_ratio = (APP<Dtype>::pruned_ratio_col[L] + APP<Dtype>::pruned_ratio_row[L]) 
+                                      - APP<Dtype>::pruned_ratio_col[L] * APP<Dtype>::pruned_ratio_row[L];
+        if (new_pruned_ratio > APP<Dtype>::pruned_ratio[L]) {
+            this->IF_masks_updated = true;
+            APP<Dtype>::pruned_ratio[L] = new_pruned_ratio;
+        }
     }
 }
 
@@ -375,7 +384,7 @@ void InnerProductLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       bias_filler->Fill(this->blobs_[1].get());
     }
     
-    // @mingsuntse: initialize masks
+    /// @mingsuntse: initialize masks
     caffe_set(this->masks_[0]->count(),
               (Dtype) 1,
               this->masks_[0]->mutable_cpu_data());
@@ -387,7 +396,7 @@ void InnerProductLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   }  // parameter initialization
   this->param_propagate_down_.resize(this->blobs_.size(), true);
   
-  // @mingsuntse: for pruning
+  /// @mingsuntse: for pruning
   PruneSetUp(this->layer_param_.prune_param());
   
 }

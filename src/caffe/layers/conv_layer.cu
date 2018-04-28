@@ -10,6 +10,11 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
           
     /// ADDED BY WANGHUAN -----------------------------------
+    #ifdef ShowTimingLog
+    clock_t t1 = clock();
+    cout << this->layer_param_.name() << ": forward GPU begins timing" << endl;
+    #endif
+    
     Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
     const int count = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
@@ -80,7 +85,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             Print(L, 'f');
         }
 
-        // Update masks and apply masks
+        // Update masks
         if (IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
             if (APP<Dtype>::prune_coremthd.substr(0, 2) == "FP" && APP<Dtype>::prune_unit == "Row" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
                 FilterPrune(); 
@@ -88,7 +93,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 ProbPruneCol(APP<Dtype>::prune_interval);
             } else if (mthd == "PP_Row" && IF_hppf()) {
                 ProbPruneRow(APP<Dtype>::prune_interval);
-            } else if (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg" && IF_hppf()) {
+            } else if (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg" && IF_hppf() &&  (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
                 PruneMinimals();
             } else if ((mthd == "PP-chl_Col" || mthd == "PP-chl-linear_Col") && IF_hppf()) { // TODO(mingsuntse): improve prune method name
                 ProbPruneCol_chl(APP<Dtype>::prune_interval);
@@ -101,6 +106,9 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 APP<Dtype>::pruned_rows.clear();
             }
         }
+        #ifdef ShowTimingLog
+        cout << "  after updating masks: " << (double)(clock() - t1) / CLOCKS_PER_SEC << endl;
+        #endif
         
         // Print weight magnitude
     if (APP<Dtype>::num_log > 0) {
@@ -134,6 +142,18 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                  << "  pruned_ratio_col: " << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << "(" << APP<Dtype>::num_pruned_col[L] << ")";
             cout << "  prune_ratio: "  << APP<Dtype>::prune_ratio[L] << endl;
         }
+        
+        // Apply masks
+        if (this->IF_masks_updated) {
+            caffe_gpu_mul(count, 
+                          this->blobs_[0]->gpu_data(),
+                          this->masks_[0]->gpu_data(),
+                          this->blobs_[0]->mutable_gpu_data());
+            this->IF_masks_updated = false;
+        }
+        #ifdef ShowTimingLog
+        cout << "  after updating masks: " << (double)(clock() - t1) / CLOCKS_PER_SEC << endl;
+        #endif
         
     } else if (this->phase_ == TEST && IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX && APP<Dtype>::prune_coremthd.substr(0, 2) == "PP") {
         if (APP<Dtype>::mask_generate_mechanism == "group-wise") {
@@ -363,22 +383,10 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     }
     
     if (APP<Dtype>::prune_method != "None" && APP<Dtype>::pruned_ratio[L] > 0) { 
-        for (int j = 0; j < count; ++j) { 
-            muweight_diff[j] *= APP<Dtype>::masks[L][j]; 
-        }
-        
-        // Trying: update this to GPU code
-        /* 
         caffe_gpu_mul(this->blobs_[0]->count(), 
                       this->blobs_[0]->gpu_diff(), 
-                      &(APP<Dtype>::masks[L][0]), 
+                      this->masks_[0]->gpu_data(), 
                       this->blobs_[0]->mutable_gpu_diff());
-        
-        cout << this->layer_param_.name() << " - weight_diff:" << endl;
-        for (int j = 0; j < 20;  ++j) {
-            cout << muweight_diff[j] << endl;
-        }
-        */
     }
 /// ------------------------------------------------------------- 
   

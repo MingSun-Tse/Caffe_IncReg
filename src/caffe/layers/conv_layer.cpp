@@ -285,11 +285,20 @@ void ConvolutionLayer<Dtype>::UpdatePrunedRatio() {
     }
     APP<Dtype>::pruned_ratio_col[L] = APP<Dtype>::num_pruned_col[L] / num_col;
     APP<Dtype>::pruned_ratio_row[L] = APP<Dtype>::num_pruned_row[L] * 1.0 / num_row;
+    
     if (APP<Dtype>::prune_unit == "Weight") {
-        APP<Dtype>::pruned_ratio[L] = APP<Dtype>::num_pruned_weight[L] * 1.0 / count;
+        const Dtype new_pruned_ratio = APP<Dtype>::num_pruned_weight[L] * 1.0 / count;
+        if (new_pruned_ratio > APP<Dtype>::pruned_ratio[L]) {
+            this->IF_masks_updated = true;
+            APP<Dtype>::pruned_ratio[L] = new_pruned_ratio;
+        }
     } else {
-        APP<Dtype>::pruned_ratio[L] =  (APP<Dtype>::pruned_ratio_col[L] + APP<Dtype>::pruned_ratio_row[L]) 
-                               - APP<Dtype>::pruned_ratio_col[L] * APP<Dtype>::pruned_ratio_row[L];
+        const Dtype new_pruned_ratio = (APP<Dtype>::pruned_ratio_col[L] + APP<Dtype>::pruned_ratio_row[L]) 
+                                      - APP<Dtype>::pruned_ratio_col[L] * APP<Dtype>::pruned_ratio_row[L];
+        if (new_pruned_ratio > APP<Dtype>::pruned_ratio[L]) {
+            this->IF_masks_updated = true;
+            APP<Dtype>::pruned_ratio[L] = new_pruned_ratio;
+        }
     }
 }
 
@@ -1018,8 +1027,10 @@ void ConvolutionLayer<Dtype>::PruneMinimals() {
         for (int i = 0; i < count; ++i) {
             if (APP<Dtype>::IF_weight_pruned[L][i]) { continue; }
             if (fabs(muweight[i]) < APP<Dtype>::prune_threshold || APP<Dtype>::history_reg[L][i] >= APP<Dtype>::target_reg) {
-                muweight[i] = 0;
-                APP<Dtype>::masks[L][i] = 0;
+                // muweight[i] = 0;
+                // APP<Dtype>::masks[L][i] = 0;
+                this->masks_[0]->mutable_cpu_data()[i] = 0;
+                
                 APP<Dtype>::num_pruned_weight[L] += 1;
                 APP<Dtype>::IF_weight_pruned[L][i] = true;
                 APP<Dtype>::hrank[L][i]  = APP<Dtype>::step_ - 1000000 - (APP<Dtype>::history_reg[L][i] - APP<Dtype>::target_reg);
@@ -1037,8 +1048,9 @@ void ConvolutionLayer<Dtype>::PruneMinimals() {
             sum /= num_row;
             if (sum < APP<Dtype>::prune_threshold ||  APP<Dtype>::history_reg[L][j] >= APP<Dtype>::target_reg) {
                 for (int i = 0; i < num_row; ++i) {
-                    muweight[i * num_col + j] = 0;
-                    APP<Dtype>::masks[L][i * num_col + j] = 0; 
+                    // muweight[i * num_col + j] = 0;
+                    // APP<Dtype>::masks[L][i * num_col + j] = 0;
+                    this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
                 }
                 APP<Dtype>::num_pruned_col[L] += 1;
                 for (int g = 0; g < group; ++g) {
@@ -1057,8 +1069,9 @@ void ConvolutionLayer<Dtype>::PruneMinimals() {
             sum /= num_col;
             if (sum < APP<Dtype>::prune_threshold ||  APP<Dtype>::history_reg[L][i] >= APP<Dtype>::target_reg) {
                 for (int j = 0; j < num_col; ++j) {
-                    muweight[i * num_col + j] = 0;
-                    APP<Dtype>::masks[L][i * num_col + j] = 0; 
+                    // muweight[i * num_col + j] = 0;
+                    // APP<Dtype>::masks[L][i * num_col + j] = 0;
+                    this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
                 }
                 ++ APP<Dtype>::num_pruned_row[L];
                 APP<Dtype>::IF_row_pruned[L][i] = true;
