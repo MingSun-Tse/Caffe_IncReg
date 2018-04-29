@@ -178,19 +178,6 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
     }
 }
 
-template <typename Dtype>
-void InnerProductLayer<Dtype>::IF_alpf() {
-    /** IF_all_layer_prune_finished
-    */
-    APP<Dtype>::IF_alpf = true;
-    for (int i = 0; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
-        if (APP<Dtype>::iter_prune_finished[i] == INT_MAX) {
-            APP<Dtype>::IF_alpf = false;
-            break;
-        }
-    }
-}
-
 template <typename Dtype> 
 void InnerProductLayer<Dtype>::UpdatePrunedRatio() {
     const int L = APP<Dtype>::layer_index[this->layer_param_.name()];

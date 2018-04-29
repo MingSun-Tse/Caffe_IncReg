@@ -84,6 +84,7 @@ class Layer {
   // 这个虚函数是必要的，因为只有卷积和FC层需要pruning，但是net.cpp中接口都是layers_，所以如果只能在这一层就定义好，然后在卷积和FC层具体实现
   // 其他例如loss、pool层就不实现
   virtual void ComputeBlobMask() {}
+  void IF_prune_finished();
   
   // added by mingsuntse
   int num_pruned_col;

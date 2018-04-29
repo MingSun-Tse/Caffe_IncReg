@@ -51,38 +51,7 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                     UpdateNumPrunedCol();
                 }
                 UpdatePrunedRatio();
-            }
-            
-            // check if prune finished, get into here ONLY once
-            if (APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
-                Dtype pruned_ratio;
-                if (APP<Dtype>::prune_unit == "Weight")   { pruned_ratio = APP<Dtype>::pruned_ratio[L];     }
-                else if (APP<Dtype>::prune_unit == "Row") { pruned_ratio = APP<Dtype>::pruned_ratio_row[L]; }
-                else if (APP<Dtype>::prune_unit == "Col") { pruned_ratio = APP<Dtype>::pruned_ratio_col[L]; }
-                const bool layer_finish     = pruned_ratio >= APP<Dtype>::prune_ratio[L]; /// layer pruning target achieved
-                const bool net_finish_speed = APP<Dtype>::IF_speedup_achieved;   /// net pruning target of speed achieved
-                const bool net_finish_param = APP<Dtype>::IF_compRatio_achieved; /// net pruning target of compression achieved
-                
-                if (layer_finish || net_finish_speed || net_finish_param) {
-                    APP<Dtype>::iter_prune_finished[L] = APP<Dtype>::step_ - 1;
-
-                    // print to log
-                    char rlayer[10];
-                    char rrow[10];
-                    char rcol[10];
-                    sprintf(rlayer, "%6.4f", APP<Dtype>::pruned_ratio[L]);
-                    sprintf(rrow,   "%6.4f", APP<Dtype>::pruned_ratio_row[L]);
-                    sprintf(rcol,   "%6.4f", APP<Dtype>::pruned_ratio_col[L]);
-                    cout << layer_name << " prune finished!" 
-                         << "  step: " << APP<Dtype>::step_
-                         << "  net speedup: " << APP<Dtype>::speedup
-                         << "  net compRatio: " << APP<Dtype>::compRatio
-                         << "  pruned_ratio: " << rlayer
-                         << "  pruned_ratio_row: " << rrow
-                         << "  pruned_ratio_col: " << rcol 
-                         << "  prune_ratio: " << APP<Dtype>::prune_ratio[L] << endl;
-                    IF_alpf();
-                }
+                this->IF_prune_finished();
             }
         }
         
@@ -97,6 +66,7 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 PruneMinimals();
             }
             UpdatePrunedRatio();
+            this->IF_prune_finished();
             if (L == APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt - 1) { // To avoid the first conv from updating col
                 APP<Dtype>::pruned_rows.clear();
             }

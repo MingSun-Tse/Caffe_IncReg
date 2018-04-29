@@ -92,7 +92,6 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
   virtual void UpdateNumPrunedRow(); 
   virtual void UpdateNumPrunedCol(); 
   virtual void UpdatePrunedRatio();
-  virtual void IF_alpf();
   virtual bool IF_hppf();
   virtual void Print(const int& L, char mode);
   virtual void PruneSetUp(const PruneParameter& prune_param);

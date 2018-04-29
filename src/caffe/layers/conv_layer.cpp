@@ -110,19 +110,6 @@ bool ConvolutionLayer<Dtype>::IF_hppf() {
 }
 
 
-template <typename Dtype>
-void ConvolutionLayer<Dtype>::IF_alpf() {
-    /** IF_all_layer_prune_finished
-    */
-    APP<Dtype>::IF_alpf = true;
-    for (int i = 0; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
-        if (APP<Dtype>::iter_prune_finished[i] == INT_MAX) {
-            APP<Dtype>::IF_alpf = false;
-            break;
-        }
-    }
-}
-
 
 template <typename Dtype> 
 void ConvolutionLayer<Dtype>::Print(const int& L, char mode) {

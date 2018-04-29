@@ -315,7 +315,6 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         const int num_pruned_col = APP<Dtype>::num_pruned_col[L];
         const int num_col_to_prune_ = ceil(num_col * APP<Dtype>::prune_ratio[L]) - num_pruned_col;
         const int num_col_ = num_col - num_pruned_col;
-        assert (num_col_to_prune_ > 0);
         if (num_col_to_prune_ <= 0) {
             LOG(FATAL) << "num_col_to_prune_ <= 0";
             exit(1);

@@ -1,6 +1,7 @@
 #include <boost/thread.hpp>
 #include <boost/thread.hpp>
 #include "caffe/layer.hpp"
+#include "caffe/adaptive_probabilistic_pruning.hpp"
 
 
 namespace caffe {
@@ -98,6 +99,50 @@ void Layer<Dtype>::kmeans_cluster(vector<int> &cLabel, vector<Dtype> &cCentro, D
   delete[] ptrC; delete[] ptrS;
 }
 
+template<typename Dtype>
+void Layer<Dtype>::IF_prune_finished() {
+    const string layer_name = this->layer_param_.name();
+    if (APP<Dtype>::layer_index.count(layer_name) != 0) {
+        const int L = APP<Dtype>::layer_index[layer_name];
+        if (APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
+            Dtype pruned_ratio = 0;
+            if (APP<Dtype>::prune_unit == "Weight")   { pruned_ratio = APP<Dtype>::pruned_ratio[L];     }
+            else if (APP<Dtype>::prune_unit == "Row") { pruned_ratio = APP<Dtype>::pruned_ratio_row[L]; }
+            else if (APP<Dtype>::prune_unit == "Col") { pruned_ratio = APP<Dtype>::pruned_ratio_col[L]; }
+            const bool layer_finish     = pruned_ratio >= APP<Dtype>::prune_ratio[L]; /// layer pruning target achieved
+            const bool net_finish_speed = APP<Dtype>::IF_speedup_achieved;   /// net pruning target of speed achieved
+            const bool net_finish_param = APP<Dtype>::IF_compRatio_achieved; /// net pruning target of compression achieved
+            
+            if (layer_finish || net_finish_speed || net_finish_param) {
+                APP<Dtype>::iter_prune_finished[L] = APP<Dtype>::step_ - 1;
+                // if (APP<Dtype>::prune_coremthd.substr(0, 2) == "PP") { CleanWorkForPP(); } // last time, do some clean work
+                
+                // print when finished
+                char rlayer[10], rrow[10], rcol[10];
+                sprintf(rlayer, "%6.4f", APP<Dtype>::pruned_ratio[L]);
+                sprintf(rrow,   "%6.4f", APP<Dtype>::pruned_ratio_row[L]);
+                sprintf(rcol,   "%6.4f", APP<Dtype>::pruned_ratio_col[L]);
+                std::cout << layer_name << " prune finished!" 
+                     << "  step: " << APP<Dtype>::step_
+                     << "  net speedup: " << APP<Dtype>::speedup
+                     << "  net compRatio: " << APP<Dtype>::compRatio
+                     << "  pruned_ratio: " << rlayer
+                     << "  pruned_ratio_row: " << rrow
+                     << "  pruned_ratio_col: " << rcol 
+                     << "  prune_ratio: " << APP<Dtype>::prune_ratio[L] << std::endl;
+                
+                // IF_all_layer_prune_finished
+                APP<Dtype>::IF_alpf = true;
+                for (int i = 0; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
+                    if (APP<Dtype>::iter_prune_finished[i] == INT_MAX) {
+                        APP<Dtype>::IF_alpf = false;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
 
   INSTANTIATE_CLASS(Layer);
 
