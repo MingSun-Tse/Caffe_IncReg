@@ -373,13 +373,14 @@ void InnerProductLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     }
     
     /// @mingsuntse: initialize masks
-    caffe_set(this->masks_[0]->count(),
-              (Dtype) 1,
-              this->masks_[0]->mutable_cpu_data());
-    
-    caffe_set(this->masks_[1]->count(),
-              (Dtype) 1,
-              this->masks_[1]->mutable_cpu_data());
+    caffe_gpu_set(this->masks_[0]->count(),
+                  static_cast<Dtype>(1),
+                  this->masks_[0]->mutable_gpu_data());
+    if (bias_term_) {
+        caffe_gpu_set(this->masks_[1]->count(),
+                      static_cast<Dtype>(1),
+                      this->masks_[1]->mutable_gpu_data());
+    }
     
   }  // parameter initialization
   this->param_propagate_down_.resize(this->blobs_.size(), true);

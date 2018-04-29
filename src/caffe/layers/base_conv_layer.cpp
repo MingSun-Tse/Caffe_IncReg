@@ -188,13 +188,13 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     }
     
     /// @mingsuntse: initialize masks
-    caffe_set(this->masks_[0]->count(),
-              (Dtype) 1,
-              this->masks_[0]->mutable_cpu_data());
+    caffe_gpu_set(this->masks_[0]->count(),
+                  static_cast<Dtype>(1),
+                  this->masks_[0]->mutable_gpu_data());
     if (bias_term_) {
-        caffe_set(this->masks_[1]->count(),
-                  (Dtype) 1,
-                  this->masks_[1]->mutable_cpu_data()); // TODO(mingsuntse): replace this with GPU set
+        caffe_gpu_set(this->masks_[1]->count(),
+                      static_cast<Dtype>(1),
+                      this->masks_[1]->mutable_gpu_data());
     }
   }
   kernel_dim_ = this->blobs_[0]->count(1); 
