@@ -23,8 +23,7 @@ class SGDSolver : public Solver<Dtype> {
 
   const vector<shared_ptr<Blob<Dtype> > >& history() { return history_; }
   bool Comparator(const std::pair<Dtype, int>& left, const std::pair<Dtype, int>& right);
-  void ClearHistory(int param_id); // WANGHUAN
-  void ClearHistory(); // WANGHUAN
+  void ClearHistory(const int& param_id); // WANGHUAN
   int GetLayerIndex(const int& param_id); // WANGHUAN
 
  protected:

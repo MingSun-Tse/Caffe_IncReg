@@ -130,19 +130,10 @@ void SGDSolver<Dtype>::ApplyUpdate() {
   cout << "  after ClipGradients: " << (double)(clock() - t1) / CLOCKS_PER_SEC << endl;
   #endif
   
-  /*
-  if (*max_element(APP<Dtype>::pruned_ratio.begin(), APP<Dtype>::pruned_ratio.end()) > 0 && APP<Dtype>::step_ % APP<Dtype>::clear_history_interval == 0) {  
-    ClearHistory(); // There is no need to ClearHistory each iteration.
-  }
-  #ifdef ShowTimingLog
-  cout << "  after ClearHistory: " << (double)(clock() - t1) / CLOCKS_PER_SEC << endl;
-  #endif
-  */
-  
-  for (int param_id = 0; param_id < this->net_->learnable_params().size();
-       ++param_id) {
+  for (int param_id = 0; param_id < this->net_->learnable_params().size(); ++param_id) {
     Normalize(param_id);
     Regularize(param_id);
+    ClearHistory(param_id); // @mingsuntse
     ComputeUpdateValue(param_id, rate);
   }
   #ifdef ShowTimingLog
@@ -972,47 +963,20 @@ void SGDSolver<Dtype>::ComputeUpdateValue(int param_id, Dtype rate) {
 }
 
 template <typename Dtype>
-void SGDSolver<Dtype>::ClearHistory(int param_id) {
+void SGDSolver<Dtype>::ClearHistory(const int& param_id) {
     const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[param_id].first];
-    if (APP<Dtype>::layer_index.count(layer_name) == 0 || history_[param_id]->shape().size() == 1) { return; }
+    if (APP<Dtype>::layer_index.count(layer_name) == 0 || history_[param_id]->shape().size() == 1) { 
+        return; 
+    } // bias not pruned for now
     const int L = APP<Dtype>::layer_index[layer_name];
-    const int count = APP<Dtype>::masks[L].size();
-    Dtype* tmp = new Dtype[count]; /// TODEBUG: Why cannot use bool?
-    for (int k = 0; k < count; ++k) {
-        tmp[k] = APP<Dtype>::masks[L][k];
+    if (APP<Dtype>::pruned_ratio[L] == 0) {
+        return;
     }
-    caffe_mul(count, 
-              (const Dtype*) tmp, 
-              history_[param_id]->cpu_data(), 
-              history_[param_id]->mutable_cpu_data());
-    delete[] tmp;
+    caffe_gpu_mul(history_[param_id]->count(),
+                  this->net_->layer_by_name(layer_name)->masks()[0]->gpu_data(),
+                  history_[param_id]->gpu_data(),
+                  history_[param_id]->mutable_gpu_data());
 }
-
-template <typename Dtype>
-void SGDSolver<Dtype>::ClearHistory() {
-    const vector<shared_ptr<Layer<Dtype> > >& layers = this->net_->layers();
-    int param_id = 0;
-    for (int i = 0; i < layers.size(); ++i) {
-    /// As long as layer i has masks, its history_ should be cleared. But only clear history_ of weights, since we only have masks for weights.
-    /// So the key is to relate layer i with corresponding param_id.
-        const string layer_name = layers[i]->layer_param().name();
-        if (APP<Dtype>::layer_index.count(layer_name)) {
-            const int L = APP<Dtype>::layer_index[layer_name];
-            const int count = APP<Dtype>::masks[L].size();
-            while (history_[param_id]->count() != count) { 
-                ++ param_id; // jump over biases. Note this may be at risk!! Equal count doesn't mean the same thing.
-            }
-            for (int i = 0; i < count; ++i) {
-                if (!APP<Dtype>::masks[L][i]) {
-                    history_[param_id]->mutable_cpu_data()[i] = 0;
-                }
-            }
-            ++ param_id;
-        }
-    }
-}
-
-
 
 template <typename Dtype>
 void SGDSolver<Dtype>::SnapshotSolverState(const string& model_filename) {

@@ -89,7 +89,7 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
         APP<Dtype>::log_weight.push_back( vector<vector<Dtype> >(num_log) );
         APP<Dtype>::log_diff.push_back( vector<vector<Dtype> >(num_log) );
     }
-
+    
     cout << "=== Masks etc. Initialized" << endl;
 }
 
@@ -176,7 +176,7 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
             cout.width(blob.size()); cout << s << "   ";
                         
             // print Mask
-            cout.width(4);  cout << APP<Dtype>::masks[L][i * num_col] << "   ";
+            cout.width(4);  cout << this->masks_[0]->cpu_data()[i * num_col] << "   ";
             
             // print info
             cout.width(info.size());  cout << info_data[i] << endl;
@@ -202,7 +202,7 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
             cout.width(blob.size()); cout << s << "   ";
             
             // print Mask
-            cout.width(4);  cout << APP<Dtype>::masks[L][j] << "   ";
+            cout.width(4);  cout << this->masks_[0]->cpu_data()[j] << "   ";
             
             // print info
             cout.width(info.size());  cout << info_data[j] << endl;
@@ -219,7 +219,7 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
             cout.width(blob.size()); cout << s << "   ";
             
             // print Mask
-            cout.width(4);  cout << APP<Dtype>::masks[L][i] << "   ";
+            cout.width(4);  cout << this->masks_[0]->cpu_data()[i] << "   ";
             
             // print info
             cout.width(info.size());  cout << info_data[i] << endl;
@@ -328,8 +328,8 @@ void ConvolutionLayer<Dtype>::TaylorPrune(const vector<Blob<Dtype>*>& top) {
         for (int i = 0; i < num_once_prune; ++i) {
             const int c = fm_score[i].second;
             for (int j = 0; j < num_col; ++j) {
-                muweight[c * num_col + j] = 0; /// Seems don't work
-                APP<Dtype>::masks[L][c * num_col + j] = 0;
+                // muweight[c * num_col + j] = 0; /// Seems don't work
+                this->masks_[0]->mutable_cpu_data()[c * num_col + j] = 0;
             }
             APP<Dtype>::IF_row_pruned[L][c] = true;
             ++ APP<Dtype>::num_pruned_row[L];
@@ -441,7 +441,7 @@ void ConvolutionLayer<Dtype>::ProbPruneRow_fm(const vector<Blob<Dtype>*>& top, c
             const int col_index = i % num_col;
             const bool cond1 = rands[row_index] < APP<Dtype>::history_prob[L][row_index];
             const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
-            APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
+            this->masks_[0]->mutable_cpu_data()[i] = (cond1 && cond2) ? 1 : 0;
         }
     }
 }
@@ -472,8 +472,8 @@ void ConvolutionLayer<Dtype>::FilterPrune() {
     for (int i = 0; i < APP<Dtype>::num_once_prune; ++i) {
         const int r = row_score[i].second;
         for (int j = 0; j < num_col; ++j) {
-            muweight[r * num_col + j] = 0;
-            APP<Dtype>::masks[L][r * num_col + j] = 0;
+            // muweight[r * num_col + j] = 0;
+            this->masks_[0]->mutable_cpu_data()[r * num_col + j] = 0;
         }
         APP<Dtype>::IF_row_pruned[L][r] = true;
         ++ APP<Dtype>::num_pruned_row[L];
@@ -557,9 +557,9 @@ void ConvolutionLayer<Dtype>::ProbPruneCol(const int& prune_interval) {
             const int col_index = i % num_col;
             const bool cond1 = rands[col_index] < APP<Dtype>::history_prob[L][col_index];
             const bool cond2 = !APP<Dtype>::IF_row_pruned[L][row_index];
-            APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0; 
+            this->masks_[0]->mutable_cpu_data()[i] = (cond1 && cond2) ? 1 : 0; 
             this->weight_backup[i] = muweight[i];
-            muweight[i] *= APP<Dtype>::masks[L][i];
+            muweight[i] *= this->masks_[0]->mutable_cpu_data()[i];
         }
     } else if (APP<Dtype>::mask_generate_mechanism == "element-wise") {
         Dtype rands[count/10]; // Because `count` may be so large (like 2 million) that `caffe_rng_uniform` will report segmengt default, generate rands for 10 times.
@@ -571,9 +571,9 @@ void ConvolutionLayer<Dtype>::ProbPruneCol(const int& prune_interval) {
             const int col_index = i % num_col;
             const bool cond1 = rands[i % (count/10)] < APP<Dtype>::history_prob[L][col_index];
             const bool cond2 = !APP<Dtype>::IF_row_pruned[L][row_index];
-            APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
+            this->masks_[0]->mutable_cpu_data()[i] = (cond1 && cond2) ? 1 : 0;
             this->weight_backup[i] = muweight[i];
-            muweight[i] *= APP<Dtype>::masks[L][i];
+            muweight[i] *= this->masks_[0]->mutable_cpu_data()[i];
         }
     } else {
         LOG(INFO) << "Wrong: unknown mask_generate_mechanism, please check";
@@ -671,9 +671,9 @@ void ConvolutionLayer<Dtype>::ProbPruneCol_chl(const int& prune_interval) {
             const int col_index = i % num_col;
             const bool cond1 = rands[col_index] < APP<Dtype>::history_prob[L][col_index / kernel_spatial_size]; // The masks in the same channel may be different.
             const bool cond2 = !APP<Dtype>::IF_row_pruned[L][row_index];
-            APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0; 
+            this->masks_[0]->mutable_cpu_data()[i] = (cond1 && cond2) ? 1 : 0; 
             this->weight_backup[i] = muweight[i];
-            muweight[i] *= APP<Dtype>::masks[L][i];
+            muweight[i] *= this->masks_[0]->mutable_cpu_data()[i];
         }
     } else if (APP<Dtype>::mask_generate_mechanism == "element-wise") {
         Dtype rands[count/10];
@@ -685,9 +685,9 @@ void ConvolutionLayer<Dtype>::ProbPruneCol_chl(const int& prune_interval) {
             const int col_index = i % num_col;
             const bool cond1 = rands[i % (count/10)] < APP<Dtype>::history_prob[L][col_index / kernel_spatial_size];
             const bool cond2 = !APP<Dtype>::IF_row_pruned[L][row_index];
-            APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
+            this->masks_[0]->mutable_cpu_data()[i] = (cond1 && cond2) ? 1 : 0;
             this->weight_backup[i] = muweight[i];
-            muweight[i] *= APP<Dtype>::masks[L][i];
+            muweight[i] *= this->masks_[0]->mutable_cpu_data()[i];
         }
     } else {
         LOG(INFO) << "Wrong: unknown mask_generate_mechanism, please check";
@@ -773,9 +773,9 @@ void ConvolutionLayer<Dtype>::ProbPruneRow(const int& prune_interval) {
             const int col_index = i % num_col;
             const bool cond1 = rands[row_index] < APP<Dtype>::history_prob[L][row_index];
             const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
-            APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
+            this->masks_[0]->mutable_cpu_data()[i] = (cond1 && cond2) ? 1 : 0;
             this->weight_backup[i] = muweight[i];
-            muweight[i] *= APP<Dtype>::masks[L][i];
+            muweight[i] *= this->masks_[0]->mutable_cpu_data()[i];
         }
     } else if (APP<Dtype>::mask_generate_mechanism == "element-wise") {
         // new mask-generating mechanism (1) 
@@ -788,9 +788,9 @@ void ConvolutionLayer<Dtype>::ProbPruneRow(const int& prune_interval) {
             const int col_index = i % num_col;
             const bool cond1 = rands[i%(count/10)] < APP<Dtype>::history_prob[L][row_index];
             const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
-            APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
+            this->masks_[0]->mutable_cpu_data()[i] = (cond1 && cond2) ? 1 : 0;
             this->weight_backup[i] = muweight[i];
-            muweight[i] *= APP<Dtype>::masks[L][i];
+            muweight[i] *= this->masks_[0]->mutable_cpu_data()[i];
         }
     } else if (APP<Dtype>::mask_generate_mechanism == "channel-wise") {
         // new mask-generating mechanism (2)
@@ -804,9 +804,9 @@ void ConvolutionLayer<Dtype>::ProbPruneRow(const int& prune_interval) {
             const int chl_index = i / kernel_spatial_size; // channel index
             const bool cond1 = rands[chl_index] < APP<Dtype>::history_prob[L][row_index];
             const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
-            APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
+            this->masks_[0]->mutable_cpu_data()[i] = (cond1 && cond2) ? 1 : 0;
             this->weight_backup[i] = muweight[i];
-            muweight[i] *= APP<Dtype>::masks[L][i];
+            muweight[i] *= this->masks_[0]->mutable_cpu_data()[i];
         }
     } else {
         LOG(INFO) << "Wrong, unknown mask_generate_mechanism";
@@ -837,9 +837,9 @@ void ConvolutionLayer<Dtype>::CleanWorkForPP() {
                                                                 : APP<Dtype>::IF_row_pruned[L][row_index];
             // muweight[i] *= APP<Dtype>::history_prob[L][k];
             // APP<Dtype>::history_prob[L][k] = 1;
-            APP<Dtype>::masks[L][i] = cond ? 0 : 1;
+            this->masks_[0]->mutable_cpu_data()[i] = cond ? 0 : 1;
         } else {
-            APP<Dtype>::masks[L][i] = 0;
+            this->masks_[0]->mutable_cpu_data()[i] = 0;
         }
     }
 }
@@ -871,7 +871,7 @@ void ConvolutionLayer<Dtype>::UpdateNumPrunedRow() {
             if (IF_consecutive_pruned) {
                 for (int j = 0; j < num_col; ++j) {
                     muweight[i * num_col + j] = 0;
-                    APP<Dtype>::masks[L][i * num_col + j] = 0;
+                    this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
                 }
                 APP<Dtype>::IF_row_pruned[L][i] = true;
                 ++ APP<Dtype>::num_pruned_row[L];
@@ -892,7 +892,6 @@ void ConvolutionLayer<Dtype>::UpdateNumPrunedCol() {
     const int num_chl = this->blobs_[0]->shape()[1];
     const int num_row_per_g = num_row / APP<Dtype>::group[L];
     const int filter_area = this->blobs_[0]->count(2);
-    Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
     
     cout << "        " << this->layer_param_.name() << " in UpdateNumPrunedCol" << endl;
     vector<int>::iterator it;
@@ -901,8 +900,7 @@ void ConvolutionLayer<Dtype>::UpdateNumPrunedCol() {
         const int g   = *it / num_chl;
         for (int i = g * num_row_per_g; i < (g + 1) * num_row_per_g; ++i) {
             for (int j = chl * filter_area; j < (chl + 1) * filter_area; ++j) {
-                APP<Dtype>::masks[L][i * num_col + j] = 0;
-                muweight[i * num_col + j] = 0;
+                this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
                 APP<Dtype>::IF_col_pruned[L][j][g] = true;
             }
         }
@@ -932,7 +930,7 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask() {
     if (APP<Dtype>::prune_unit == "Weight") {
         for (int i = 0; i < count; ++i) {
             if (!weight[i]) {
-                APP<Dtype>::masks[L][i] = 0;
+                this->masks_[0]->mutable_cpu_data()[i] = 0;
                 ++ APP<Dtype>::num_pruned_weight[L];
                 APP<Dtype>::IF_weight_pruned[L][i] = true;
             }
@@ -952,7 +950,7 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask() {
                     num_pruned_col += 1.0 / group; /// note that num_pruned_row is always integer while num_pruned_col can be non-integer.
                     APP<Dtype>::IF_col_pruned[L][j][g] = true;
                     for (int i = g * num_row_per_g; i < (g+1) * num_row_per_g; ++i) { 
-                        APP<Dtype>::masks[L][i * num_col + j] = 0;
+                        this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
                     }
                     if (mthd == "PP_Col") {
                         APP<Dtype>::history_prob[L][j] = 0; /// TODO: count group;
@@ -971,7 +969,7 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask() {
                 ++ num_pruned_row;
                 APP<Dtype>::IF_row_pruned[L][i] = true;
                 for (int j = 0; j < num_col; ++j) { 
-                    APP<Dtype>::masks[L][i * num_col + j] = 0; 
+                    this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
                 }
                 if (mthd == "PP_Row") {
                     APP<Dtype>::history_prob[L][i] = 0; /// TODO: count group;
@@ -984,6 +982,7 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask() {
         
     }
     UpdatePrunedRatio();
+    this->IF_masks_updated = true;
     
     Dtype pruned_ratio;
     if (APP<Dtype>::prune_unit == "Weight")   { pruned_ratio = APP<Dtype>::pruned_ratio[L];     }
@@ -1014,8 +1013,6 @@ void ConvolutionLayer<Dtype>::PruneMinimals() {
         for (int i = 0; i < count; ++i) {
             if (APP<Dtype>::IF_weight_pruned[L][i]) { continue; }
             if (fabs(muweight[i]) < APP<Dtype>::prune_threshold || APP<Dtype>::history_reg[L][i] >= APP<Dtype>::target_reg) {
-                // muweight[i] = 0;
-                // APP<Dtype>::masks[L][i] = 0;
                 this->masks_[0]->mutable_cpu_data()[i] = 0;
                 
                 APP<Dtype>::num_pruned_weight[L] += 1;
@@ -1035,8 +1032,6 @@ void ConvolutionLayer<Dtype>::PruneMinimals() {
             sum /= num_row;
             if (sum < APP<Dtype>::prune_threshold ||  APP<Dtype>::history_reg[L][j] >= APP<Dtype>::target_reg) {
                 for (int i = 0; i < num_row; ++i) {
-                    // muweight[i * num_col + j] = 0;
-                    // APP<Dtype>::masks[L][i * num_col + j] = 0;
                     this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
                 }
                 APP<Dtype>::num_pruned_col[L] += 1;
@@ -1056,8 +1051,6 @@ void ConvolutionLayer<Dtype>::PruneMinimals() {
             sum /= num_col;
             if (sum < APP<Dtype>::prune_threshold ||  APP<Dtype>::history_reg[L][i] >= APP<Dtype>::target_reg) {
                 for (int j = 0; j < num_col; ++j) {
-                    // muweight[i * num_col + j] = 0;
-                    // APP<Dtype>::masks[L][i * num_col + j] = 0;
                     this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
                 }
                 ++ APP<Dtype>::num_pruned_row[L];

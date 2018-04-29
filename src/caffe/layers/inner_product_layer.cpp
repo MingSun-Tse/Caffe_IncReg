@@ -126,7 +126,7 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
             cout.width(blob.size()); cout << s << "   ";
             
             // print Mask
-            cout.width(4);  cout << APP<Dtype>::masks[L][i * num_col] << "   ";
+            cout.width(4);  cout << this->masks_[0]->cpu_data()[i * num_col] << "   ";
             
             // print info
             cout.width(info.size());  cout << info_data[i] << endl;
@@ -152,7 +152,7 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
             cout.width(blob.size()); cout << s << "   ";
             
             // print Mask
-            cout.width(4);  cout << APP<Dtype>::masks[L][j] << "   ";
+            cout.width(4);  cout << this->masks_[0]->cpu_data()[j] << "   ";
             // print info
             cout.width(info.size());  cout << info_data[j] << endl;
            
@@ -170,7 +170,7 @@ Index   DiffBeforeMasked   Mask   Prob - conv1
             cout.width(blob.size()); cout << s << "   ";
             
             // print Mask
-            cout.width(4);  cout << APP<Dtype>::masks[L][i] << "   ";
+            cout.width(4);  cout << this->masks_[0]->cpu_data()[i] << "   ";
             
             // print info
             cout.width(info.size());  cout << info_data[i] << endl;
@@ -252,7 +252,7 @@ void InnerProductLayer<Dtype>::ComputeBlobMask() {
     if (APP<Dtype>::prune_unit == "Weight") {
         for (int i = 0; i < count; ++i) {
             if (!weight[i]) {
-                APP<Dtype>::masks[L][i] = 0;
+                this->masks_[0]->mutable_cpu_data()[i] = 0;
                 ++ APP<Dtype>::num_pruned_weight[L];
                 APP<Dtype>::IF_weight_pruned[L][i] = true;
             }
@@ -269,7 +269,7 @@ void InnerProductLayer<Dtype>::ComputeBlobMask() {
                     num_pruned_col += 1.0 / group; /// note that num_pruned_row is always integer while num_pruned_col can be non-integer.
                     APP<Dtype>::IF_col_pruned[L][j][g] = true;
                     for (int i = g * num_row_per_g; i < (g+1) * num_row_per_g; ++i) { 
-                        APP<Dtype>::masks[L][i * num_col + j] = 0;
+                        this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
                     }
                     if (mthd == "PP_Col") {
                         APP<Dtype>::history_prob[L][j] = 0; /// TODO: count group;
@@ -288,7 +288,7 @@ void InnerProductLayer<Dtype>::ComputeBlobMask() {
                 ++ num_pruned_row;
                 APP<Dtype>::IF_row_pruned[L][i] = true;
                 for (int j = 0; j < num_col; ++j) { 
-                    APP<Dtype>::masks[L][i * num_col + j] = 0; 
+                    this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
                 }
                 if (mthd == "PP_Row") {
                     APP<Dtype>::history_prob[L][i] = 0; /// TODO: count group;
@@ -301,6 +301,7 @@ void InnerProductLayer<Dtype>::ComputeBlobMask() {
         
     }
     UpdatePrunedRatio();
+    this->IF_masks_updated = true;
     
     Dtype pruned_ratio;
     if (APP<Dtype>::prune_unit == "Weight")   { pruned_ratio = APP<Dtype>::pruned_ratio[L];     }
@@ -426,8 +427,7 @@ void InnerProductLayer<Dtype>::UpdateNumPrunedRow() {
     for (int i = 0; i < num_row; ++i) {
         if (!APP<Dtype>::IF_row_pruned[L][i] && APP<Dtype>::IF_col_pruned[L+1][i][0]) {
             for (int j = 0; j < num_col; ++j) {
-                muweight[i * num_col + j] = 0;
-                APP<Dtype>::masks[L][i * num_col + j] = 0;
+                this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
             }
             APP<Dtype>::IF_row_pruned[L][i] = true;
             ++ APP<Dtype>::num_pruned_row[L];
@@ -450,9 +450,7 @@ void InnerProductLayer<Dtype>::UpdateNumPrunedCol() {
     } else {
         for (vector<int>::iterator it = APP<Dtype>::pruned_rows.begin(); it != APP<Dtype>::pruned_rows.end(); ++it) {
             for (int i = 0; i < num_row; ++i) {
-                muweight[i * num_col + *it] = 0;
-                APP<Dtype>::masks[L][i * num_col + *it] = 0;
-                
+                this->masks_[0]->mutable_cpu_data()[i * num_col + *it] = 0;
             }
             APP<Dtype>::IF_col_pruned[L][*it][0] = true;
             APP<Dtype>::num_pruned_col[L] += 1;
@@ -477,7 +475,6 @@ void InnerProductLayer<Dtype>::PruneMinimals() {
             if (APP<Dtype>::IF_weight_pruned[L][i]) { continue; }
             if (fabs(muweight[i]) < APP<Dtype>::prune_threshold || APP<Dtype>::history_reg[L][i] >= APP<Dtype>::target_reg) {
                 // muweight[i] = 0;
-                // APP<Dtype>::masks[L][i] = 0;
                 this->masks_[0]->mutable_cpu_data()[i] = 0;
                 
                 APP<Dtype>::num_pruned_weight[L] += 1;
@@ -498,7 +495,6 @@ void InnerProductLayer<Dtype>::PruneMinimals() {
             if (sum < APP<Dtype>::prune_threshold ||  APP<Dtype>::history_reg[L][j] >= APP<Dtype>::target_reg) {
                 for (int i = 0; i < num_row; ++i) {
                     // muweight[i * num_col + j] = 0;
-                    // APP<Dtype>::masks[L][i * num_col + j] = 0; 
                     this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
                 }
                 APP<Dtype>::num_pruned_col[L] += 1;
@@ -517,7 +513,6 @@ void InnerProductLayer<Dtype>::PruneMinimals() {
             if (sum < APP<Dtype>::prune_threshold ||  APP<Dtype>::history_reg[L][i] >= APP<Dtype>::target_reg) {
                 for (int j = 0; j < num_col; ++j) {
                     // muweight[i * num_col + j] = 0;
-                    // APP<Dtype>::masks[L][i * num_col + j] = 0; 
                     this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
                 }
                 ++ APP<Dtype>::num_pruned_row[L];

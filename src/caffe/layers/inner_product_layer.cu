@@ -109,7 +109,7 @@ void InnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         
         // Apply masks
         if (this->IF_masks_updated) {
-            caffe_gpu_mul(count, 
+            caffe_gpu_mul(this->blobs_[0]->count(), 
                           this->blobs_[0]->gpu_data(),
                           this->masks_[0]->gpu_data(),
                           this->blobs_[0]->mutable_gpu_data());

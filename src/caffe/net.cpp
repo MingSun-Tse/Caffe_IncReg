@@ -80,9 +80,6 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
   top_id_vecs_.resize(param.layer_size());
   bottom_need_backward_.resize(param.layer_size());
   for (int layer_id = 0; layer_id < param.layer_size(); ++layer_id) {
-    /*
-     * 注意这里是对每一层进行操作，打印出每一层的信息
-     */
 
     // For non-root solvers, whether this layer is shared from root_net_.
     bool share_from_root = !Caffe::root_solver()
@@ -106,7 +103,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
     } else {
       layers_.push_back(LayerRegistry<Dtype>::CreateLayer(layer_param));
     }
-    layer_names_.push_back(layer_param.name()); /// 在layer SetUp的时候得到每一层的名字
+    layer_names_.push_back(layer_param.name());
     LOG_IF(INFO, Caffe::root_solver())
         << "Creating Layer " << layer_param.name();
     bool need_backward = false;
@@ -155,7 +152,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
             << layer_param.name();
       }
     } else {
-      layers_[layer_id]->SetUp(bottom_vecs_[layer_id], top_vecs_[layer_id]);
+      layers_[layer_id]->SetUp(bottom_vecs_[layer_id], top_vecs_[layer_id]); // @mingsuntse note this
     }
     LOG_IF(INFO, Caffe::root_solver())
         << "Setting up " << layer_names_[layer_id];
@@ -168,11 +165,12 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
       blob_loss_weights_[top_id_vecs_[layer_id][top_id]] = layer->loss(top_id);
       LOG_IF(INFO, Caffe::root_solver())
           << "Top shape: " << top_vecs_[layer_id][top_id]->shape_string();
+      
       /// --------------------------------------------------------------------
-      /// GFLOPs
+      /// @mingsuntse GFLOPs
       if (phase_ == TRAIN && APP<Dtype>::layer_index.count(layer_param.name()) && layer_param.type() == "Convolution") {
           const int L = APP<Dtype>::layer_index[layer_param.name()];
-          APP<Dtype>::GFLOPs[L] *= (top_vecs_[layer_id][top_id]->shape()[2] * top_vecs_[layer_id][top_id]->shape()[3]);                           
+          APP<Dtype>::GFLOPs[L] *= (top_vecs_[layer_id][top_id]->shape()[2] * top_vecs_[layer_id][top_id]->shape()[3]);
           // std::cout << this->blobs_[0]->shape()[0]
                     // << " " << this->blobs_[0]->shape()[1]
                     // << " " << this->blobs_[0]->shape()[2]
@@ -476,7 +474,7 @@ int Net<Dtype>::AppendBottom(const NetParameter& param, const int layer_id,
 
 template <typename Dtype>
 void Net<Dtype>::AppendParam(const NetParameter& param, const int layer_id,
-                             const int param_id) {
+                             const int param_id) { // For example, param_id \in {0, 1} if the layer has weights and biases.
   const LayerParameter& layer_param = layers_[layer_id]->layer_param();
   const int param_size = layer_param.param_size();
   string param_name =
@@ -488,11 +486,11 @@ void Net<Dtype>::AppendParam(const NetParameter& param, const int layer_id,
     param_display_name << param_id;
     param_display_names_.push_back(param_display_name.str());
   }
-  const int net_param_id = params_.size();
-  // std::cout << "net_param_id: " << net_param_id << endl; // WANGHUAN
-  params_.push_back(layers_[layer_id]->blobs()[param_id]);
+  const int net_param_id = params_.size(); // net_param_id: the param id in the whole net
+  params_.push_back(layers_[layer_id]->blobs()[param_id]); // @mingsuntse note this
+  
   param_id_vecs_[layer_id].push_back(net_param_id);
-  param_layer_indices_.push_back(make_pair(layer_id, param_id));
+  param_layer_indices_.push_back(make_pair(layer_id, param_id)); // TOCHECK(@mingsuntse)
   ParamSpec default_param_spec;
   const ParamSpec* param_spec = (layer_param.param_size() > param_id) ?
       &layer_param.param(param_id) : &default_param_spec;
@@ -507,6 +505,9 @@ void Net<Dtype>::AppendParam(const NetParameter& param, const int layer_id,
     }
     const int learnable_param_id = learnable_params_.size();
     learnable_params_.push_back(params_[net_param_id].get());
+    //std::cout << layers_[layer_id]->masks()[param_id].get() << std::endl;
+    //learnable_mask_params_.push_back(layers_[layer_id]->masks()[param_id].get()); // @mingsuntse // layers_[layer_id]->masks()[param_id].get()
+    
     learnable_param_ids_.push_back(learnable_param_id);
     has_params_lr_.push_back(param_spec->has_lr_mult());
     has_params_decay_.push_back(param_spec->has_decay_mult());
