@@ -17,6 +17,7 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     this->weight_backup.resize(count); // still used in TEST phase when using PP
     APP<Dtype>::prune_ratio.push_back(prune_param.prune_ratio());
     APP<Dtype>::pruned_ratio.push_back(0); // used in TEST
+    this->IF_masks_updated = true;
     
     // Get layer_index
     const string layer_name = this->layer_param_.name();
@@ -982,7 +983,6 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask() {
         
     }
     UpdatePrunedRatio();
-    this->IF_masks_updated = true;
     
     Dtype pruned_ratio;
     if (APP<Dtype>::prune_unit == "Weight")   { pruned_ratio = APP<Dtype>::pruned_ratio[L];     }

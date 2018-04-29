@@ -12,6 +12,7 @@ void InnerProductLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     const int count = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
+    this->IF_masks_updated = true;
     
     // Get layer_index
     const string layer_name = this->layer_param_.name();
@@ -301,7 +302,6 @@ void InnerProductLayer<Dtype>::ComputeBlobMask() {
         
     }
     UpdatePrunedRatio();
-    this->IF_masks_updated = true;
     
     Dtype pruned_ratio;
     if (APP<Dtype>::prune_unit == "Weight")   { pruned_ratio = APP<Dtype>::pruned_ratio[L];     }
