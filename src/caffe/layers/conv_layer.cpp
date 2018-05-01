@@ -994,10 +994,11 @@ void ConvolutionLayer<Dtype>::ComputeBlobMask() {
     } else if ((APP<Dtype>::prune_coremthd.substr(0, 2) == "PP" || APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg") && APP<Dtype>::step_ > 1) { // since resuming, the step should be larger than 1
         RestorePruneProb(pruned_ratio);
     }
-    LOG(INFO) << "    Masks restored, num_pruned_col = " << APP<Dtype>::num_pruned_col[L]
-              << "  num_pruned_row = " << APP<Dtype>::num_pruned_row[L]
-              << "  pruned_ratio = "   << APP<Dtype>::pruned_ratio[L]
-              << "  prune_ratio = "    << APP<Dtype>::prune_ratio[L];
+    LOG(INFO) << "  Masks restored,"
+              << "  num_pruned_col=" << APP<Dtype>::num_pruned_col[L] << "(" << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << ")"
+              << "  num_pruned_row=" << APP<Dtype>::num_pruned_row[L] << "(" << APP<Dtype>::num_pruned_row[L] * 1.0 / num_row << ")"
+              << "  pruned_ratio="   << APP<Dtype>::pruned_ratio[L]
+              << "  prune_ratio="    << APP<Dtype>::prune_ratio[L];
 }
 
 template <typename Dtype>

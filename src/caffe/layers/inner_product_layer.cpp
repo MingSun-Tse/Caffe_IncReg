@@ -315,10 +315,11 @@ void InnerProductLayer<Dtype>::ComputeBlobMask() {
             RestorePruneProb(pruned_ratio);
         }
     }
-    LOG(INFO) << "    Masks restored, num_pruned_col = " << APP<Dtype>::num_pruned_col[L]
-              << "  num_pruned_row = " << APP<Dtype>::num_pruned_row[L]
-              << "  pruned_ratio = "   << APP<Dtype>::pruned_ratio[L]
-              << "  prune_ratio = "    << APP<Dtype>::prune_ratio[L];
+    LOG(INFO) << "  Masks restored,"
+              << "  num_pruned_col=" << APP<Dtype>::num_pruned_col[L] << "(" << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << ")"
+              << "  num_pruned_row=" << APP<Dtype>::num_pruned_row[L] << "(" << APP<Dtype>::num_pruned_row[L] * 1.0 / num_row << ")"
+              << "  pruned_ratio="   << APP<Dtype>::pruned_ratio[L]
+              << "  prune_ratio="    << APP<Dtype>::prune_ratio[L];
 }
 
 
