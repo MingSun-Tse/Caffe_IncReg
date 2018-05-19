@@ -14,6 +14,7 @@
 #include <ctime>
 #define NUM_SHOW 20
 
+
 namespace caffe {
 
 // Return the current learning rate. The currently implemented learning rate
@@ -505,6 +506,139 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         cout << "  after gpu add, end of Reg_Col: " << (double)(clock() - t1)/CLOCKS_PER_SEC << "s" << endl;
         #endif
       
+      
+      } else if (regularization_type == "Reg-Optimal_Col") {
+         
+        // If return
+        const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[param_id].first];
+        const int L = GetLayerIndex(param_id);
+        if (L == -1) { return; }
+        
+        #ifdef ShowTimingLog
+        cout << layer_name << " Reg-Optimal_Col start timing" << endl;
+        clock_t t1 = clock();
+        #endif
+
+        const Dtype* weight = net_params[param_id]->cpu_data();
+        const Dtype* S      = net_params[param_id]->cpu_secdiff();
+        const int count     = net_params[param_id]->count();
+        const int num_row   = net_params[param_id]->shape()[0];
+        const int num_col   = count / num_row;
+        const int num_pruned_col    = APP<Dtype>::num_pruned_col[L];
+        const int num_col_to_prune_ = ceil(num_col * APP<Dtype>::prune_ratio[L]) - num_pruned_col;
+        const int num_col_ = num_col - num_pruned_col;
+        Dtype* muhistory_reg_ = history_reg_[param_id]->mutable_cpu_data();
+        if (num_col_to_prune_ <= 0) {
+            LOG(FATAL) << "num_col_to_prune_ <= 0";
+            exit(1);
+        }
+        const Dtype AA = APP<Dtype>::AA; // The fixed reg multiplier
+        
+        if (APP<Dtype>::prune_interval == 0) {
+            cout << "Wrong: prune_interval not set, please check" << endl;
+            exit(1);
+        }
+        
+        cout << layer_name << endl;
+        if (APP<Dtype>::step_ % APP<Dtype>::prune_interval == 0) {
+            // Get alpha
+            Dtype D, E, F;
+            int ix = 19; // fixed_reg_weight_index
+            D = S[ix] + APP<Dtype>::history_reg[L][ix % num_col];
+            E = weight[ix] * weight[ix] * D * D;
+            F = E * APP<Dtype>::history_reg[L][ix % num_col];
+            const Dtype alpha = (-E * AA - F) / ((D + AA) * (D + AA) * (D + AA));
+            
+            // vector<Dtype> compr(num_col, 0); // magnitude compression ratio
+            // typedef std::pair<Dtype, int> mypair;
+            // vector<mypair> col_score(num_col);
+            for (int i = 0; i < count; ++i) {
+                D = S[i] + APP<Dtype>::history_reg[L][i % num_col];
+                E = weight[i] * weight[i] * D * D;
+                F = E * APP<Dtype>::history_reg[L][i % num_col];
+                
+                // solve the 3-order equation
+                const Dtype p = (F - D * E) / alpha;
+                const Dtype q = E / alpha;
+                
+                // Check 
+                Dtype pq0 = q*q/4 + p*p*p/27;
+                if (pq0 < 0) {
+                    // cout << "Wrong: negative " << pq0 << endl;
+                    pq0 = - pq0;
+                }
+                const Dtype pq1 = -q/2 + sqrt(pq0);
+                const Dtype pq2 = -q/2 - sqrt(pq0);
+                const int sign1 = pq1 > 0 ? 1 : -1;
+                const int sign2 = pq2 > 0 ? 1 : -1;
+                
+                const Dtype x = sign1 * pow(fabs(pq1), 1.0/3)
+                              + sign2 * pow(fabs(pq2), 1.0/3); // if q*q/4 + p*p*p/27 > 0?
+                
+                if (i < 10) {
+                    cout << "alpha: " << alpha
+                         << "  S: " << S[i] 
+                         << "  D: " << D 
+                         << "  E: " << E 
+                         << "  F: " << F 
+                         << "  p: " << p 
+                         << "  q: " << q 
+                         << "  pq:" << q*q/4 + p*p*p/27
+                         << "  pq1:" << pq1
+                         << "  pq2:" << pq2
+                         << "  x-D: " << x-D
+                         << endl;
+                }
+                
+                muhistory_reg_[i] += min(APP<Dtype>::AA, fabs(x - D));
+                APP<Dtype>::history_reg[L][i % num_col] += min(APP<Dtype>::AA, fabs(x - D)) / num_col;
+                
+                // compr[i % num_col] += fabs((x - D) / x); // |\Delta w / w|
+            }
+            cout << endl;
+            
+            /* 
+            // Sort col_score
+            for (int j = 0; j < num_col; ++j) {
+                col_score[j].first  = compr[j];
+                col_score[j].second = j;
+            }
+            sort(col_score.begin(), col_score.end());
+            
+            
+            for (int rk = 0; rk < num_col; ++rk) {
+                const int col_of_rank_rk = col_score[rk].second;
+                if (rk < num_col_to_prune_) { // rank is not good
+                    
+                } else { // rank is good
+                    
+                }
+                // Get 
+            */    
+
+        }
+
+        #ifdef ShowTimingLog
+        cout  << "  after calculate reg term: " << (double)(clock() - t1)/CLOCKS_PER_SEC << "s" << endl;
+        #endif
+        
+        //Apply Reg
+        caffe_gpu_mul(count,
+                      net_params[param_id]->gpu_data(),
+                      history_reg_[param_id]->gpu_data(),
+                      tmp_[param_id]->mutable_gpu_data());
+        #ifdef ShowTimingLog
+        cout << "  after gpu mul: " << (double)(clock() - t1)/CLOCKS_PER_SEC << "s" << endl;
+        #endif
+        
+        caffe_gpu_add(count,
+                      tmp_[param_id]->gpu_data(),
+                      net_params[param_id]->gpu_diff(),
+                      net_params[param_id]->mutable_gpu_diff()); 
+        #ifdef ShowTimingLog
+        cout << "  after gpu add, end of Reg-Optimal_Col: " << (double)(clock() - t1)/CLOCKS_PER_SEC << "s" << endl;
+        #endif
+      
       // ******************************************************************************************
       // Got idea from cvpr rebuttal, improve SelectiveReg: 1) use L1-norm rather than rank, 2) row prune
       } else if (regularization_type == "Reg_Row") {
@@ -513,7 +647,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         caffe_gpu_axpy(net_params[param_id]->count(),
                        local_decay,
                        net_params[param_id]->gpu_data(),
-                       net_params[param_id]->mutable_gpu_diff());    
+                       net_params[param_id]->mutable_gpu_diff());
         
         // Three occasions to return
         // 1. Get layer index and layer name, if not registered, don't reg it.

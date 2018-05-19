@@ -276,7 +276,6 @@ class Blob {
 
   bool ShapeEquals(const BlobProto& other);
   
-  Dtype* mutable_cpu_second_diff; // wanghuan
 
  protected:
   shared_ptr<SyncedMemory> data_;

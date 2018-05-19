@@ -70,7 +70,11 @@ void ConvolutionLayer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     APP<Dtype>::hrank.push_back( vector<Dtype>(num_, 0) );
     APP<Dtype>::hhrank.push_back( vector<Dtype>(num_, 0) );
     APP<Dtype>::history_prob.push_back( vector<Dtype>(num_, 1) );
-    APP<Dtype>::history_reg.push_back( vector<Dtype>(num_, 0) );
+    if (APP<Dtype>::prune_coremthd == "Reg-Optimal") {
+        APP<Dtype>::history_reg.push_back(vector<Dtype>(num_, APP<Dtype>::AA));
+    } else {
+        APP<Dtype>::history_reg.push_back(vector<Dtype>(num_, 0));
+    }
     
     // Info shared among layers
     APP<Dtype>::filter_area.push_back(this->blobs_[0]->shape()[2] * this->blobs_[0]->shape()[3]);

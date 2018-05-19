@@ -17,7 +17,7 @@ template <typename Dtype>
 void ReLULayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
   const Dtype* bottom_data = bottom[0]->gpu_data();
-  Dtype* top_data = top[0]->mutable_gpu_data();
+  Dtype* top_data    = top[0]->mutable_gpu_data();
   const int count = bottom[0]->count();
   Dtype negative_slope = this->layer_param_.relu_param().negative_slope();
   // NOLINT_NEXT_LINE(whitespace/operators)
@@ -29,6 +29,8 @@ void ReLULayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   //     << " top_data: " << (unsigned long)top_data
   //     << " blocks: " << CAFFE_GET_BLOCKS(count)
   //     << " threads: " << CAFFE_CUDA_NUM_THREADS;
+  
+  std::cout << "ReLU forward" << std::endl;
 }
 
 template <typename Dtype>
@@ -41,18 +43,33 @@ __global__ void ReLUBackward(const int n, const Dtype* in_diff,
 }
 
 template <typename Dtype>
+__global__ void ReLUBackward_sec(const int n, const Dtype* in_diff,
+    const Dtype* in_data, Dtype* out_diff, Dtype negative_slope) {
+  CUDA_KERNEL_LOOP(index, n) {
+    out_diff[index] = in_diff[index] * ((in_data[index] > 0)
+        + (in_data[index] <= 0) * negative_slope * negative_slope);
+  }
+}
+
+template <typename Dtype>
 void ReLULayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     const vector<bool>& propagate_down,
     const vector<Blob<Dtype>*>& bottom) {
   if (propagate_down[0]) {
     const Dtype* bottom_data = bottom[0]->gpu_data();
-    const Dtype* top_diff = top[0]->gpu_diff();
-    Dtype* bottom_diff = bottom[0]->mutable_gpu_diff();
+    const Dtype* top_diff    = top[0]->gpu_diff();
+    const Dtype* top_secdiff = top[0]->gpu_secdiff();
+    Dtype* bottom_diff    = bottom[0]->mutable_gpu_diff();
+    Dtype* bottom_secdiff = bottom[0]->mutable_gpu_secdiff();
+    
     const int count = bottom[0]->count();
     Dtype negative_slope = this->layer_param_.relu_param().negative_slope();
     // NOLINT_NEXT_LINE(whitespace/operators)
     ReLUBackward<Dtype><<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
         count, top_diff, bottom_data, bottom_diff, negative_slope);
+    ReLUBackward_sec<Dtype><<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
+        count, top_secdiff, bottom_data, bottom_secdiff, negative_slope); /// @mingsuntse
+                  
     CUDA_POST_KERNEL_CHECK;
   }
 }
