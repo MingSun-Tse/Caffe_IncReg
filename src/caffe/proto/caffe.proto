@@ -303,8 +303,10 @@ message SolverState {
   optional int32 iter = 1; // The current iteration
   optional string learned_net = 2; // The file that stores the learned net.
   repeated BlobProto history = 3; // The history for sgd solvers
+  repeated BlobProto history_score = 5; // `history_score` is used to evaluate the relative importance of different weight groups in pruning.
+  repeated BlobProto history_punish = 6; // Based on `history_score`, get punishment for different weight groups, accumulated history punishment gives `history_punish`.
   optional int32 current_step = 4 [default = 0]; // The current step for learning rate
-}
+} 
 
 enum Phase {
    TRAIN = 0;

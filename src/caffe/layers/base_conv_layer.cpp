@@ -166,14 +166,17 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     if (bias_term_) {
       this->blobs_.resize(2);
       this->masks_.resize(2);
+      this->blobs_backup_.resize(2);
       } else {
       this->blobs_.resize(1);
       this->masks_.resize(1);
+      this->blobs_backup_.resize(1);
     }
     // Initialize and fill the weights:
     // output channels x input channels per-group x kernel height x kernel width
     this->blobs_[0].reset(new Blob<Dtype>(weight_shape));
     this->masks_[0].reset(new Blob<Dtype>(weight_shape));
+    this->blobs_backup_[0].reset(new Blob<Dtype>(weight_shape));
     
     shared_ptr<Filler<Dtype> > weight_filler(GetFiller<Dtype>(
         this->layer_param_.convolution_param().weight_filler()));
@@ -182,6 +185,7 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     if (bias_term_) {
       this->blobs_[1].reset(new Blob<Dtype>(bias_shape));
       this->masks_[1].reset(new Blob<Dtype>(bias_shape));
+      this->blobs_backup_[1].reset(new Blob<Dtype>(bias_shape));
       shared_ptr<Filler<Dtype> > bias_filler(GetFiller<Dtype>(
           this->layer_param_.convolution_param().bias_filler()));
       bias_filler->Fill(this->blobs_[1].get());
@@ -203,6 +207,8 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   this->param_propagate_down_.resize(this->blobs_.size(), true);
   
   /// @mingsuntse: for pruning
+  APP<Dtype>::group.push_back(this->group_);
+  APP<Dtype>::num_ = this->num_;
   this->PruneSetUp(this->layer_param_.prune_param());
   
 }

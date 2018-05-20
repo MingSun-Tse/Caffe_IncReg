@@ -403,8 +403,6 @@ void Solver<Dtype>::Step(int iters) {
   }
 }
 
-
-
 template <typename Dtype>
 void Solver<Dtype>::Solve(const char* resume_file) {
   CHECK(Caffe::root_solver());
@@ -420,7 +418,7 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   }
   
     // After restore, calculate GFLOPs and determine whether the prune finished
-    // WANGHUAN TODO 
+    // TODO(mingsuntse)
     Dtype GFLOPs_left   = 0;
     Dtype GFLOPs_origin = 0;
     for (int i = 0; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
@@ -444,7 +442,6 @@ void Solver<Dtype>::Solve(const char* resume_file) {
             APP<Dtype>::iter_prune_finished[i] = -1; 
         }
     }
-  
 
   // For a network that is trained by the solver, no bottom or top vecs
   // should be given, and we will just provide dummy vecs.
@@ -458,7 +455,6 @@ void Solver<Dtype>::Solve(const char* resume_file) {
     Snapshot();
   }
   if (requested_early_exit_) {
-    if (APP<Dtype>::prune_coremthd.substr(0, 2) == "PP" || APP<Dtype>::prune_coremthd.substr(0,3) == "Reg") { PruneStateShot(); }
     if (APP<Dtype>::prune_method != "None") { PrintFinalPrunedRatio(); }
     LOG(INFO) << "Optimization stopped early.";
     return;
@@ -481,7 +477,6 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   if (param_.test_interval() && iter_ % param_.test_interval() == 0) {
     TestAll();
   }
-  if (APP<Dtype>::prune_coremthd.substr(0, 2) == "PP" || APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg") { PruneStateShot(); } //TODO(mingsuntse): When retraining, this is not necessary
   if (APP<Dtype>::prune_method != "None") { PrintFinalPrunedRatio(); }
   LOG(INFO) << "Optimization Done.";
 }
@@ -604,6 +599,7 @@ void Solver<Dtype>::Snapshot() {
   SnapshotSolverState(model_filename);
 }
 
+/// @mingsuntse, Deprecated -- use built-in solverstate
 template <typename Dtype>
 void Solver<Dtype>::PruneStateShot() {
     map<string, int>::iterator it_m;
@@ -642,7 +638,6 @@ void Solver<Dtype>::PruneStateShot() {
             LOG(INFO) << APP<Dtype>::layer_index[it_m->first] << " " << it_m->first << ": save prune state done!";
         }
     }
-    
 }
 
 // Deprecated

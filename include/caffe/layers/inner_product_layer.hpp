@@ -29,7 +29,6 @@ class InnerProductLayer : public Layer<Dtype> {
   virtual inline int ExactNumBottomBlobs() const { return 1; }
   virtual inline int ExactNumTopBlobs() const { return 1; }
 
-
  protected:
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
@@ -39,16 +38,6 @@ class InnerProductLayer : public Layer<Dtype> {
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
   virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
-  
-  // Added by WANGHUAN for pruning
-  virtual void ComputeBlobMask();
-  virtual void PruneMinimals();
-  virtual void PruneSetUp(const PruneParameter& prune_param);
-  virtual void Print(const int& L, char mode);
-  virtual void UpdatePrunedRatio();
-  virtual void RestorePruneProb(const Dtype& pruned_r) {};
-  virtual void UpdateNumPrunedRow();
-  virtual void UpdateNumPrunedCol();
 
   int M_;
   int K_;

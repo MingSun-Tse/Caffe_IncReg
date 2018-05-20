@@ -8,183 +8,7 @@ namespace caffe {
 template <typename Dtype>
 void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-          
-    /// ADDED BY WANGHUAN -----------------------------------
-    #ifdef ShowTimingLog
-    clock_t t1 = clock();
-    cout << this->layer_param_.name() << ": forward GPU begins timing" << endl;
-    #endif
-    
-    Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
-    const int count = this->blobs_[0]->count();
-    const int num_row = this->blobs_[0]->shape()[0];
-    const int num_col = count / num_row;
-    const string layer_name = this->layer_param_.name();
-    const string mthd = APP<Dtype>::prune_method;
-    const int L = APP<Dtype>::layer_index[layer_name];
-    this->IF_restore = false;
-    
-    /// IF_prune
-    const bool IF_want_prune  = mthd != "None" && APP<Dtype>::prune_ratio[L] > 0; // if you want to prune, you must specify a meaningful prune_method and give a positive prune_ratio
-    const bool IF_been_pruned = APP<Dtype>::pruned_ratio[L] > 0; // for a pruned layer, continue to prune
-    const bool IF_enough_iter = APP<Dtype>::step_ >= APP<Dtype>::prune_begin_iter+1; // for a raw layer, if iter is enough, then prune
-    const bool IF_prune = IF_want_prune && (IF_been_pruned || IF_enough_iter);
-    
-    if (this->phase_ == TRAIN && APP<Dtype>::inner_iter == 0) {
-        // For a layer which doesn't want to prune, it still should UpdateNumPrunedCol/Row because of neighbour layer
-        if (mthd != "None" && (IF_been_pruned || IF_enough_iter)) { 
-            if (APP<Dtype>::IF_update_row_col && APP<Dtype>::IF_update_row_col_layer[L]) {
-                // Note that, UpdateNumPrunedRow/Col before pruning, so that when calculating score, the zombie weights will not be counted.
-                // The last conv and last fc layer need not updating num of pruned row.
-                // In fact, the last conv should be updated row and the first fc should be updated col, but for simplicity, which are ignored for now.
-                if (APP<Dtype>::prune_unit == "Col" && L != APP<Dtype>::conv_layer_cnt-1) { 
-                    if (APP<Dtype>::step_-1 - APP<Dtype>::iter_prune_finished[L+1] <= 1) {
-                        UpdateNumPrunedRow();
-                    }
-                } else if (APP<Dtype>::prune_unit == "Row" && mthd != "TP_Row" && APP<Dtype>::pruned_rows.size()) {
-                    UpdateNumPrunedCol();
-                } /// Note we don't update column for TP, because their method didn't mention this.
-                UpdatePrunedRatio();
-                this->IF_prune_finished();
-            }
-        }
-        
-        // Print and check, before update probs
-        // put this outside, to print even when we do not prune
-        if (L == APP<Dtype>::show_layer && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0) {
-            Print(L, 'f');
-        }
-
-        // Update masks
-        if (IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
-            if (APP<Dtype>::prune_coremthd.substr(0, 2) == "FP" && APP<Dtype>::prune_unit == "Row" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
-                FilterPrune(); 
-            } else if (mthd == "PP_Col" && IF_hppf()) {
-                ProbPruneCol(APP<Dtype>::prune_interval);
-            } else if (mthd == "PP_Row" && IF_hppf()) {
-                ProbPruneRow(APP<Dtype>::prune_interval);
-            } else if (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg" && IF_hppf() && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
-                PruneMinimals();
-            } else if ((mthd == "PP-chl_Col" || mthd == "PP-chl-linear_Col") && IF_hppf()) { // TODO(mingsuntse): improve prune method name
-                ProbPruneCol_chl(APP<Dtype>::prune_interval);
-            } else {
-                //LOG(FATAL) << "Wrong: unknown prune_method";
-                //exit(1);
-            }
-            UpdatePrunedRatio();
-            this->IF_prune_finished();
-            if (L == APP<Dtype>::conv_layer_cnt - 1) { // To avoid the first fc from updating col
-                APP<Dtype>::pruned_rows.clear();
-            }
-        }
-        #ifdef ShowTimingLog
-        cout << "  after updating masks: " << (double)(clock() - t1) / CLOCKS_PER_SEC << endl;
-        #endif
-        
-        // Print weight magnitude
-    if (APP<Dtype>::num_log > 0) {
-        if (APP<Dtype>::prune_unit == "Col") {
-            cout << "ave-magnitude_col " << APP<Dtype>::step_ << " " << layer_name << ":";
-            for (int j = 0; j < num_col; ++j) {
-                Dtype sum = 0;
-                for (int i = 0; i < num_row; ++i) {
-                    sum += fabs(muweight[i*num_col + j]);
-                }
-                cout << " " << sum;
-            }
-            cout << endl;
-        } else if (APP<Dtype>::prune_unit == "Row") {
-            cout << "ave-magnitude_row " << APP<Dtype>::step_ << " " << layer_name << ":";
-            for (int i = 0; i < num_row; ++i) {
-                Dtype sum = 0;
-                for (int j = 0; j < num_col; ++j) {
-                    sum += fabs(muweight[i*num_col + j]);
-                }
-                cout << " " << sum;
-            }
-            cout << endl;
-        }
-    }
-        // Summary print 
-        if (mthd != "None" && L < APP<Dtype>::show_num_layer) {
-            cout << layer_name << "  IF_prune: " << IF_prune 
-                 << "  pruned_ratio: " << APP<Dtype>::pruned_ratio[L];
-            cout << "  pruned_ratio_row: " << APP<Dtype>::num_pruned_row[L] * 1.0 / num_row << "(" << APP<Dtype>::num_pruned_row[L] << ")"
-                 << "  pruned_ratio_col: " << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << "(" << APP<Dtype>::num_pruned_col[L] << ")";
-            cout << "  prune_ratio: "  << APP<Dtype>::prune_ratio[L] << endl;
-        }
-        
-        // Apply masks
-        if (this->IF_masks_updated) {
-            caffe_gpu_mul(this->blobs_[0]->count(), 
-                          this->blobs_[0]->gpu_data(),
-                          this->masks_[0]->gpu_data(),
-                          this->blobs_[0]->mutable_gpu_data());
-            this->IF_masks_updated = false;
-        }
-        #ifdef ShowTimingLog
-        cout << "  after updating masks: " << (double)(clock() - t1) / CLOCKS_PER_SEC << endl;
-        #endif
-        
-    } else if (this->phase_ == TEST && IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX && APP<Dtype>::prune_coremthd.substr(0, 2) == "PP") {
-        if (APP<Dtype>::mask_generate_mechanism == "group-wise") {
-            // use the old mask-generating mechanism
-            const int num_unit = (APP<Dtype>::prune_unit == "Row") ? num_row : num_col;
-            Dtype rands[num_unit];
-            caffe_rng_uniform(num_unit, (Dtype)0, (Dtype)1, rands);
-            for (int i = 0; i < count; ++i) {
-                const int row_index = i / num_col;
-                const int col_index = i % num_col;
-                const bool cond1 = (APP<Dtype>::prune_unit == "Row") ? rands[row_index] < APP<Dtype>::history_prob[L][row_index]
-                                                                     : rands[col_index] < APP<Dtype>::history_prob[L][col_index];
-                const bool cond2 = (APP<Dtype>::prune_unit == "Row") ? !APP<Dtype>::IF_col_pruned[L][col_index][0]
-                                                                     : !APP<Dtype>::IF_row_pruned[L][row_index];
-                APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
-                this->weight_backup[i] = muweight[i]; // backup weights
-                muweight[i] *= APP<Dtype>::masks[L][i];
-            }
-        } else if (APP<Dtype>::mask_generate_mechanism == "element-wise") {
-            // use the new mask-generating mechanism (1)
-            Dtype rands[count/10];
-            for (int i = 0; i < count; ++i) {
-        if (i % (count/10) == 0) {
-            caffe_rng_uniform(count/10, (Dtype)0, (Dtype)1, rands);
-        }
-                const int row_index = i / num_col;
-                const int col_index = i % num_col;
-                const bool cond1 = (APP<Dtype>::prune_unit == "Row") ? rands[i%(count/10)] < APP<Dtype>::history_prob[L][row_index]
-                                                                     : rands[i%(count/10)] < APP<Dtype>::history_prob[L][col_index];
-                const bool cond2 = (APP<Dtype>::prune_unit == "Row") ? !APP<Dtype>::IF_col_pruned[L][col_index][0]
-                                                                     : !APP<Dtype>::IF_row_pruned[L][row_index];
-                APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
-                this->weight_backup[i] = muweight[i]; // backup weights
-                muweight[i] *= APP<Dtype>::masks[L][i];
-            }
-        } else if (APP<Dtype>::mask_generate_mechanism == "channel-wise") {
-            // new mask-generating mechanism (2)
-            assert(APP<Dtype>::prune_unit != "Col");
-            const int num = this->blobs_[0]->count(0, 2); // number of channel
-            const int kernel_spatial_size = this->blobs_[0]->count(2);
-            Dtype rands[num];
-            caffe_rng_uniform(num, (Dtype)0, (Dtype)1, rands);
-            for (int i = 0; i < count; ++i) {
-                const int row_index = i / num_col;
-                const int col_index = i % num_col;
-                const int chl_index = i / kernel_spatial_size; // channel index
-                const bool cond1 = rands[chl_index] < APP<Dtype>::history_prob[L][row_index];
-                const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
-                APP<Dtype>::masks[L][i] = (cond1 && cond2) ? 1 : 0;
-                this->weight_backup[i] = muweight[i]; // backup weights
-                muweight[i] *= APP<Dtype>::masks[L][i];
-            }
-        } else {
-            LOG(INFO) << "Wrong, unknown mask_generate_mechanism";
-            exit(1);
-        }
-        this->IF_restore = true;
-    }
-  /// ------------------------------------------------------
-  
+    this->PruneForward(); /// @mingsuntse, for pruning
     const Dtype* weight = this->blobs_[0]->gpu_data();
     for (int i = 0; i < bottom.size(); ++i) {
         const Dtype* bottom_data    = bottom[i]->gpu_data();
@@ -197,28 +21,6 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             }
         }
     }
-    
-    /*
-    // ProbPruneRow-2, use feature map to measure importance
-    if (this->phase_ == TRAIN && APP<Dtype>::inner_iter == 0) {
-        if (IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
-            if (mthd == "PP-fm_Row") {
-                ProbPruneRow_fm(top, APP<Dtype>::prune_interval);
-            }
-            UpdatePrunedRatio();
-            if (L == APP<Dtype>::conv_layer_cnt - 1) { // To avoid the first fc from updating col
-                APP<Dtype>::pruned_rows.clear();
-            }
-        }
-    }
-    */
-    
-    /*
-    this->bottom_dim_: bottom feature map size, input
-    this->top_dim_: top feature map size, output
-    this->num_: batch size
-    */
-    
     /// Print feature map to check --------
     /// If row 3 and 8 are pruned in previous layer, then channel 3 and 8 will be only biases in this layer's feature map.
     /**
@@ -246,40 +48,23 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         }
     }
     */
-    /// -----------------------------------
     
-    /// Restore weights ----------------
+    // Restore weights when using ProbPrune
     if (this->IF_restore) {
+        /*
         /// cout << layer_name << ": restore weights! " << endl;
-        this->blobs_[0]->mutable_cpu_data();
+        Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
         /// this->blobs_[0]->gpu_data(); 
         /// Interesting! If the above line is added, something like "control" seems to transfer from cpu to gpu. 
         /// Then modifying cpu weights won't affect their gpu counterparts.
         for (int i = 0; i < count; ++i) {
             muweight[i] = this->weight_backup[i];
         }
-        
-        /**
-        /// ========================
-        /// Chech restore
-        cout << "weights from cpu:" << endl;
-        for (int i = 0; i < 20; ++i) {
-            cout << muweight[i] << " ";
-        }
-        cout << endl;
-
-        Dtype weight_cpu[count];
-        const Dtype* weight_gpu = this->blobs_[0]->gpu_data();
-        cout << "weights copied from gpu:" << endl;
-        cudaMemcpy(weight_cpu, weight_gpu, sizeof(Dtype) * count, cudaMemcpyDeviceToHost);
-        for (int i = 0; i < 20; ++i) {
-            cout << weight_cpu[i] << " ";
-        }
-        cout << endl;
-        /// ========================
         */
+        caffe_gpu_memcpy(this->blobs_[0]->count(),
+                         this->blobs_backup_[0]->gpu_data(),
+                         this->blobs_[0]->mutable_gpu_data());
     }
-    /// --------------------------------
 }
 
 template <typename Dtype>
@@ -330,53 +115,7 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
       }
     }
   }
-  
-/// ADDED BY WANGHUAN ------------------------------------------
-    Dtype* muweight_diff = this->blobs_[0]->mutable_cpu_diff();      
-    const int count   = this->blobs_[0]->count();
-    const int num_row = this->blobs_[0]->shape()[0];
-    const int num_col = count / num_row;
-    const int L = APP<Dtype>::layer_index[this->layer_param_.name()];
-
-    /// Diff log
-    if (APP<Dtype>::num_log) {
-        const int num_log = APP<Dtype>::log_index[L].size();
-        for (int i = 0; i < num_log; ++i) {
-            const int index = APP<Dtype>::log_index[L][i];
-            Dtype sum = 0;
-            for (int r = 0; r < num_row; ++r) {
-                sum += fabs(muweight_diff[r * num_col + index]);
-            }
-            sum /= num_row;
-            APP<Dtype>::log_diff[L][i].push_back(sum);
-        }
-    }
-    
-    // TaylorPrune
-    if (APP<Dtype>::prune_method == "TP_Row" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
-        const bool IF_want_prune  = APP<Dtype>::prune_method != "None" && APP<Dtype>::prune_ratio[L] > 0;
-        const bool IF_been_pruned = APP<Dtype>::pruned_ratio[L] > 0;
-        const bool IF_enough_iter = APP<Dtype>::step_ >= APP<Dtype>::prune_begin_iter+1;
-        const bool IF_prune = IF_want_prune && (IF_been_pruned || IF_enough_iter);
-        if (IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
-            TaylorPrune(top);
-        }
-    }
-    
-    // Print and check
-    if (L == APP<Dtype>::show_layer && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0 && APP<Dtype>::inner_iter == 0) {
-       Print(L, 'b');
-    }
-    
-    if (APP<Dtype>::prune_method != "None" && APP<Dtype>::pruned_ratio[L] > 0) { 
-        caffe_gpu_mul(this->blobs_[0]->count(), 
-                      this->blobs_[0]->gpu_diff(), 
-                      this->masks_[0]->gpu_data(), 
-                      this->blobs_[0]->mutable_gpu_diff());
-    }
-/// ------------------------------------------------------------- 
-  
-  
+  this->PruneBackward(top); /// @mingsuntse, for pruning
 }
 
 INSTANTIATE_LAYER_GPU_FUNCS(ConvolutionLayer);

@@ -28,10 +28,6 @@ class BaseConvolutionLayer : public Layer<Dtype> {
   virtual inline int MinTopBlobs() const { return 1; }
   virtual inline bool EqualNumBottomTopBlobs() const { return true; }
 
-  virtual void ComputeBlobMask() {}   // WANGHUAN
-  virtual void PruneSetUp(const PruneParameter& prune_param) {} // WANGHUAN
-
-
  protected:
   // Helper functions that abstract away the column buffer and gemm arguments.
   // The last argument in forward_cpu_gemm is so that we can skip the im2col if

@@ -54,10 +54,12 @@ bool ReadProtoFromBinaryFile(const char* filename, Message* proto) {
   CHECK_NE(fd, -1) << "File not found: " << filename;
   ZeroCopyInputStream* raw_input = new FileInputStream(fd);
   CodedInputStream* coded_input = new CodedInputStream(raw_input);
-  coded_input->SetTotalBytesLimit(kProtoReadBytesLimit, 536870912);
+  coded_input->SetTotalBytesLimit(kProtoReadBytesLimit, 536870912); // 2^29
 
   bool success = proto->ParseFromCodedStream(coded_input);
-
+  LOG(INFO) << "Read Proto From Binary File: '" << filename << "', suspend for 2 seconds..";
+  sleep(2);
+  
   delete coded_input;
   delete raw_input;
   close(fd);
@@ -67,6 +69,8 @@ bool ReadProtoFromBinaryFile(const char* filename, Message* proto) {
 void WriteProtoToBinaryFile(const Message& proto, const char* filename) {
   fstream output(filename, ios::out | ios::trunc | ios::binary);
   CHECK(proto.SerializeToOstream(&output));
+  LOG(INFO) << "Write Proto To Binary File, suspend for 2 seconds..";
+  sleep(2);
 }
 
 #ifdef USE_OPENCV
@@ -119,7 +123,6 @@ cv::Mat ReadImageToCVMat(const string& filename,
     }
 
     return cv_img;
-    
 }
 
 cv::Mat ReadImageToCVMat(const string& filename,

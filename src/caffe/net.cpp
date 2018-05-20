@@ -490,7 +490,7 @@ void Net<Dtype>::AppendParam(const NetParameter& param, const int layer_id,
   params_.push_back(layers_[layer_id]->blobs()[param_id]); // @mingsuntse note this
   
   param_id_vecs_[layer_id].push_back(net_param_id);
-  param_layer_indices_.push_back(make_pair(layer_id, param_id)); // TOCHECK(@mingsuntse)
+  param_layer_indices_.push_back(make_pair(layer_id, param_id)); // TODO(mingsuntse): check
   ParamSpec default_param_spec;
   const ParamSpec* param_spec = (layer_param.param_size() > param_id) ?
       &layer_param.param(param_id) : &default_param_spec;
@@ -599,7 +599,7 @@ const vector<Blob<Dtype>*>& Net<Dtype>::Forward(Dtype* loss) {
   if (loss != NULL) {
     *loss = ForwardFromTo(0, layers_.size() - 1);
   } else {
-    ForwardFromTo(0, layers_.size() - 1); // test的时候没有loss
+    ForwardFromTo(0, layers_.size() - 1);
   }
   return net_output_blobs_;
 }
@@ -806,12 +806,6 @@ void Net<Dtype>::CopyTrainedLayersFrom(const NetParameter& param) {
         layers_[target_layer_id]->blobs();
     CHECK_EQ(target_blobs.size(), source_layer.blobs_size())
         << "Incompatible number of blobs for layer " << source_layer_name;
-    
-    /*
-    std::cout << "Copying weights - " << source_layer_name << std::endl;
-    std::cout << "target_blobs.size() " << target_blobs.size() << std::endl;
-    */
-    
     for (int j = 0; j < target_blobs.size(); ++j) {
       if (!target_blobs[j]->ShapeEquals(source_layer.blobs(j))) {
         Blob<Dtype> source_blob;
@@ -824,7 +818,6 @@ void Net<Dtype>::CopyTrainedLayersFrom(const NetParameter& param) {
             << "To learn this layer's parameters from scratch rather than "
             << "copying from a saved net, rename the layer.";
       }
-
         const bool kReshape = false;
         target_blobs[j]->FromProto(source_layer.blobs(j), kReshape);
     }
@@ -833,7 +826,7 @@ void Net<Dtype>::CopyTrainedLayersFrom(const NetParameter& param) {
     // WANGHUAN, restore masks
     if (APP<Dtype>::prune_method != "None" && phase_ == TRAIN && target_blobs.size()) {
         LOG(INFO) << "Going to restore masks from binproto file, current layer: " << source_layer_name;
-        layers_[target_layer_id]->ComputeBlobMask();
+        layers_[target_layer_id]->RestoreMasks();
     }
     // ---------------------------------------------------------------------------------------------
   }
@@ -845,9 +838,8 @@ void Net<Dtype>::CopyTrainedLayersFrom(const string trained_filename) {
       trained_filename.compare(trained_filename.size() - 3, 3, ".h5") == 0) {
     CopyTrainedLayersFromHDF5(trained_filename); // If .h5 file used, we can restore directly from .h5 file.
   } else {
-    CopyTrainedLayersFromBinaryProto(trained_filename); // While binproto file  used, we first need to read params from the binproto file, then restore.
+    CopyTrainedLayersFromBinaryProto(trained_filename); // When binproto file  used, we first need to read params from the binproto file, then restore.
   }
-
 }
 
 template <typename Dtype>
@@ -887,15 +879,7 @@ void Net<Dtype>::CopyTrainedLayersFromHDF5(const string trained_filename) {
     int num_source_params = hdf5_get_num_links(layer_hid);
     CHECK_LE(num_source_params, target_blobs.size())
         << "Incompatible number of blobs for layer " << source_layer_name;
-        
-    // ---------------------------------------------------------------------------------------------
-    // WANGHUAN, restore masks
-    if (APP<Dtype>::prune_method != "None" && phase_ == TRAIN && target_blobs.size()) {
-        LOG(INFO) << "Going to restore masks from H5 file, current layer: " << source_layer_name;
-        layers_[target_layer_id]->ComputeBlobMask();
-    }
-    // ---------------------------------------------------------------------------------------------
-    
+
     for (int j = 0; j < target_blobs.size(); ++j) {
       ostringstream oss;
       oss << j;
@@ -912,9 +896,15 @@ void Net<Dtype>::CopyTrainedLayersFromHDF5(const string trained_filename) {
         }
       }
       hdf5_load_nd_dataset(layer_hid, dataset_name.c_str(), 0, kMaxBlobAxes,
-          target_blobs[j].get());
+          target_blobs[j].get()); // load parameters into blobs
     }
     H5Gclose(layer_hid);
+    
+    /// @mingsuntse
+    if (APP<Dtype>::prune_method != "None" && phase_ == TRAIN && target_blobs.size()) {
+        LOG(INFO) << "Going to restore masks from H5 file, current layer: " << source_layer_name;
+        layers_[target_layer_id]->RestoreMasks();
+    }
   }
   H5Gclose(data_hid);
   H5Fclose(file_hid);

@@ -77,26 +77,6 @@ class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
   virtual inline bool reverse_dimensions() { return false; }
   virtual void compute_output_shape();
-  // -----------------------------------------
-  // Added by WANGHUAN for pruning
-  virtual void ComputeBlobMask();
-  virtual void RestorePruneProb(const Dtype& pruned_r);
-  virtual void FilterPrune(); 
-  virtual void TaylorPrune(const vector<Blob<Dtype>*>& top);
-  virtual void ProbPruneCol(const int& prune_interval);
-  virtual void ProbPruneCol_chl(const int& prune_interval);
-  virtual void ProbPruneRow(const int& prune_interval);
-  virtual void ProbPruneRow_fm(const vector<Blob<Dtype>*>& top, const int& prune_interval);
-  virtual void PruneMinimals();
-  virtual void CleanWorkForPP();
-  virtual void UpdateNumPrunedRow(); 
-  virtual void UpdateNumPrunedCol(); 
-  virtual void UpdatePrunedRatio();
-  virtual bool IF_hppf();
-  virtual void Print(const int& L, char mode);
-  virtual void PruneSetUp(const PruneParameter& prune_param);
-  virtual Dtype normal_random();
-
 };
 
 }  // namespace caffe

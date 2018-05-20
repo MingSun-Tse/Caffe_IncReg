@@ -1,18 +1,16 @@
 #include <string>
 #include <vector>
-
+#include <numeric>
+#include <cmath>
+#include <algorithm>
+#include <fstream>
+#include <ctime>
 #include "caffe/sgd_solvers.hpp"
 #include "caffe/util/hdf5.hpp"
 #include "caffe/util/io.hpp"
 #include "caffe/util/upgrade_proto.hpp"
 #include "caffe/util/math_functions.hpp"
-#include <numeric>
 #include "caffe/adaptive_probabilistic_pruning.hpp"
-#include <cmath>
-#include <algorithm>
-#include <fstream>
-#include <ctime>
-#define NUM_SHOW 20
 
 
 namespace caffe {
@@ -78,17 +76,21 @@ void SGDSolver<Dtype>::PreSolve() {
   history_.clear();
   update_.clear();
   temp_.clear();
-  
-  history_reg_.clear();
+  /// @mingsuntse, for pruning
+  history_score_.clear();
+  history_punish_.clear();
   tmp_.clear();
+  
   for (int i = 0; i < net_params.size(); ++i) {
     const vector<int>& shape = net_params[i]->shape();
     history_.push_back(shared_ptr<Blob<Dtype> >(new Blob<Dtype>(shape)));
     update_.push_back(shared_ptr<Blob<Dtype> >(new Blob<Dtype>(shape)));
     temp_.push_back(shared_ptr<Blob<Dtype> >(new Blob<Dtype>(shape)));  
     
-    history_reg_.push_back(shared_ptr<Blob<Dtype> >(new Blob<Dtype>(shape))); // @mingsuntse
-    tmp_.push_back(shared_ptr<Blob<Dtype> >(new Blob<Dtype>(shape))); // @mingsuntse
+    /// @mingsuntse, for pruning
+    history_score_.push_back(shared_ptr<Blob<Dtype> >(new Blob<Dtype>(shape)));
+    history_punish_.push_back(shared_ptr<Blob<Dtype> >(new Blob<Dtype>(shape)));
+    tmp_.push_back(shared_ptr<Blob<Dtype> >(new Blob<Dtype>(shape)));
   }
 }
 
@@ -319,7 +321,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         }
         if (APP<Dtype>::step_ % APP<Dtype>::prune_interval == 0) {
             
-            Dtype* muhistory_reg_ = history_reg_[param_id]->mutable_cpu_data();
+            Dtype* muhistory_punish_ = history_punish_[param_id]->mutable_cpu_data();
             // (1) Reg-rank_Col
             if (APP<Dtype>::prune_coremthd == "Reg-rank" || APP<Dtype>::prune_coremthd == "Reg") {
                 // Sort 01: sort by L1-norm
@@ -411,7 +413,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                         const Dtype new_reg = std::max(old_reg + Delta, Dtype(0));
                         APP<Dtype>::history_reg[L][col_of_rank_j] = new_reg;
                         for (int i = 0; i < num_row; ++i) {
-                            muhistory_reg_[i * num_col + col_of_rank_j] = new_reg;
+                            muhistory_punish_[i * num_col + col_of_rank_j] = new_reg;
                         }
                         
                         // Print
@@ -435,7 +437,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                         const Dtype new_reg = std::max(old_reg + Delta, Dtype(0));
                         APP<Dtype>::history_reg[L][col_of_rank_j] = new_reg;
                         for (int i = 0; i < num_row; ++i) {
-                            muhistory_reg_[i * num_col + col_of_rank_j] = new_reg;
+                            muhistory_punish_[i * num_col + col_of_rank_j] = new_reg;
                         }
                     }
                 }
@@ -467,7 +469,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                     APP<Dtype>::history_reg[L][col_of_rank_rk] = new_reg;
                     
                     for (int i = 0; i < num_row; ++i) {
-                        muhistory_reg_[i * num_col + col_of_rank_rk] = new_reg;
+                        muhistory_punish_[i * num_col + col_of_rank_rk] = new_reg;
                     }
                     // Print
                     if (new_reg < old_reg) {
@@ -478,7 +480,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                 }
                 
                 // Print
-                const int num_show = NUM_SHOW > num_col ? num_col : NUM_SHOW;
+                const int num_show = APP<Dtype>::show_num_weight > num_col ? num_col : APP<Dtype>::show_num_weight;
                 cout << layer_name << "-score: "; for (int rk = 0; rk < num_show; ++rk) { cout << col_score[rk].first  << " "; } cout << endl;
                 cout << layer_name << "  -col: "; for (int rk = 0; rk < num_show; ++rk) { cout << col_score[rk].second << " "; } cout << endl;
                 cout << layer_name << "  -reg: "; for (int rk = 0; rk < num_show; ++rk) { cout << APP<Dtype>::history_reg[L][col_score[rk].second] << " "; } cout << endl;
@@ -492,7 +494,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         //Apply Reg
         caffe_gpu_mul(count,
                       net_params[param_id]->gpu_data(),
-                      history_reg_[param_id]->gpu_data(),
+                      history_punish_[param_id]->gpu_data(),
                       tmp_[param_id]->mutable_gpu_data());
         #ifdef ShowTimingLog
         cout << "  after gpu mul: " << (double)(clock() - t1)/CLOCKS_PER_SEC << "s" << endl;
@@ -527,7 +529,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         const int num_pruned_col    = APP<Dtype>::num_pruned_col[L];
         const int num_col_to_prune_ = ceil(num_col * APP<Dtype>::prune_ratio[L]) - num_pruned_col;
         const int num_col_ = num_col - num_pruned_col;
-        Dtype* muhistory_reg_ = history_reg_[param_id]->mutable_cpu_data();
+        Dtype* muhistory_punish_ = history_punish_[param_id]->mutable_cpu_data();
         if (num_col_to_prune_ <= 0) {
             LOG(FATAL) << "num_col_to_prune_ <= 0";
             exit(1);
@@ -590,7 +592,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                          << endl;
                 }
                 
-                muhistory_reg_[i] += min(APP<Dtype>::AA, fabs(x - D));
+                muhistory_punish_[i] += min(APP<Dtype>::AA, fabs(x - D));
                 APP<Dtype>::history_reg[L][i % num_col] += min(APP<Dtype>::AA, fabs(x - D)) / num_col;
                 
                 // compr[i % num_col] += fabs((x - D) / x); // |\Delta w / w|
@@ -625,7 +627,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         //Apply Reg
         caffe_gpu_mul(count,
                       net_params[param_id]->gpu_data(),
-                      history_reg_[param_id]->gpu_data(),
+                      history_punish_[param_id]->gpu_data(),
                       tmp_[param_id]->mutable_gpu_data());
         #ifdef ShowTimingLog
         cout << "  after gpu mul: " << (double)(clock() - t1)/CLOCKS_PER_SEC << "s" << endl;
@@ -824,7 +826,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             }
             
             // Print
-            const int num_show = 10000 > num_row ? num_row : NUM_SHOW;
+            const int num_show = 10000 > num_row ? num_row : APP<Dtype>::show_num_weight;
             cout << "score: ";   for (int rk = 0; rk < num_show; ++rk) { cout << row_score[rk].first  << " "; }
             cout << "\n  row: "; for (int rk = 0; rk < num_show; ++rk) { cout << row_score[rk].second << " "; }
             cout << "\n  reg: "; for (int rk = 0; rk < num_show; ++rk) { cout << APP<Dtype>::history_reg[L][row_score[rk].second] << " "; }
@@ -1044,7 +1046,6 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
       } else {
           LOG(FATAL) << "Unknown regularization type: " << regularization_type;
       }
-
     }
 #else
     NO_GPU;
@@ -1134,10 +1135,19 @@ void SGDSolver<Dtype>::SnapshotSolverStateToBinaryProto(
   state.set_learned_net(model_filename);
   state.set_current_step(this->current_step_);
   state.clear_history();
+  state.clear_history_score();
+  state.clear_history_punish();
+  
   for (int i = 0; i < history_.size(); ++i) {
     // Add history
     BlobProto* history_blob = state.add_history();
+    BlobProto* history_score_blob = state.add_history_score(); /// @mingsuntse, for pruning
+    BlobProto* history_punish_blob = state.add_history_punish();
     history_[i]->ToProto(history_blob);
+    if (APP<Dtype>::prune_method != "None") {
+        history_score_[i]->ToProto(history_score_blob);
+        history_punish_[i]->ToProto(history_punish_blob);
+    }
   }
   string snapshot_filename = Solver<Dtype>::SnapshotFilename(".solverstate");
   LOG(INFO)
@@ -1145,6 +1155,7 @@ void SGDSolver<Dtype>::SnapshotSolverStateToBinaryProto(
   WriteProtoToBinaryFile(state, snapshot_filename.c_str());
 }
 
+// TODO(mingsuntse): Add history_score etc. in .h5
 template <typename Dtype>
 void SGDSolver<Dtype>::SnapshotSolverStateToHDF5(
     const string& model_filename) {
@@ -1187,8 +1198,20 @@ void SGDSolver<Dtype>::RestoreSolverStateFromBinaryProto(
   CHECK_EQ(state.history_size(), history_.size())
       << "Incorrect length of history blobs.";
   LOG(INFO) << "SGDSolver: restoring history";
+  if (APP<Dtype>::prune_method != "None") {
+      CHECK_EQ(state.history_score_size(), history_score_.size())
+          << "Incorrect length of history score blobs.";
+      LOG(INFO) << "SGDSolver: restoring history score";
+      CHECK_EQ(state.history_punish_size(), history_punish_.size())
+          << "Incorrect length of history punish blobs.";
+      LOG(INFO) << "SGDSolver: restoring history punish";
+  }
   for (int i = 0; i < history_.size(); ++i) {
     history_[i]->FromProto(state.history(i));
+    if (APP<Dtype>::prune_method != "None") {
+        history_score_[i]->FromProto(state.history_score(i));
+        history_punish_[i]->FromProto(state.history_punish(i));
+    }
   }
 }
 
@@ -1212,7 +1235,6 @@ int SGDSolver<Dtype>::GetLayerIndex(const int& param_id) {
     if (shape.size() == 1) { return -1; }
     
     return L;
-    
 }
 
 template <typename Dtype>

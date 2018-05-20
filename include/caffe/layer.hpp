@@ -79,14 +79,30 @@ class Layer {
   // added by mingsuntse
   void kmeans_cluster(vector<int> &cLabel, vector<Dtype> &cCentro, Dtype *cWeights, int nWeights, \
     vector<bool> &mask, int nCluster,  int max_iter);
-
-  // Deep compression
-  // 这个虚函数是必要的，因为只有卷积和FC层需要pruning，但是net.cpp中接口都是layers_，所以如果只能在这一层就定义好，然后在卷积和FC层具体实现
-  // 其他例如loss、pool层就不实现
-  virtual void ComputeBlobMask() {}
-  void IF_prune_finished();
   
-  // added by mingsuntse
+  /// Added by @mingsuntse, for pruning
+  // Tool functions
+  void RestoreMasks();
+  void RestorePruneProb();
+  void IF_prune_finished();
+  bool IF_hppf();
+  void UpdateNumPrunedRow();
+  void UpdateNumPrunedCol();
+  void UpdatePrunedRatio();
+  void Print(char mode);
+  // Pruning methods
+  void FilterPrune();
+  void TaylorPrune(const vector<Blob<Dtype>*>& top);
+  void ProbPruneCol(const int& prune_interval);
+  void ProbPruneCol_chl(const int& prune_interval);
+  void ProbPruneRow(const int& prune_interval);
+  void ProbPruneRow_fm(const vector<Blob<Dtype>*>& top, const int& prune_interval);
+  void PruneMinimals();
+  // Main pruning functions
+  void PruneSetUp(const PruneParameter& prune_param);
+  void PruneForward();
+  void PruneBackward(const vector<Blob<Dtype>*>& top);
+
   int num_pruned_col;
   int num_pruned_row;
   int num_pruned_weight;
@@ -372,7 +388,9 @@ class Layer {
   Phase phase_;
   /** The vector that stores the learnable parameters as a set of blobs. */
   vector<shared_ptr<Blob<Dtype> > > blobs_;
-  vector<shared_ptr<Blob<Dtype> > > masks_; // @mingsuntse for pruning
+  vector<shared_ptr<Blob<Dtype> > > masks_; /// @mingsuntse, for pruning
+  vector<shared_ptr<Blob<Dtype> > > blobs_backup_; /// @mingsuntse, for pruning
+  
   /** Vector indicating whether to compute the diff of each param blob. */
   vector<bool> param_propagate_down_;
 
