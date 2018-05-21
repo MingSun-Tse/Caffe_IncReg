@@ -114,9 +114,7 @@ class Layer {
   bool IF_restore;
   bool IF_prune;
   bool IF_masks_updated;
-  vector<Dtype> history_score;
 
-  vector<Dtype> weight_backup;
   vector<bool> IF_col_pruned;
   vector<bool> IF_row_pruned;
   
@@ -234,12 +232,16 @@ class Layer {
   vector<shared_ptr<Blob<Dtype> > >& blobs() {
     return blobs_;
   }
-  
   /// @mingsuntse Return masks
   vector<shared_ptr<Blob<Dtype> > >& masks() {
       return masks_;
   }
-
+  vector<shared_ptr<Blob<Dtype> > >& history_punish() {
+      return history_punish_;
+  }
+  vector<shared_ptr<Blob<Dtype> > >& history_score() {
+      return history_score_;
+  }
   /**
    * @brief Returns the layer parameter.
    */
@@ -377,19 +379,18 @@ class Layer {
     param_propagate_down_[param_id] = value;
   }
 
-
-
-
- protected:  
-
+ protected:
   /** The protobuf that stores the layer parameters */
   LayerParameter layer_param_;
   /** The phase: TRAIN or TEST */
   Phase phase_;
   /** The vector that stores the learnable parameters as a set of blobs. */
   vector<shared_ptr<Blob<Dtype> > > blobs_;
-  vector<shared_ptr<Blob<Dtype> > > masks_; /// @mingsuntse, for pruning
-  vector<shared_ptr<Blob<Dtype> > > blobs_backup_; /// @mingsuntse, for pruning
+  /// @mingsuntse, for pruning
+  vector<shared_ptr<Blob<Dtype> > > masks_;
+  vector<shared_ptr<Blob<Dtype> > > blobs_backup_;
+  vector<shared_ptr<Blob<Dtype> > > history_score_;
+  vector<shared_ptr<Blob<Dtype> > > history_punish_;
   
   /** Vector indicating whether to compute the diff of each param blob. */
   vector<bool> param_propagate_down_;
@@ -507,10 +508,7 @@ class Layer {
   void Lock();
   /** Unlock forward_mutex_ if this layer is shared */
   void Unlock();
-
-
-
-
+  
   DISABLE_COPY_AND_ASSIGN(Layer);
 };  // class Layer
 
@@ -526,7 +524,7 @@ inline Dtype Layer<Dtype>::Forward(const vector<Blob<Dtype>*>& bottom,
   Reshape(bottom, top);
   switch (Caffe::mode()) {
   case Caffe::CPU:
-    Forward_cpu(bottom, top); // 虚函数，看各个层具体实现
+    Forward_cpu(bottom, top); // virtual function
     for (int top_id = 0; top_id < top.size(); ++top_id) {
       if (!this->loss(top_id)) { continue; }
       const int count = top[top_id]->count();

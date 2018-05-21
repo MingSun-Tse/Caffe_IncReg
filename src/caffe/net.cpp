@@ -505,9 +505,6 @@ void Net<Dtype>::AppendParam(const NetParameter& param, const int layer_id,
     }
     const int learnable_param_id = learnable_params_.size();
     learnable_params_.push_back(params_[net_param_id].get());
-    //std::cout << layers_[layer_id]->masks()[param_id].get() << std::endl;
-    //learnable_mask_params_.push_back(layers_[layer_id]->masks()[param_id].get()); // @mingsuntse // layers_[layer_id]->masks()[param_id].get()
-    
     learnable_param_ids_.push_back(learnable_param_id);
     has_params_lr_.push_back(param_spec->has_lr_mult());
     has_params_decay_.push_back(param_spec->has_decay_mult());

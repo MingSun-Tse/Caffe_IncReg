@@ -22,9 +22,8 @@ class SGDSolver : public Solver<Dtype> {
   virtual inline const char* type() const { return "SGD"; }
 
   const vector<shared_ptr<Blob<Dtype> > >& history() { return history_; }
-  bool Comparator(const std::pair<Dtype, int>& left, const std::pair<Dtype, int>& right);
-  void ClearHistory(const int& param_id); // WANGHUAN
-  int GetLayerIndex(const int& param_id); // WANGHUAN
+  void ClearHistory(const int& param_id);
+  const int GetLayerIndex(const int& param_id);
 
  protected:
   void PreSolve();
@@ -43,7 +42,7 @@ class SGDSolver : public Solver<Dtype> {
   // update maintains update related data and is not needed in snapshots.
   // temp maintains other information that might be needed in computation
   //   of gradients/updates and is not needed in snapshots
-  vector<shared_ptr<Blob<Dtype> > > history_, history_score_, history_punish_, update_, temp_, tmp_; /// @mingsuntse, `history_reg_, tmp_` for pruning using regularization
+  vector<shared_ptr<Blob<Dtype> > > history_, update_, temp_, tmp_; /// @mingsuntse, for pruning
 
   DISABLE_COPY_AND_ASSIGN(SGDSolver);
 };

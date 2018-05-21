@@ -25,10 +25,14 @@ void InnerProductLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       this->blobs_.resize(2);
       this->masks_.resize(2);
       this->blobs_backup_.resize(2);
+      this->history_score_.resize(2);
+      this->history_punish_.resize(2);
     } else {
       this->blobs_.resize(1);
       this->masks_.resize(1);
       this->blobs_backup_.resize(1);
+      this->history_score_.resize(1);
+      this->history_punish_.resize(1);
     }
     // Initialize the weights
     vector<int> weight_shape(2);
@@ -42,6 +46,8 @@ void InnerProductLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     this->blobs_[0].reset(new Blob<Dtype>(weight_shape));
     this->masks_[0].reset(new Blob<Dtype>(weight_shape)); /// @mingsuntse: added for pruning
     this->blobs_backup_[0].reset(new Blob<Dtype>(weight_shape));
+    this->history_score_[0].reset(new Blob<Dtype>(weight_shape));
+    this->history_punish_[0].reset(new Blob<Dtype>(weight_shape));
     
     // fill the weights
     shared_ptr<Filler<Dtype> > weight_filler(GetFiller<Dtype>(
@@ -53,6 +59,8 @@ void InnerProductLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       this->blobs_[1].reset(new Blob<Dtype>(bias_shape));
       this->masks_[1].reset(new Blob<Dtype>(bias_shape));
       this->blobs_backup_[1].reset(new Blob<Dtype>(bias_shape));
+      this->history_score_[1].reset(new Blob<Dtype>(bias_shape));
+      this->history_punish_[1].reset(new Blob<Dtype>(bias_shape));
       shared_ptr<Filler<Dtype> > bias_filler(GetFiller<Dtype>(
           this->layer_param_.inner_product_param().bias_filler()));
       bias_filler->Fill(this->blobs_[1].get());
@@ -62,10 +70,22 @@ void InnerProductLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     caffe_gpu_set(this->masks_[0]->count(),
                   static_cast<Dtype>(1),
                   this->masks_[0]->mutable_gpu_data());
+    caffe_gpu_set(this->history_score_[0]->count(),
+                  static_cast<Dtype>(0),
+                  this->history_score_[0]->mutable_gpu_data());
+    caffe_gpu_set(this->history_punish_[0]->count(),
+                  static_cast<Dtype>(0),
+                  this->history_punish_[0]->mutable_gpu_data());
     if (bias_term_) {
         caffe_gpu_set(this->masks_[1]->count(),
                       static_cast<Dtype>(1),
                       this->masks_[1]->mutable_gpu_data());
+        caffe_gpu_set(this->history_score_[1]->count(),
+                      static_cast<Dtype>(0),
+                      this->history_score_[1]->mutable_gpu_data());
+        caffe_gpu_set(this->history_punish_[1]->count(),
+                      static_cast<Dtype>(0),
+                      this->history_punish_[1]->mutable_gpu_data());
     }
   }
   this->param_propagate_down_.resize(this->blobs_.size(), true);

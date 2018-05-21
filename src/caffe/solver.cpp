@@ -53,7 +53,7 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   CHECK(Caffe::root_solver() || root_solver_)
       << "root_solver_ needs to be set for all non-root solvers";
   LOG_IF(INFO, Caffe::root_solver()) << "Initializing solver from parameters: "
-    << std::endl << param.DebugString(); // 这里打印出solver_params
+    << std::endl << param.DebugString();
   param_ = param;
   
   // ------------------------------------------
@@ -94,14 +94,12 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   APP<Dtype>::num_iter_reg = 10000;
   APP<Dtype>::reg_cushion_iter = 2000;
   APP<Dtype>::hrank_momentum = 0.999;
- // APP<Dtype>::mask_generate_mechanism = param_.mask_generate_mechanism();
-  
+  // APP<Dtype>::mask_generate_mechanism = param_.mask_generate_mechanism();
   // APP<Dtype>::score_decay = param_.score_decay();
   APP<Dtype>::snapshot_prefix = param_.snapshot_prefix();
   // ------------------------------------------
 
   CHECK_GE(param_.average_loss(), 1) << "average_loss should be non-negative.";
-
   CheckSnapshotWritePermissions();
   if (Caffe::root_solver() && param_.random_seed() >= 0) {
     Caffe::set_random_seed(param_.random_seed());
@@ -115,7 +113,6 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   }
   iter_ = 0;
   current_step_ = 0;
-
 }
 
 template <typename Dtype>
@@ -145,7 +142,7 @@ void Solver<Dtype>::InitTrainNet() {
   if (param_.has_net()) {
     LOG_IF(INFO, Caffe::root_solver())
         << "Creating training net from net file: " << param_.net();
-    ReadNetParamsFromTextFileOrDie(param_.net(), &net_param); // 读入网络结构
+    ReadNetParamsFromTextFileOrDie(param_.net(), &net_param);
   }
   // Set the correct NetState.  We start with the solver defaults (lowest
   // precedence); then, merge in any NetState specified by the net_param itself;
@@ -255,7 +252,6 @@ void Solver<Dtype>::Step(int iters) {
 
   while (iter_ < stop_iter) {
     APP<Dtype>::step_ = iter_ + 1;
-    
     // zero-init the params
     net_->ClearParamDiffs();
     if (param_.test_interval() && iter_ % param_.test_interval() == 0
@@ -267,13 +263,11 @@ void Solver<Dtype>::Step(int iters) {
         break;
       }
     }
-    
     // 分发参数
     // std::cout << "call_backs_.size(): " << callbacks_.size() << std::endl; /// WANGHUAN
     for (int i = 0; i < callbacks_.size(); ++i) {
       callbacks_[i]->on_start();
     }
-    
     const bool display = param_.display() && iter_ % param_.display() == 0;
     net_->set_debug_info(display && param_.debug_info());
     // accumulate the loss and gradient
@@ -286,7 +280,6 @@ void Solver<Dtype>::Step(int iters) {
         requested_early_exit_ = true;
         break;
     }
-
     // GFLOPs, since it measures the speedup of the whole net, so put it here rather than in layer.
     Dtype GFLOPs_left   = 0;
     Dtype GFLOPs_origin = 0;
@@ -300,7 +293,6 @@ void Solver<Dtype>::Step(int iters) {
     if (APP<Dtype>::prune_unit == "Col" || APP<Dtype>::prune_unit == "Row") {
         APP<Dtype>::IF_speedup_achieved = GFLOPs_origin/GFLOPs_left >= APP<Dtype>::speedup;
     }
-    
     Dtype num_param_left   = 0;
     Dtype num_param_origin = 0;
     const int num_layer_begin = APP<Dtype>::IF_compr_count_conv ? 0 : APP<Dtype>::conv_layer_cnt;
@@ -311,7 +303,6 @@ void Solver<Dtype>::Step(int iters) {
     if (APP<Dtype>::prune_unit == "Weight") {
         APP<Dtype>::IF_compRatio_achieved = num_param_origin/num_param_left >= APP<Dtype>::compRatio;
     }
-
     cout << "\n**** Step " << APP<Dtype>::step_ << ": " 
          << GFLOPs_origin / GFLOPs_left << "/" << APP<Dtype>::speedup << " "
          << num_param_origin / num_param_left << "/" << APP<Dtype>::compRatio
@@ -379,7 +370,7 @@ void Solver<Dtype>::Step(int iters) {
       callbacks_[i]->on_gradients_ready();
     }
     
-    ApplyUpdate(); /// Virtual Function
+    ApplyUpdate(); // Then goes into sgd_solver
     cout << "--- after ApplyUpdate: " << (double)(clock() - t1) / CLOCKS_PER_SEC << endl;
 
     // Increment the internal iter_ counter -- its value should always indicate
@@ -640,7 +631,7 @@ void Solver<Dtype>::PruneStateShot() {
     }
 }
 
-// Deprecated
+/// @mingsuntse, Deprecated
 template <typename Dtype>
 void Solver<Dtype>::Logshot() {
     const time_t t = time(NULL);
@@ -680,7 +671,7 @@ void Solver<Dtype>::Logshot() {
             log_i << "\n";
         }
     }
-                
+    
     if (!log_w.is_open()) { 
         cout << "Error: opening file failed: " << ww << endl; 
     } else {

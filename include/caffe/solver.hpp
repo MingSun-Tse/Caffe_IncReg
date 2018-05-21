@@ -116,8 +116,6 @@ class Solver {
 
   SolverParameter param_;
   int iter_;
-
-  
   int current_step_;
   shared_ptr<Net<Dtype> > net_;
   vector<shared_ptr<Net<Dtype> > > test_nets_;

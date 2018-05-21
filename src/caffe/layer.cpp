@@ -3,9 +3,7 @@
 #include "caffe/layer.hpp"
 #include "caffe/adaptive_probabilistic_pruning.hpp"
 
-
 namespace caffe {
-
 template <typename Dtype>
 void Layer<Dtype>::InitMutex() {
   forward_mutex_.reset(new boost::mutex());
@@ -46,7 +44,6 @@ void Layer<Dtype>::kmeans_cluster(vector<int> &cLabel, vector<Dtype> &cCentro, D
   // generate initial centroids linearly
   for (int k = 0; k < nCluster; k++)
     cCentro[k] = minWeight + (maxWeight - minWeight) * k / (nCluster - 1);
-
 
   Dtype *ptrC = new Dtype[nCluster]; // 用来存各个中心的权重的和，和下面的相除得到各个中心新的值
   int *ptrS = new int[nCluster]; // 用来存各个中心的权重的个数
@@ -283,11 +280,11 @@ template <typename Dtype>
 void Layer<Dtype>::Print(char mode) {
     assert(mode == 'f' || mode = 'b'); /// forward, backward
     const string layer_name = this->layer_param_.name();
-    const int L = APP<Dtype>::layer_index[layer_name];
     const int num_col = this->blobs_[0]->count() / this->blobs_[0]->shape()[0];
     const int num_row = this->blobs_[0]->shape()[0];
     const Dtype* w = this->blobs_[0]->cpu_data();
     const Dtype* d = this->blobs_[0]->cpu_diff();
+    const Dtype* m = this->masks_[0]->cpu_data();
 
     // print Index, blob, Mask
     cout.width(5);  cout << "Index" << "   ";
@@ -296,21 +293,8 @@ void Layer<Dtype>::Print(char mode) {
     cout.width(4);  cout << "Mask" << "   ";
     
     // print additional info
-    char* coremthd = new char[strlen(APP<Dtype>::prune_coremthd.c_str()) + 1];
-    strcpy(coremthd, APP<Dtype>::prune_coremthd.c_str());
-    const string coremthd_ = strtok(coremthd, "-");
-    string info = "Unknown";
-    vector<Dtype> info_data; 
-    if (coremthd_ == "Reg") { // TODO(mingsuntse): prune method name needs to be unified.
-        info = "HistoryReg";
-        info_data = APP<Dtype>::history_reg[L];
-    } else if (coremthd_ == "PP") {
-        info = "HistoryProb";
-        info_data = APP<Dtype>::history_prob[L];
-    } else {
-        info = "HistoryReg";
-        info_data = APP<Dtype>::history_reg[L];
-    }
+    const string info = APP<Dtype>::prune_coremthd.substr(0, 2) == "PP" ? "HistoryProb" : "HistoryReg";
+    const Dtype* info_data = this->history_punish_[0]->cpu_data();
     cout.width(info.size()); cout << info << " - " << this->layer_param_.name() << endl;
     
     if (APP<Dtype>::prune_unit == "Row") {
@@ -328,15 +312,16 @@ void Layer<Dtype>::Print(char mode) {
             }
             sum_w /= num_col; /// average abs weight
             sum_d /= num_col; /// average abs diff
-            char s[20]; sprintf(s, "%7.5f", sum_d);
-            if (mode == 'f') { sprintf(s, "%f", sum_w); }
+            // char s[20]; sprintf(s, "%7.5f", sum_d);
+            // if (mode == 'f') { sprintf(s, "%f", sum_w); }
+            const Dtype s = mode == 'f' ? sum_w : sum_d;
             cout.width(blob.size()); cout << s << "   ";
                         
             // print Mask
-            cout.width(4);  cout << this->masks_[0]->cpu_data()[i * num_col] << "   ";
+            cout.width(4);  cout << m[i * num_col] << "   ";
             
             // print info
-            cout.width(info.size());  cout << info_data[i] << endl;
+            cout.width(info.size());  cout << info_data[i * num_col] << endl;
         }
         
     } else if (APP<Dtype>::prune_unit == "Col") {
@@ -354,12 +339,13 @@ void Layer<Dtype>::Print(char mode) {
             }
             sum_w /= num_row; /// average abs weight
             sum_d /= num_row; /// average abs diff
-            char s[20]; sprintf(s, "%7.5f", sum_d);
-            if (mode == 'f') { sprintf(s, "%f", sum_w); }
+            // char s[20]; sprintf(s, "%7.5f", sum_d);
+            // if (mode == 'f') { sprintf(s, "%f", sum_w); }
+            const Dtype s = mode == 'f' ? sum_w : sum_d;
             cout.width(blob.size()); cout << s << "   ";
             
             // print Mask
-            cout.width(4);  cout << this->masks_[0]->cpu_data()[j] << "   ";
+            cout.width(4);  cout << m[j] << "   ";
             
             // print info
             cout.width(info.size());  cout << info_data[j] << endl;
@@ -371,12 +357,13 @@ void Layer<Dtype>::Print(char mode) {
             cout.width(2); cout << i+1 << "   ";
             
             // print blob
-            char s[20]; sprintf(s, "%7.5f", fabs(d[i]));
-            if (mode == 'f') { sprintf(s, "%f", fabs(w[i])); }
+            // char s[20]; sprintf(s, "%7.5f", fabs(d[i]));
+            // if (mode == 'f') { sprintf(s, "%f", fabs(w[i])); }
+            const Dtype s = mode == 'f' ? fabs(w[i]) : fabs(d[i]);
             cout.width(blob.size()); cout << s << "   ";
             
             // print Mask
-            cout.width(4);  cout << this->masks_[0]->cpu_data()[i] << "   ";
+            cout.width(4);  cout << m[i] << "   ";
             
             // print info
             cout.width(info.size());  cout << info_data[i] << endl;
@@ -496,7 +483,6 @@ void Layer<Dtype>::ProbPruneCol(const int& prune_interval) {
         if (APP<Dtype>::IF_col_pruned[L][j][0]) { col_score[j].first = INT_MAX; } /// make the pruned columns "float" up
     }
     sort(col_score.begin(), col_score.end());
-    
 
     /// Update history_prob
     if ((APP<Dtype>::step_ - 1) % prune_interval == 0 && APP<Dtype>::inner_iter == 0) {
@@ -1182,7 +1168,7 @@ void Layer<Dtype>::PruneForward() {
         
         // Print and check, before update probs
         // put this outside, to print even when we do not prune
-        if (L == APP<Dtype>::show_layer && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0) {
+        if (APP<Dtype>::show_layer[L] == '1' && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0) {
             this->Print('f');
         }
 
@@ -1350,7 +1336,7 @@ void Layer<Dtype>::PruneBackward(const vector<Blob<Dtype>*>& top) {
     }
     
     // Print and check
-    if (L == APP<Dtype>::show_layer && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0 && APP<Dtype>::inner_iter == 0) {
+    if (APP<Dtype>::show_layer[L] == '1' && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0 && APP<Dtype>::inner_iter == 0) {
        this->Print('b');
     }
     

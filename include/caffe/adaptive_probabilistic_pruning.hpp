@@ -106,7 +106,7 @@ public:
     static string mask_generate_mechanism;
     
     static int show_interval;
-    static int show_layer;
+    static string show_layer;
     static int show_num_layer;
     static int show_num_weight;
     
@@ -226,8 +226,8 @@ public:
     template<typename Dtype>  string  APP<Dtype>::prune_state_dir = "/PruneStateSnapshot/";
     template<typename Dtype>  string  APP<Dtype>::mask_generate_mechanism = "group-wise";
     
-    template<typename Dtype>  int APP<Dtype>::show_interval = 10; 
-    template<typename Dtype>  int APP<Dtype>::show_layer = 2; // The layer index of which the weights will be printed.
+    template<typename Dtype>  int APP<Dtype>::show_interval = 1; 
+    template<typename Dtype>  string APP<Dtype>::show_layer = "0011"; // The layer index of which the weights will be printed.
     template<typename Dtype>  int APP<Dtype>::show_num_layer = 100;
     template<typename Dtype>  int APP<Dtype>::show_num_weight = 20;
     /// --------------------------------
