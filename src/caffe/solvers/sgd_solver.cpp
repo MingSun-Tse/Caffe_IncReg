@@ -541,7 +541,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                 
                 muhistory_punish[i] += min(APP<Dtype>::AA, fabs(x - D));
                 if (muhistory_punish[i] >= APP<Dtype>::target_reg) {
-                    muweight[i] = 0;
+                    mumasks[i] = 0;
                 }
                 
                 // compr[i % num_col] += fabs((x - D) / x); // |\Delta w / w|
@@ -899,18 +899,18 @@ void SGDSolver<Dtype>::SnapshotSolverStateToBinaryProto(
   state.clear_history_punish();
   
   string previous_layer_name = "";
-  int cnt_same_layer = 0;
+  int local_blob_index = 0;
   for (int i = 0; i < history_.size(); ++i) {
     // Add history
     BlobProto* history_blob = state.add_history();
     BlobProto* history_score_blob = state.add_history_score(); /// @mingsuntse, for pruning
     BlobProto* history_punish_blob = state.add_history_punish();
     history_[i]->ToProto(history_blob);
-    if (APP<Dtype>::prune_method != "None") { // i: param_id
+    if (APP<Dtype>::prune_coremthd.substr(0,3) == "Reg" or APP<Dtype>::prune_coremthd.substr(0,2) == "PP") { // i: param_id
         const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[i].first];
-        cnt_same_layer = layer_name == previous_layer_name ? cnt_same_layer + 1 : 0;
-        this->net_->layer_by_name(layer_name)->history_score()[cnt_same_layer]->ToProto(history_score_blob);
-        this->net_->layer_by_name(layer_name)->history_punish()[cnt_same_layer]->ToProto(history_punish_blob);
+        local_blob_index = layer_name == previous_layer_name ? local_blob_index + 1 : 0;
+        this->net_->layer_by_name(layer_name)->history_score()[local_blob_index]->ToProto(history_score_blob);
+        this->net_->layer_by_name(layer_name)->history_punish()[local_blob_index]->ToProto(history_punish_blob);
         previous_layer_name = layer_name;
     }
   }
@@ -972,14 +972,14 @@ void SGDSolver<Dtype>::RestoreSolverStateFromBinaryProto(
       LOG(INFO) << "SGDSolver: restoring history punish";
   }
   string previous_layer_name = "";
-  int cnt_same_layer = 0;
+  int local_blob_index = 0;
   for (int i = 0; i < history_.size(); ++i) {
     history_[i]->FromProto(state.history(i));
-    if (APP<Dtype>::prune_method != "None") {
+    if (APP<Dtype>::prune_coremthd.substr(0,3) == "Reg" or APP<Dtype>::prune_coremthd.substr(0,2) == "PP") {
         const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[i].first];
-        cnt_same_layer = layer_name == previous_layer_name ? cnt_same_layer + 1 : 0;
-        this->net_->layer_by_name(layer_name)->history_score()[cnt_same_layer]->FromProto(state.history_score(i));
-        this->net_->layer_by_name(layer_name)->history_punish()[cnt_same_layer]->FromProto(state.history_punish(i));
+        local_blob_index = layer_name == previous_layer_name ? local_blob_index + 1 : 0;
+        this->net_->layer_by_name(layer_name)->history_score()[local_blob_index]->FromProto(state.history_score(i));
+        this->net_->layer_by_name(layer_name)->history_punish()[local_blob_index]->FromProto(state.history_punish(i));
         previous_layer_name = layer_name;
     }
   }
