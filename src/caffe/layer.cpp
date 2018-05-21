@@ -1168,7 +1168,7 @@ void Layer<Dtype>::PruneForward() {
         
         // Print and check, before update probs
         // put this outside, to print even when we do not prune
-        if (APP<Dtype>::show_layer[L] == '1' && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0) {
+        if (APP<Dtype>::show_layer.size() >= L+1 && APP<Dtype>::show_layer[L] == '1' && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0) {
             this->Print('f');
         }
 
@@ -1336,7 +1336,7 @@ void Layer<Dtype>::PruneBackward(const vector<Blob<Dtype>*>& top) {
     }
     
     // Print and check
-    if (APP<Dtype>::show_layer[L] == '1' && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0 && APP<Dtype>::inner_iter == 0) {
+    if (APP<Dtype>::show_layer.size() >= L+1 && APP<Dtype>::show_layer[L] == '1' && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0 && APP<Dtype>::inner_iter == 0) { 
        this->Print('b');
     }
     
