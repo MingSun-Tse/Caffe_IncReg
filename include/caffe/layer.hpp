@@ -75,7 +75,6 @@ class Layer {
     SetLossWeights(top);
   }
 
-
   // added by mingsuntse
   void kmeans_cluster(vector<int> &cLabel, vector<Dtype> &cCentro, Dtype *cWeights, int nWeights, \
     vector<bool> &mask, int nCluster,  int max_iter);
@@ -96,8 +95,7 @@ class Layer {
   void ProbPruneCol(const int& prune_interval);
   void ProbPruneCol_chl(const int& prune_interval);
   void ProbPruneRow(const int& prune_interval);
-  void ProbPruneRow_fm(const vector<Blob<Dtype>*>& top, const int& prune_interval);
-  void PruneMinimals();
+  void GenerateMasks();
   // Main pruning functions
   void PruneSetUp(const PruneParameter& prune_param);
   void PruneForward();
@@ -106,21 +104,14 @@ class Layer {
   int num_pruned_col;
   int num_pruned_row;
   int num_pruned_weight;
-  int num_recovered_column;
-  int layer_index;
   Dtype prune_ratio;
   Dtype pruned_ratio;
-  Dtype delta;
   bool IF_restore;
   bool IF_prune;
   bool IF_masks_updated;
-
   vector<bool> IF_col_pruned;
   vector<bool> IF_row_pruned;
   
-  vector<Dtype> history_diff;
-
-
   /**
    * @brief Does layer-specific setup: your layer should implement this function
    *        as well as Reshape.

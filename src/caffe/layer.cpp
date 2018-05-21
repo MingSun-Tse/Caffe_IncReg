@@ -157,7 +157,7 @@ void Layer<Dtype>::UpdateNumPrunedRow() {
     Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
     const int count = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
-    const int fanl = APP<Dtype>::filter_area[L+1]; /// filter_area_next_layer
+    const int fanl = APP<Dtype>::filter_spatial_size[L+1]; /// filter_area_next_layer
     const int num_col = count / num_row;
     const int num_row_per_g = num_row / APP<Dtype>::group[L+1];
     
@@ -285,25 +285,22 @@ void Layer<Dtype>::Print(char mode) {
     const Dtype* w = this->blobs_[0]->cpu_data();
     const Dtype* d = this->blobs_[0]->cpu_diff();
     const Dtype* m = this->masks_[0]->cpu_data();
-
     // print Index, blob, Mask
     cout.width(5);  cout << "Index" << "   ";
     const string blob = (mode == 'f') ? "WeightBeforeMasked" : "DiffBeforeMasked";
     cout.width(blob.size()); cout << blob << "   ";
     cout.width(4);  cout << "Mask" << "   ";
-    
     // print additional info
     const string info = APP<Dtype>::prune_coremthd.substr(0, 2) == "PP" ? "HistoryProb" : "HistoryReg";
     const Dtype* info_data = this->history_punish_[0]->cpu_data();
     cout.width(info.size()); cout << info << " - " << this->layer_param_.name() << endl;
-    
+
     if (APP<Dtype>::prune_unit == "Row") {
         const int show_num = APP<Dtype>::show_num_weight > num_row ? num_row : APP<Dtype>::show_num_weight;
         for (int i = 0; i < show_num; ++i) {
             // print Index
             cout.width(3); cout << "r"; 
             cout.width(2); cout << i+1 << "   ";
-            
             // print blob
             Dtype sum_w = 0, sum_d = 0;
             for (int j = 0; j < num_col; ++j) {
@@ -312,14 +309,10 @@ void Layer<Dtype>::Print(char mode) {
             }
             sum_w /= num_col; /// average abs weight
             sum_d /= num_col; /// average abs diff
-            // char s[20]; sprintf(s, "%7.5f", sum_d);
-            // if (mode == 'f') { sprintf(s, "%f", sum_w); }
             const Dtype s = mode == 'f' ? sum_w : sum_d;
             cout.width(blob.size()); cout << s << "   ";
-                        
             // print Mask
             cout.width(4);  cout << m[i * num_col] << "   ";
-            
             // print info
             cout.width(info.size());  cout << info_data[i * num_col] << endl;
         }
@@ -330,7 +323,6 @@ void Layer<Dtype>::Print(char mode) {
             // print Index
             cout.width(3); cout << "c"; 
             cout.width(2); cout << j+1 << "   ";
-            
             // print blob
             Dtype sum_w = 0, sum_d = 0;
             for (int i = 0; i < num_row; ++i) {
@@ -339,14 +331,10 @@ void Layer<Dtype>::Print(char mode) {
             }
             sum_w /= num_row; /// average abs weight
             sum_d /= num_row; /// average abs diff
-            // char s[20]; sprintf(s, "%7.5f", sum_d);
-            // if (mode == 'f') { sprintf(s, "%f", sum_w); }
             const Dtype s = mode == 'f' ? sum_w : sum_d;
             cout.width(blob.size()); cout << s << "   ";
-            
             // print Mask
             cout.width(4);  cout << m[j] << "   ";
-            
             // print info
             cout.width(info.size());  cout << info_data[j] << endl;
         }
@@ -355,16 +343,10 @@ void Layer<Dtype>::Print(char mode) {
             // print Index
             cout.width(3); cout << "w";
             cout.width(2); cout << i+1 << "   ";
-            
-            // print blob
-            // char s[20]; sprintf(s, "%7.5f", fabs(d[i]));
-            // if (mode == 'f') { sprintf(s, "%f", fabs(w[i])); }
             const Dtype s = mode == 'f' ? fabs(w[i]) : fabs(d[i]);
             cout.width(blob.size()); cout << s << "   ";
-            
             // print Mask
             cout.width(4);  cout << m[i] << "   ";
-            
             // print info
             cout.width(info.size());  cout << info_data[i] << endl;
         }
@@ -376,7 +358,7 @@ void Layer<Dtype>::TaylorPrune(const vector<Blob<Dtype>*>& top) {
     for (int i = 0; i < top.size(); ++i) {
         const Dtype* top_data = top[i]->cpu_data();
         const Dtype* top_diff = top[i]->cpu_diff();
-        Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
+        Dtype* mumasks = this->masks_[0]->mutable_cpu_data();
         const int num_c = top[i]->shape()[1]; /// channel
         const int num_h = top[i]->shape()[2]; /// height
         const int num_w = top[i]->shape()[3]; /// width
@@ -394,8 +376,8 @@ void Layer<Dtype>::TaylorPrune(const vector<Blob<Dtype>*>& top) {
         for (int n = 0; n < APP<Dtype>::num_; ++n) {
             for (int c = 0; c < num_c; ++c) {
                 for (int i = 0; i < num_h * num_w; ++i) {
-                    fm_score[c].first += fabs(top_diff[n * num_c * num_w * num_h + c * num_w * num_h + i] 
-                                            * top_data[n * num_c * num_w * num_h + c * num_w * num_h + i]);                          
+                    fm_score[c].first += fabs(top_diff[n * num_c * num_w * num_h + c * num_w * num_h + i]
+                                            * top_data[n * num_c * num_w * num_h + c * num_w * num_h + i]);
                 }
             }
         }
@@ -410,16 +392,10 @@ void Layer<Dtype>::TaylorPrune(const vector<Blob<Dtype>*>& top) {
         for (int i = 0; i < num_once_prune; ++i) {
             const int c = fm_score[i].second;
             for (int j = 0; j < num_col; ++j) {
-                // muweight[c * num_col + j] = 0; /// Seems don't work
-                this->masks_[0]->mutable_cpu_data()[c * num_col + j] = 0;
+                mumasks[c * num_col + j] = 0;
             }
             APP<Dtype>::IF_row_pruned[L][c] = true;
             ++ APP<Dtype>::num_pruned_row[L];
-        }
-        if (L == 1) {
-            for (int i = 0; i < num_row; ++i) {
-                cout << muweight[i*num_col] << " " << endl;
-            }
         }
     }
 }
@@ -427,6 +403,7 @@ void Layer<Dtype>::TaylorPrune(const vector<Blob<Dtype>*>& top) {
 template <typename Dtype> 
 void Layer<Dtype>::FilterPrune() {
     Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
+    Dtype* mumasks = this->masks_[0]->mutable_cpu_data();
     const int count = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
@@ -449,8 +426,7 @@ void Layer<Dtype>::FilterPrune() {
     for (int i = 0; i < APP<Dtype>::num_once_prune; ++i) {
         const int r = row_score[i].second;
         for (int j = 0; j < num_col; ++j) {
-            // muweight[r * num_col + j] = 0;
-            this->masks_[0]->mutable_cpu_data()[r * num_col + j] = 0;
+            mumasks[r * num_col + j] = 0;
         }
         APP<Dtype>::IF_row_pruned[L][r] = true;
         ++ APP<Dtype>::num_pruned_row[L];
@@ -460,13 +436,15 @@ void Layer<Dtype>::FilterPrune() {
 
 template <typename Dtype> 
 void Layer<Dtype>::ProbPruneCol(const int& prune_interval) {
+    Dtype* muhistory_score = this->history_score_[0]->mutable_cpu_data();
+    Dtype* muhistory_punish = this->history_punish_[0]->mutable_cpu_data();
     Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
     const int count = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
     const string layer_name = this->layer_param_.name();
     const int L = APP<Dtype>::layer_index[layer_name];
-    const int num_col_to_prune_ = ceil((APP<Dtype>::prune_ratio[L] + APP<Dtype>::delta[L]) * num_col); /// a little bit higher goal
+    const int num_col_to_prune_ = ceil(APP<Dtype>::prune_ratio[L] * num_col); /// a little bit higher goal
     const int group = APP<Dtype>::group[L];
     
     /// Calculate history score
@@ -478,15 +456,15 @@ void Layer<Dtype>::ProbPruneCol(const int& prune_interval) {
         for (int i = 0; i < num_row; ++i) {
             score += fabs(muweight[i * num_col +j]);
         }
-        APP<Dtype>::hscore[L][j] = APP<Dtype>::score_decay * APP<Dtype>::hscore[L][j] + score;
-        col_score[j].first = APP<Dtype>::hscore[L][j];
+        muhistory_score[j] = APP<Dtype>::score_decay * muhistory_score[j] + score;
+        col_score[j].first = muhistory_score[j];
         if (APP<Dtype>::IF_col_pruned[L][j][0]) { col_score[j].first = INT_MAX; } /// make the pruned columns "float" up
     }
     sort(col_score.begin(), col_score.end());
 
     /// Update history_prob
     if ((APP<Dtype>::step_ - 1) % prune_interval == 0 && APP<Dtype>::inner_iter == 0) {
-        /// Calculate functioning probability of each weight
+        /// Calculate existence probability of each weight
         const Dtype AA = APP<Dtype>::AA;
         const Dtype kk = APP<Dtype>::kk;
         const Dtype alpha = log(2/kk) / (num_col_to_prune_ - APP<Dtype>::num_pruned_col[L]);
@@ -494,16 +472,14 @@ void Layer<Dtype>::ProbPruneCol(const int& prune_interval) {
         const Dtype k_ = AA / (num_col_to_prune_ - APP<Dtype>::num_pruned_col[L]); /// linear punishment
         
         for (int j = 0; j < num_col - APP<Dtype>::num_pruned_col[L]; ++j) {
-            
             const int col_of_rank_j = col_score[j].second;
             Dtype delta = j < N1 ? AA * exp(-alpha * j) : -AA * exp(-alpha * (2*N1-j)) + 2*kk*AA;
             if (APP<Dtype>::prune_method == "PP-linear_Col") {
                 delta = AA - k_ * j; /// linear punishment
             }            
-            const Dtype old_prob = APP<Dtype>::history_prob[L][col_of_rank_j];
+            const Dtype old_prob = 1 - muhistory_punish[col_of_rank_j];
             const Dtype new_prob = std::min(std::max(old_prob - delta, Dtype(0)), Dtype(1));
-            APP<Dtype>::history_prob[L][col_of_rank_j] = new_prob;
-            
+            muhistory_punish[col_of_rank_j] = 1 - new_prob;
             if (new_prob == 0) {
                 APP<Dtype>::num_pruned_col[L] += 1;
                 for (int g = 0; g < group; ++g) {
@@ -513,49 +489,15 @@ void Layer<Dtype>::ProbPruneCol(const int& prune_interval) {
                     muweight[i * num_col + col_of_rank_j] = 0;
                 } /// once pruned, zero out weights
             }
-            
             // Print
             if (new_prob > old_prob) {
                 cout << "recover prob: " << layer_name << "-" << col_of_rank_j 
-                     << "  old prob: " << old_prob
-                     << "  new prob: " << new_prob << endl;
+                     << "   old prob: " << old_prob
+                     << "   new prob: " << new_prob << endl;
             }
         }
     }
-
-    // With probability updated, generate masks and do pruning
-    assert(APP<Dtype>::mask_generate_mechanism != "channel-wise");
-    if (APP<Dtype>::mask_generate_mechanism == "group-wise") {
-        Dtype rands[num_col];
-        caffe_rng_uniform(num_col, (Dtype)0, (Dtype)1, rands);
-        for (int i = 0; i < count; ++i) {
-            const int row_index = i / num_col;
-            const int col_index = i % num_col;
-            const bool cond1 = rands[col_index] < APP<Dtype>::history_prob[L][col_index];
-            const bool cond2 = !APP<Dtype>::IF_row_pruned[L][row_index];
-            this->masks_[0]->mutable_cpu_data()[i] = (cond1 && cond2) ? 1 : 0; 
-            this->blobs_backup_[0]->mutable_cpu_data()[i] = muweight[i];
-            muweight[i] *= this->masks_[0]->mutable_cpu_data()[i];
-        }
-    } else if (APP<Dtype>::mask_generate_mechanism == "element-wise") {
-        Dtype rands[count/10]; // Because `count` may be so large (like 2 million) that `caffe_rng_uniform` will report segmengt default, generate rands for 10 times.
-        for (int i = 0; i < count; ++i) {
-        if (i % (count/10) == 0) {
-                caffe_rng_uniform(count/10, (Dtype)0, (Dtype)1, rands);
-        }
-            const int row_index = i / num_col;
-            const int col_index = i % num_col;
-            const bool cond1 = rands[i % (count/10)] < APP<Dtype>::history_prob[L][col_index];
-            const bool cond2 = !APP<Dtype>::IF_row_pruned[L][row_index];
-            this->masks_[0]->mutable_cpu_data()[i] = (cond1 && cond2) ? 1 : 0;
-            this->blobs_backup_[0]->mutable_cpu_data()[i] = muweight[i];
-            muweight[i] *= this->masks_[0]->mutable_cpu_data()[i];
-        }
-    } else {
-        LOG(INFO) << "Wrong: unknown mask_generate_mechanism, please check";
-        exit(1);
-    }
-    this->IF_restore = true;
+    this->GenerateMasks(); // With probability updated, generate masks and do pruning
 }
 
 /*
@@ -563,6 +505,8 @@ TODO(mingsuntse): check, why does ProbPruneCol_chl work so poor?
 */
 template <typename Dtype>
 void Layer<Dtype>::ProbPruneCol_chl(const int& prune_interval) {
+    Dtype* muhistory_score = this->history_score_[0]->mutable_cpu_data();
+    Dtype* muhistory_punish = this->history_punish_[0]->mutable_cpu_data();
     Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
     const int count = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
@@ -585,8 +529,8 @@ void Layer<Dtype>::ProbPruneCol_chl(const int& prune_interval) {
                 sum += fabs(muweight[i * num_col +j]);
             }
         }
-        APP<Dtype>::hscore[L][c] = APP<Dtype>::score_decay * APP<Dtype>::hscore[L][c] + sum;
-        chl_score[c].first = APP<Dtype>::hscore[L][c];
+        muhistory_score[c] = APP<Dtype>::score_decay * muhistory_score[c] + sum;
+        chl_score[c].first = muhistory_score[c];
         if (APP<Dtype>::IF_col_pruned[L][c * kernel_spatial_size][0]) { chl_score[c].first = INT_MAX; } /// make the pruned columns "float" up
     }
     sort(chl_score.begin(), chl_score.end());
@@ -599,20 +543,17 @@ void Layer<Dtype>::ProbPruneCol_chl(const int& prune_interval) {
         const Dtype alpha = log(2/kk) / (num_chl_to_prune - APP<Dtype>::num_pruned_col[L] / kernel_spatial_size);
         const Dtype N1 = -log(kk)/alpha;
         const Dtype k_ = AA / (num_chl_to_prune - APP<Dtype>::num_pruned_col[L] / kernel_spatial_size); /// linear punishment
-        
         for (int rk = 0; rk < (num_col - APP<Dtype>::num_pruned_col[L])/kernel_spatial_size; ++rk) {
             const int chl_of_rank_rk = chl_score[rk].second;
             Dtype delta = rk < N1 ? AA * exp(-alpha * rk) : -AA * exp(-alpha * (2*N1-rk)) + 2*kk*AA;
             if (APP<Dtype>::prune_method == "PP-chl-linear_Col") {
                 delta = AA - k_ * rk; /// linear punishment
             } 
-            
-            const Dtype old_prob = APP<Dtype>::history_prob[L][chl_of_rank_rk * kernel_spatial_size];
+            const Dtype old_prob = 1 - muhistory_punish[chl_of_rank_rk * kernel_spatial_size];
             const Dtype new_prob = std::min(std::max(old_prob - delta, Dtype(0)), Dtype(1));
             for (int j = chl_of_rank_rk * kernel_spatial_size; j < (chl_of_rank_rk + 1) * kernel_spatial_size; ++j) {
-                APP<Dtype>::history_prob[L][j] = new_prob;
+               muhistory_punish[j] = 1 - new_prob;
             }
-            
             if (new_prob == 0) {
                 APP<Dtype>::num_pruned_col[L] += kernel_spatial_size;
                 for (int j = chl_of_rank_rk * kernel_spatial_size; j < (chl_of_rank_rk+1) * kernel_spatial_size; ++j) {
@@ -620,60 +561,27 @@ void Layer<Dtype>::ProbPruneCol_chl(const int& prune_interval) {
                         APP<Dtype>::IF_col_pruned[L][j][g] = true;
                     }
                 }
-
                 for (int i = 0; i < num_row; ++i) {
                     for (int j = chl_of_rank_rk * kernel_spatial_size; j < (chl_of_rank_rk+1) * kernel_spatial_size; ++j) {
                         muweight[i * num_col + j] = 0;
                     }
                 } // once pruned, zero out weights
             }
-            
             // Print
             if (new_prob > old_prob) {
                 cout << "recover prob: " << layer_name << "-" << chl_of_rank_rk
-                     << "  old prob: " << old_prob
-                     << "  new prob: " << new_prob << endl;
+                     << "   old prob: " << old_prob
+                     << "   new prob: " << new_prob << endl;
             }
         }
     }
-
-    // With probability updated, generate masks and do pruning
-    assert(APP<Dtype>::mask_generate_mechanism != "channel-wise");
-    if (APP<Dtype>::mask_generate_mechanism == "group-wise") { // i.e. column wise
-        Dtype rands[num_col];
-        caffe_rng_uniform(num_col, (Dtype)0, (Dtype)1, rands);
-        for (int i = 0; i < count; ++i) {
-            const int row_index = i / num_col;
-            const int col_index = i % num_col;
-            const bool cond1 = rands[col_index] < APP<Dtype>::history_prob[L][col_index / kernel_spatial_size]; // The masks in the same channel may be different.
-            const bool cond2 = !APP<Dtype>::IF_row_pruned[L][row_index];
-            this->masks_[0]->mutable_cpu_data()[i] = (cond1 && cond2) ? 1 : 0; 
-            this->blobs_backup_[0]->mutable_cpu_data()[i] = muweight[i];
-            muweight[i] *= this->masks_[0]->mutable_cpu_data()[i];
-        }
-    } else if (APP<Dtype>::mask_generate_mechanism == "element-wise") {
-        Dtype rands[count/10];
-        for (int i = 0; i < count; ++i) {
-        if (i % (count/10) == 0) {
-                caffe_rng_uniform(count/10, (Dtype)0, (Dtype)1, rands);
-        }
-            const int row_index = i / num_col;
-            const int col_index = i % num_col;
-            const bool cond1 = rands[i % (count/10)] < APP<Dtype>::history_prob[L][col_index / kernel_spatial_size];
-            const bool cond2 = !APP<Dtype>::IF_row_pruned[L][row_index];
-            this->masks_[0]->mutable_cpu_data()[i] = (cond1 && cond2) ? 1 : 0;
-            this->blobs_backup_[0]->mutable_cpu_data()[i] = muweight[i];
-            muweight[i] *= this->masks_[0]->mutable_cpu_data()[i];
-        }
-    } else {
-        LOG(INFO) << "Wrong: unknown mask_generate_mechanism, please check";
-        exit(1);
-    }
-    this->IF_restore = true;
+    this->GenerateMasks(); // With probability updated, generate masks and do pruning
 }
 
 template <typename Dtype> 
 void Layer<Dtype>::ProbPruneRow(const int& prune_interval) {
+    Dtype* muhistory_score = this->history_score_[0]->mutable_cpu_data();
+    Dtype* muhistory_punish = this->history_punish_[0]->mutable_cpu_data();
     Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
     const int count = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
@@ -681,7 +589,6 @@ void Layer<Dtype>::ProbPruneRow(const int& prune_interval) {
     const string layer_name = this->layer_param_.name();
     const int L = APP<Dtype>::layer_index[layer_name];
     
-
     /// Calculate history score
     typedef std::pair<Dtype, int> mypair;
     vector<mypair> row_score(num_row);
@@ -695,14 +602,13 @@ void Layer<Dtype>::ProbPruneRow(const int& prune_interval) {
         for (int j = 0; j < num_col; ++j) {
             score += fabs(muweight[i * num_col +j]);
         }
-        APP<Dtype>::hscore[L][i] = APP<Dtype>::score_decay * APP<Dtype>::hscore[L][i] + score;
-        row_score[i].first = APP<Dtype>::hscore[L][i];
+        muhistory_score[i * num_col] = APP<Dtype>::score_decay * muhistory_score[i * num_col] + score;
+        row_score[i].first = muhistory_score[i * num_col];
     }
     sort(row_score.begin(), row_score.end());
     
     /// Update history_prob
     if (APP<Dtype>::step_ % prune_interval == 0 && APP<Dtype>::inner_iter == 0) {
-
         /// Calculate functioning probability of each weight
         /// use two linear functions
         const Dtype AA = APP<Dtype>::AA;
@@ -711,15 +617,13 @@ void Layer<Dtype>::ProbPruneRow(const int& prune_interval) {
         const Dtype k1 = AA / (row_score[num_row_to_prune_].first - row_score[0].first);
         const Dtype k2 = AA / (row_score[num_row_ - 1].first - row_score[num_row_to_prune_].first);
         cout << k1 << "  " << k2 << endl;
-        
         for (int rk = 0; rk < num_row_; ++rk) {
             const int row_of_rank_rk = row_score[rk].second;
             const Dtype Delta = (rk <= num_row_to_prune_) ? AA - k1*(row_score[rk].first - row_score[0].first) 
                                                           : -(k2*(row_score[rk].first - row_score[num_row_to_prune_].first));
-            const Dtype old_prob = APP<Dtype>::history_prob[L][row_of_rank_rk];
+            const Dtype old_prob = 1 - muhistory_punish[row_of_rank_rk * num_col];
             const Dtype new_prob = std::min(std::max(old_prob - Delta, Dtype(0)), Dtype(1));
-            APP<Dtype>::history_prob[L][row_of_rank_rk] = new_prob;
-            
+            muhistory_punish[row_of_rank_rk * num_col] = 1 - new_prob;
             if (new_prob == 0) {
                 ++ APP<Dtype>::num_pruned_row[L];
                 APP<Dtype>::IF_row_pruned[L][row_of_rank_rk] = true;  
@@ -730,7 +634,6 @@ void Layer<Dtype>::ProbPruneRow(const int& prune_interval) {
                     APP<Dtype>::pruned_rows.push_back(row_of_rank_rk);
                 }
             }
-            
             // Print
             if (new_prob > old_prob) {
                 cout << "recover prob: " << layer_name << "-" << row_of_rank_rk 
@@ -739,38 +642,79 @@ void Layer<Dtype>::ProbPruneRow(const int& prune_interval) {
             }
         }
     }
+    this->GenerateMasks(); // With probability updated, generate masks and do pruning
+}
 
-    // With probability updated, generate masks and do pruning
+template <typename Dtype>
+void Layer<Dtype>::GenerateMasks() {
+    Dtype* muhistory_punish = this->history_punish_[0]->mutable_cpu_data();
+    Dtype* mumasks = this->masks_[0]->mutable_cpu_data();
+    Dtype* mublobs_backup = this->blobs_backup_[0]->mutable_cpu_data();
+    Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
+    const int L = APP<Dtype>::layer_index[this->layer_param_.name()];
+    const int count = this->blobs_[0]->count();
+    const int num_row = this->blobs_[0]->shape()[0];
+    const int num_col = count / num_row;
+    assert(APP<Dtype>::prune_unit != "Weight"); // PP not used for element-wise pruning for now.
+    
     if (APP<Dtype>::mask_generate_mechanism == "group-wise") {
-        Dtype rands[num_row];
-        caffe_rng_uniform(num_row, (Dtype)0, (Dtype)1, rands);
-        for (int i = 0; i < count; ++i) {
-            const int row_index = i / num_col;
-            const int col_index = i % num_col;
-            const bool cond1 = rands[row_index] < APP<Dtype>::history_prob[L][row_index];
-            const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
-            this->masks_[0]->mutable_cpu_data()[i] = (cond1 && cond2) ? 1 : 0;
-            this->blobs_backup_[0]->mutable_cpu_data()[i] = muweight[i];
-            muweight[i] *= this->masks_[0]->mutable_cpu_data()[i];
+        if (APP<Dtype>::prune_unit == "Row") {
+            Dtype rands[num_row];
+            caffe_rng_uniform(num_row, (Dtype)0, (Dtype)1, rands);
+            for (int i = 0; i < count; ++i) {
+                const int row_index = i / num_col;
+                const int col_index = i % num_col;
+                const bool cond1 = rands[row_index] < muhistory_punish[row_index * num_col];
+                const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
+                mumasks[i] = (cond1 && cond2) ? 1 : 0;
+                mublobs_backup[i] = muweight[i];
+                muweight[i] *= mumasks[i];
+            }
+        } else {
+            Dtype rands[num_col];
+            caffe_rng_uniform(num_col, (Dtype)0, (Dtype)1, rands);
+            for (int i = 0; i < count; ++i) {
+                const int row_index = i / num_col;
+                const int col_index = i % num_col;
+                const bool cond1 = rands[col_index] < muhistory_punish[col_index];
+                const bool cond2 = !APP<Dtype>::IF_row_pruned[L][row_index];
+                mumasks[i] = (cond1 && cond2) ? 1 : 0;
+                mublobs_backup[i] = muweight[i];
+                muweight[i] *= mumasks[i];
+            }
         }
     } else if (APP<Dtype>::mask_generate_mechanism == "element-wise") {
-        // new mask-generating mechanism (1) 
-        Dtype rands[count/10];
-        for (int i = 0; i < count; ++i) {
-        if (i % (count/10) == 0) {
-            caffe_rng_uniform(count/10, (Dtype)0, (Dtype)1, rands);
-        }
-            const int row_index = i / num_col;
-            const int col_index = i % num_col;
-            const bool cond1 = rands[i%(count/10)] < APP<Dtype>::history_prob[L][row_index];
-            const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
-            this->masks_[0]->mutable_cpu_data()[i] = (cond1 && cond2) ? 1 : 0;
-            this->blobs_backup_[0]->mutable_cpu_data()[i] = muweight[i];
-            muweight[i] *= this->masks_[0]->mutable_cpu_data()[i];
+        Dtype rands[count/100];
+        if (APP<Dtype>::prune_unit == "Row") {
+            for (int i = 0; i < count; ++i) {
+                if (i % (count/100) == 0) {
+                    caffe_rng_uniform(count/100, (Dtype)0, (Dtype)1, rands);
+                }
+                const int row_index = i / num_col;
+                const int col_index = i % num_col;
+                const bool cond1 = rands[i % (count/100)] < muhistory_punish[row_index * num_col];
+                const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
+                mumasks[i] = (cond1 && cond2) ? 1 : 0;
+                mublobs_backup[i] = muweight[i];
+                muweight[i] *= mumasks[i];
+            }
+        } else {
+            for (int i = 0; i < count; ++i) {
+                if (i % (count/100) == 0) {
+                    caffe_rng_uniform(count/100, (Dtype)0, (Dtype)1, rands);
+                }
+                const int row_index = i / num_col;
+                const int col_index = i % num_col;
+                const bool cond1 = rands[i % (count/100)] < muhistory_punish[col_index];
+                const bool cond2 = !APP<Dtype>::IF_row_pruned[L][row_index];
+                mumasks[i] = (cond1 && cond2) ? 1 : 0;
+                mublobs_backup[i] = muweight[i];
+                muweight[i] *= mumasks[i];
+            }
         }
     } else if (APP<Dtype>::mask_generate_mechanism == "channel-wise") {
-        // new mask-generating mechanism (2)
-        const int num = this->blobs_[0]->count(0, 2);
+        assert(APP<Dtype>::prune_unit != "Col"); // "channel-wise" only used for row pruning
+        const int num = this->blobs_[0]->count(0, 2); // number of channels
         const int kernel_spatial_size = this->blobs_[0]->count(2);
         Dtype rands[num];
         caffe_rng_uniform(num, (Dtype)0, (Dtype)1, rands);
@@ -778,11 +722,11 @@ void Layer<Dtype>::ProbPruneRow(const int& prune_interval) {
             const int row_index = i / num_col;
             const int col_index = i % num_col;
             const int chl_index = i / kernel_spatial_size; // channel index
-            const bool cond1 = rands[chl_index] < APP<Dtype>::history_prob[L][row_index];
+            const bool cond1 = rands[chl_index] < muhistory_punish[row_index * num_col];
             const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
-            this->masks_[0]->mutable_cpu_data()[i] = (cond1 && cond2) ? 1 : 0;
-            this->blobs_backup_[0]->mutable_cpu_data()[i] = muweight[i];
-            muweight[i] *= this->masks_[0]->mutable_cpu_data()[i];
+            mumasks[i] = (cond1 && cond2) ? 1 : 0;
+            mublobs_backup[i] = muweight[i];
+            muweight[i] *= mumasks[i];
         }
     } else {
         LOG(INFO) << "Wrong, unknown mask_generate_mechanism";
@@ -791,107 +735,7 @@ void Layer<Dtype>::ProbPruneRow(const int& prune_interval) {
     this->IF_restore = true;
 }
 
-template <typename Dtype> 
-void Layer<Dtype>::ProbPruneRow_fm(const vector<Blob<Dtype>*>& top, const int& prune_interval) {
-    const string layer_name = this->layer_param_.name();
-    if (top.size() > 1) { cout << "Note: top.size() > 1 - " << layer_name << endl; }
-    for (int i = 0; i < top.size(); ++i) {
-        Dtype* mu_top_data = top[i]->mutable_cpu_data();
-        Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
-        const int num_c = top[i]->shape()[1]; /// channel
-        const int num_h = top[i]->shape()[2]; /// height
-        const int num_w = top[i]->shape()[3]; /// width
-        const int count = this->blobs_[0]->count();
-        const int num_row = this->blobs_[0]->shape()[0];
-        const int num_col = count / num_row;
-        const int L = APP<Dtype>::layer_index[layer_name];
-        assert(num_c == num_row);
-
-        typedef std::pair<Dtype, int> mypair;
-        vector<mypair> fm_score(num_c); /// feature map score
-        for (int c = 0; c < num_c; ++c) {
-            fm_score[c].second = c;
-            fm_score[c].first  = 0;
-        }
-        for (int n = 0; n < APP<Dtype>::num_; ++n) {
-            for (int c = 0; c < num_c; ++c) {
-                for (int i = 0; i < num_h * num_w; ++i) {
-                    fm_score[c].first += fabs(mu_top_data[n * num_c * num_w * num_h + c * num_w * num_h + i]);
-                                       //* mu_top_data[n * num_c * num_w * num_h + c * num_w * num_h + i];                          
-                }
-            }
-        }
-        for (int c = 0; c < num_c; ++c) {
-            APP<Dtype>::hscore[L][c] += fm_score[c].first;
-        }
-        
-        // update prob
-        if (APP<Dtype>::step_ % prune_interval == 0 && APP<Dtype>::inner_iter == 0) {
-            for (int c = 0; c < num_c; ++c) {
-                if (APP<Dtype>::IF_row_pruned[L][c]) {
-                    fm_score[c].first = INT_MAX;
-                    continue;
-                }
-                fm_score[c].first = APP<Dtype>::hscore[L][c];
-            }
-            sort(fm_score.begin(), fm_score.end());
-            
-            const int num_row_to_prune_ = ceil(num_row * APP<Dtype>::prune_ratio[L]) - APP<Dtype>::num_pruned_row[L];
-            const Dtype k = APP<Dtype>::AA / (fm_score[num_row_to_prune_].first - fm_score[0].first);
-            for (int rk = 0; rk < num_row - APP<Dtype>::num_pruned_row[L]; ++rk) {
-                const int row_of_rank_rk = fm_score[rk].second;
-                const Dtype old_prob = APP<Dtype>::history_prob[L][row_of_rank_rk];
-                const Dtype Delta1 = APP<Dtype>::AA - k * (fm_score[rk].first - fm_score[0].first);
-                Dtype Delta2 = 0;
-                const Dtype new_prob = std::min(std::max(old_prob - Delta1 - Delta2, (Dtype)0), (Dtype)1);
-                APP<Dtype>::history_prob[L][row_of_rank_rk] = new_prob;
-                
-                if (new_prob == 0) {
-                    for (int j = 0; j < num_col; ++j) {
-                        muweight[row_of_rank_rk * num_col + j] = 0;
-                    }
-                    APP<Dtype>::IF_row_pruned[L][row_of_rank_rk] = true;
-                    ++ APP<Dtype>::num_pruned_row[L];
-                    if (L != APP<Dtype>::conv_layer_cnt - 1) {
-                        APP<Dtype>::pruned_rows.push_back(row_of_rank_rk);
-                    }
-                }
-                
-                // once updated prob, clean the old history score
-                APP<Dtype>::hscore[L][row_of_rank_rk] = 0;
-
-                // Print
-                if (new_prob > old_prob) {
-                    cout << "recover prob: " << layer_name << "-" << row_of_rank_rk 
-                         << "  old prob: " << old_prob
-                         << "  new prob: " << new_prob << endl;
-                }
-            }
-        }
-        
-        // With probability updated, generate masks and do pruning
-        Dtype rands[num_row];
-        caffe_rng_uniform(num_row, (Dtype)0, (Dtype)1, rands);
-        for (int n = 0; n < APP<Dtype>::num_; ++n) {
-            for (int c = 0; c < num_c; ++c) {
-                const bool cond1 = rands[c] < APP<Dtype>::history_prob[L][c];
-                for (int i = 0; i < num_h * num_w; ++i) {
-                    mu_top_data[n * num_c * num_w * num_h + c * num_w * num_h + i] *= (cond1 ? 1 : 0);
-                }
-            }
-        }
-        
-        // generate masks, for use in backward
-        for (int i = 0; i < count; ++i) {
-            const int row_index = i / num_col;
-            const int col_index = i % num_col;
-            const bool cond1 = rands[row_index] < APP<Dtype>::history_prob[L][row_index];
-            const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
-            this->masks_[0]->mutable_cpu_data()[i] = (cond1 && cond2) ? 1 : 0;
-        }
-    }
-}
-
+/*
 template <typename Dtype>
 void Layer<Dtype>::PruneMinimals() {
     Dtype* muweight   = this->blobs_[0]->mutable_cpu_data();
@@ -953,13 +797,14 @@ void Layer<Dtype>::PruneMinimals() {
         }
     }
 }
-
+*/
 template <typename Dtype>
 void Layer<Dtype>::RestoreMasks() {
     /* Restore pruning state when retrain */
     const int count   = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
+    Dtype* muhistory_punish = this->history_punish_[0]->mutable_cpu_data();
     const Dtype *weight = this->blobs_[0]->cpu_data();
     const string layer_name = this->layer_param_.name();
     const int L = APP<Dtype>::layer_index[layer_name];
@@ -968,14 +813,12 @@ void Layer<Dtype>::RestoreMasks() {
     const string mthd = APP<Dtype>::prune_method;
 
     Dtype num_pruned_col = 0;
-    int   num_pruned_row = 0;
-    
+    int num_pruned_row = 0;
     if (APP<Dtype>::prune_unit == "Weight") {
         for (int i = 0; i < count; ++i) {
             if (!weight[i]) {
                 this->masks_[0]->mutable_cpu_data()[i] = 0;
                 ++ APP<Dtype>::num_pruned_weight[L];
-                APP<Dtype>::IF_weight_pruned[L][i] = true;
             }
         }
     } else {
@@ -993,12 +836,11 @@ void Layer<Dtype>::RestoreMasks() {
                         this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
                     }
                     if (mthd == "PP_Col") {
-                        APP<Dtype>::history_prob[L][j] = 0; /// TODO: count group;
+                        muhistory_punish[j] = 0; /// TODO: count group;
                     }
                 }
             }
         }
-        
         // Row
         for (int i = 0; i < num_row; ++i) { 
             Dtype sum = 0;
@@ -1012,7 +854,7 @@ void Layer<Dtype>::RestoreMasks() {
                     this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
                 }
                 if (mthd == "PP_Row") {
-                    APP<Dtype>::history_prob[L][i] = 0; /// TODO: count group;
+                    muhistory_punish[i * num_col] = 0; /// TODO: count group;
                 }
             }
         }
@@ -1028,7 +870,6 @@ void Layer<Dtype>::RestoreMasks() {
     if (pruned_ratio >= APP<Dtype>::prune_ratio[L]) {
         APP<Dtype>::iter_prune_finished[L] = -1; /// To check multi-GPU
         cout << L << ": " << layer_name << " prune finished" << endl;
-    } else if ((APP<Dtype>::prune_coremthd.substr(0, 2) == "PP" || APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg") && APP<Dtype>::step_ > 1) { // since resuming, the step should be larger than 1
     }
     LOG(INFO) << "  Masks restored,"
               << "  num_pruned_col=" << APP<Dtype>::num_pruned_col[L] << "(" << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << ")"
@@ -1039,90 +880,52 @@ void Layer<Dtype>::RestoreMasks() {
 
 template <typename Dtype>
 void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
-    // Basic setting
     const int count   = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
     APP<Dtype>::prune_ratio.push_back(prune_param.prune_ratio());
     APP<Dtype>::pruned_ratio.push_back(0); // used in TEST
     this->IF_masks_updated = true;
+    if (this->phase_ == TEST) { return; }
     
     // Get layer_index
     const string layer_name = this->layer_param_.name();
-    if (this->phase_ == TRAIN) {
-        if (APP<Dtype>::layer_index.count(layer_name) == 0) {
-            APP<Dtype>::layer_index[layer_name] = APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt;
+    if (APP<Dtype>::layer_index.count(layer_name) == 0) {
+        APP<Dtype>::layer_index[layer_name] = APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt;
+        if (!strcmp(this->type(), "Convolution")) {
             ++ APP<Dtype>::conv_layer_cnt;
-            cout << "a new layer registered: " << layer_name 
-                 << "  total layers: " << APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt << endl;
+        } else if (!strcmp(this->type(), "InnerProduct")) {
+            ++ APP<Dtype>::fc_layer_cnt;
+        } else {
+            LOG(FATAL) << "Seems wrong, pruning setup can ONLY be put in the layers with learnable parameters (Conv and FC), please check.";
         }
-    } else { return; }
+        LOG(INFO) << "A new layer registered: " << layer_name
+            << ". Its layer_index: " << APP<Dtype>::layer_index[layer_name] << endl;
+    }
     const int L = APP<Dtype>::layer_index[layer_name];
-    cout << "prune setup: " << layer_name  
-         << "  its layer_index: " << L
-         << "  total layers: " << APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt << endl;
-    
     
     // Note: the varibales below can ONLY be used in training.
     // Note: These varibales will be called for every GPU, whereas since we use `layer_index` to index, so it doesn't matter.
     // Set up prune parameters of layer
-    APP<Dtype>::delta.push_back(prune_param.delta()); // TODO: abolish delta
     APP<Dtype>::IF_update_row_col_layer.push_back(prune_param.if_update_row_col());
     APP<Dtype>::pruned_ratio_col.push_back(0);
     APP<Dtype>::pruned_ratio_row.push_back(0);
     APP<Dtype>::GFLOPs.push_back(this->blobs_[0]->shape()[0] * this->blobs_[0]->shape()[1] 
-                        * this->blobs_[0]->shape()[2] * this->blobs_[0]->shape()[3]); /// further calculated in `net.cpp`, after layer SetUp
+                               * this->blobs_[0]->shape()[2] * this->blobs_[0]->shape()[3]); // further calculated in `net.cpp`, after layer SetUp
     APP<Dtype>::num_param.push_back(count);
-    
-    // Pruning state {masks, IF_col/row/weight_pruned, num_pruned_col/row/weight, history_prob/score/reg/rank}
-    APP<Dtype>::masks.push_back( vector<Dtype>(count, 1) );
-    //this->blobmasks.resize(count, 1);
+    // Pruning state
     APP<Dtype>::num_pruned_col.push_back(0);
     APP<Dtype>::num_pruned_row.push_back(0);
     APP<Dtype>::num_pruned_weight.push_back(0);
-    APP<Dtype>::IF_row_pruned.push_back( vector<bool>(num_row, false) );
+    APP<Dtype>::IF_row_pruned.push_back(vector<bool>(num_row, false));
     vector<bool> vec_tmp(APP<Dtype>::group[L], false); // initialization
-    APP<Dtype>::IF_col_pruned.push_back( vector<vector<bool> >(num_col, vec_tmp) );
-    APP<Dtype>::IF_weight_pruned.push_back( vector<bool>(count, false) );
-    APP<Dtype>::reg_to_distribute.push_back(ceil(prune_param.prune_ratio() * num_col) * APP<Dtype>::target_reg);
-
-    int num_ = num_col; // default, even when not pruning
-    if (APP<Dtype>::prune_unit == "Weight") {
-        num_ = count;
-    } else if (APP<Dtype>::prune_unit == "Col") {
-        num_ = num_col;
-    } else if (APP<Dtype>::prune_unit == "Row") {
-        num_ = num_row;
-    }
-    APP<Dtype>::hscore.push_back( vector<Dtype>(num_, 0) );
-    APP<Dtype>::hrank.push_back( vector<Dtype>(num_, 0) );
-    APP<Dtype>::hhrank.push_back( vector<Dtype>(num_, 0) );
-    APP<Dtype>::history_prob.push_back( vector<Dtype>(num_, 1) );
-    if (APP<Dtype>::prune_coremthd == "Reg-Optimal") {
-        APP<Dtype>::history_reg.push_back(vector<Dtype>(num_, APP<Dtype>::AA));
-    } else {
-        APP<Dtype>::history_reg.push_back(vector<Dtype>(num_, 0));
-    }
-    
+    APP<Dtype>::IF_col_pruned.push_back(vector<vector<bool> >(num_col, vec_tmp));
+    APP<Dtype>::IF_weight_pruned.push_back(vector<bool>(count, false));
     // Info shared among layers
-    APP<Dtype>::filter_area.push_back(this->blobs_[0]->shape()[2] * this->blobs_[0]->shape()[3]);
+    APP<Dtype>::filter_spatial_size.push_back(this->blobs_[0]->shape()[2] * this->blobs_[0]->shape()[3]);
     APP<Dtype>::priority.push_back(prune_param.priority());
     APP<Dtype>::iter_prune_finished.push_back(INT_MAX);
-
-    // Logging
-    if (APP<Dtype>::num_log) {
-        const int num_log = APP<Dtype>::num_log;
-        Dtype rands[num_log];
-        caffe_rng_uniform(num_log, (Dtype)0, (Dtype)(num_col - 1), rands);
-        APP<Dtype>::log_index.push_back( vector<int>(num_log) );
-        for (int i = 0; i < num_log; ++i) {
-            APP<Dtype>::log_index[L][i] = int(rands[i]);
-        }
-        APP<Dtype>::log_weight.push_back( vector<vector<Dtype> >(num_log) );
-        APP<Dtype>::log_diff.push_back( vector<vector<Dtype> >(num_log) );
-    }
-    
-    cout << "=== Masks etc. Initialized" << endl;
+    LOG(INFO) << "Pruning setup done.";
 }
 
 template <typename Dtype> 
@@ -1131,8 +934,6 @@ void Layer<Dtype>::PruneForward() {
     clock_t t1 = clock();
     cout << this->layer_param_.name() << ": forward GPU begins timing" << endl;
     #endif
-    
-    Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
     const int count = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
@@ -1168,7 +969,8 @@ void Layer<Dtype>::PruneForward() {
         
         // Print and check, before update probs
         // put this outside, to print even when we do not prune
-        if (APP<Dtype>::show_layer.size() >= L+1 && APP<Dtype>::show_layer[L] == '1' && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0) {
+        if (APP<Dtype>::show_layer.size() >= L+1 && APP<Dtype>::show_layer[L] == '1'
+                    && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0) {
             this->Print('f');
         }
 
@@ -1180,8 +982,6 @@ void Layer<Dtype>::PruneForward() {
                 this->ProbPruneCol(APP<Dtype>::prune_interval);
             } else if (mthd == "PP_Row" && this->IF_hppf()) {
                 this->ProbPruneRow(APP<Dtype>::prune_interval);
-            } else if (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg" && this->IF_hppf() && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
-                this->PruneMinimals();
             } else if ((mthd == "PP-chl_Col" || mthd == "PP-chl-linear_Col") && this->IF_hppf()) { // TODO(mingsuntse): improve prune method name
                 this->ProbPruneCol_chl(APP<Dtype>::prune_interval);
             } else {
@@ -1199,29 +999,30 @@ void Layer<Dtype>::PruneForward() {
         #endif
         
         // Print weight magnitude
-    if (APP<Dtype>::num_log > 0) {
-        if (APP<Dtype>::prune_unit == "Col") {
-            cout << "ave-magnitude_col " << APP<Dtype>::step_ << " " << layer_name << ":";
-            for (int j = 0; j < num_col; ++j) {
-                Dtype sum = 0;
-                for (int i = 0; i < num_row; ++i) {
-                    sum += fabs(muweight[i*num_col + j]);
-                }
-                cout << " " << sum;
-            }
-            cout << endl;
-        } else if (APP<Dtype>::prune_unit == "Row") {
-            cout << "ave-magnitude_row " << APP<Dtype>::step_ << " " << layer_name << ":";
-            for (int i = 0; i < num_row; ++i) {
-                Dtype sum = 0;
+        const Dtype* weight = this->blobs_[0]->cpu_data();
+        if (APP<Dtype>::num_log > 0) {
+            if (APP<Dtype>::prune_unit == "Col") {
+                cout << "ave-magnitude_col " << APP<Dtype>::step_ << " " << layer_name << ":";
                 for (int j = 0; j < num_col; ++j) {
-                    sum += fabs(muweight[i*num_col + j]);
+                    Dtype sum = 0;
+                    for (int i = 0; i < num_row; ++i) {
+                        sum += fabs(weight[i*num_col + j]);
+                    }
+                    cout << " " << sum;
                 }
-                cout << " " << sum;
+                cout << endl;
+            } else if (APP<Dtype>::prune_unit == "Row") {
+                cout << "ave-magnitude_row " << APP<Dtype>::step_ << " " << layer_name << ":";
+                for (int i = 0; i < num_row; ++i) {
+                    Dtype sum = 0;
+                    for (int j = 0; j < num_col; ++j) {
+                        sum += fabs(weight[i*num_col + j]);
+                    }
+                    cout << " " << sum;
+                }
+                cout << endl;
             }
-            cout << endl;
         }
-    }
         // Summary print 
         if (mthd != "None" && L < APP<Dtype>::show_num_layer) {
             cout << layer_name << "  IF_prune: " << IF_prune 
@@ -1243,87 +1044,18 @@ void Layer<Dtype>::PruneForward() {
         cout << "  after updating masks: " << (double)(clock() - t1) / CLOCKS_PER_SEC << endl;
         #endif
         
-    } else if (this->phase_ == TEST && IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX && APP<Dtype>::prune_coremthd.substr(0, 2) == "PP") {
-        if (APP<Dtype>::mask_generate_mechanism == "group-wise") {
-            // use the old mask-generating mechanism
-            const int num_unit = (APP<Dtype>::prune_unit == "Row") ? num_row : num_col;
-            Dtype rands[num_unit];
-            caffe_rng_uniform(num_unit, (Dtype)0, (Dtype)1, rands);
-            for (int i = 0; i < count; ++i) {
-                const int row_index = i / num_col;
-                const int col_index = i % num_col;
-                const bool cond1 = (APP<Dtype>::prune_unit == "Row") ? rands[row_index] < APP<Dtype>::history_prob[L][row_index]
-                                                                     : rands[col_index] < APP<Dtype>::history_prob[L][col_index];
-                const bool cond2 = (APP<Dtype>::prune_unit == "Row") ? !APP<Dtype>::IF_col_pruned[L][col_index][0]
-                                                                     : !APP<Dtype>::IF_row_pruned[L][row_index];
-                this->masks_[0]->mutable_cpu_data()[i] = (cond1 && cond2) ? 1 : 0;
-                this->blobs_backup_[0]->mutable_cpu_data()[i] = muweight[i]; // backup weights
-                muweight[i] *= this->masks_[0]->mutable_cpu_data()[i];
-            }
-        } else if (APP<Dtype>::mask_generate_mechanism == "element-wise") {
-            // use the new mask-generating mechanism (1)
-            Dtype rands[count/10];
-            for (int i = 0; i < count; ++i) {
-        if (i % (count/10) == 0) {
-            caffe_rng_uniform(count/10, (Dtype)0, (Dtype)1, rands);
-        }
-                const int row_index = i / num_col;
-                const int col_index = i % num_col;
-                const bool cond1 = (APP<Dtype>::prune_unit == "Row") ? rands[i%(count/10)] < APP<Dtype>::history_prob[L][row_index]
-                                                                     : rands[i%(count/10)] < APP<Dtype>::history_prob[L][col_index];
-                const bool cond2 = (APP<Dtype>::prune_unit == "Row") ? !APP<Dtype>::IF_col_pruned[L][col_index][0]
-                                                                     : !APP<Dtype>::IF_row_pruned[L][row_index];
-                this->masks_[0]->mutable_cpu_data()[i] = (cond1 && cond2) ? 1 : 0;
-                this->blobs_backup_[0]->mutable_cpu_data()[i] = muweight[i]; // backup weights
-                muweight[i] *= this->masks_[0]->mutable_cpu_data()[i];
-            }
-        } else if (APP<Dtype>::mask_generate_mechanism == "channel-wise") {
-            // new mask-generating mechanism (2)
-            assert(APP<Dtype>::prune_unit != "Col");
-            const int num = this->blobs_[0]->count(0, 2); // number of channel
-            const int kernel_spatial_size = this->blobs_[0]->count(2);
-            Dtype rands[num];
-            caffe_rng_uniform(num, (Dtype)0, (Dtype)1, rands);
-            for (int i = 0; i < count; ++i) {
-                const int row_index = i / num_col;
-                const int col_index = i % num_col;
-                const int chl_index = i / kernel_spatial_size; // channel index
-                const bool cond1 = rands[chl_index] < APP<Dtype>::history_prob[L][row_index];
-                const bool cond2 = !APP<Dtype>::IF_col_pruned[L][col_index][0];
-                this->masks_[0]->mutable_cpu_data()[i] = (cond1 && cond2) ? 1 : 0;
-                this->blobs_backup_[0]->mutable_cpu_data()[i] = muweight[i]; // backup weights
-                muweight[i] *= this->masks_[0]->mutable_cpu_data()[i];
-            }
-        } else {
-            LOG(INFO) << "Wrong, unknown mask_generate_mechanism";
-            exit(1);
-        }
-        this->IF_restore = true;
+    } else if (this->phase_ == TEST 
+                && IF_prune 
+                && APP<Dtype>::iter_prune_finished[L] == INT_MAX 
+                && APP<Dtype>::prune_coremthd.substr(0, 2) == "PP") {
+        this->GenerateMasks();
     }
 }
 
 template <typename Dtype> 
 void Layer<Dtype>::PruneBackward(const vector<Blob<Dtype>*>& top) {
-    Dtype* muweight_diff = this->blobs_[0]->mutable_cpu_diff();      
-    const int count   = this->blobs_[0]->count();
-    const int num_row = this->blobs_[0]->shape()[0];
-    const int num_col = count / num_row;
     const int L = APP<Dtype>::layer_index[this->layer_param_.name()];
 
-    /// Diff log
-    if (APP<Dtype>::num_log) {
-        const int num_log = APP<Dtype>::log_index[L].size();
-        for (int i = 0; i < num_log; ++i) {
-            const int index = APP<Dtype>::log_index[L][i];
-            Dtype sum = 0;
-            for (int r = 0; r < num_row; ++r) {
-                sum += fabs(muweight_diff[r * num_col + index]);
-            }
-            sum /= num_row;
-            APP<Dtype>::log_diff[L][i].push_back(sum);
-        }
-    }
-    
     // TaylorPrune
     if (APP<Dtype>::prune_method == "TP_Row" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
         const bool IF_want_prune  = APP<Dtype>::prune_method != "None" && APP<Dtype>::prune_ratio[L] > 0;
@@ -1336,11 +1068,12 @@ void Layer<Dtype>::PruneBackward(const vector<Blob<Dtype>*>& top) {
     }
     
     // Print and check
-    if (APP<Dtype>::show_layer.size() >= L+1 && APP<Dtype>::show_layer[L] == '1' && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0 && APP<Dtype>::inner_iter == 0) { 
+    if (APP<Dtype>::show_layer.size() >= L+1 && APP<Dtype>::show_layer[L] == '1' 
+                && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0 && APP<Dtype>::inner_iter == 0) { 
        this->Print('b');
     }
     
-    if (APP<Dtype>::prune_method != "None" && APP<Dtype>::pruned_ratio[L] > 0) { 
+    if (APP<Dtype>::pruned_ratio[L] > 0) { 
         caffe_gpu_mul(this->blobs_[0]->count(), 
                       this->blobs_[0]->gpu_diff(), 
                       this->masks_[0]->gpu_data(), 

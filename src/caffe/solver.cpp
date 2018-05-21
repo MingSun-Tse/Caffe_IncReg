@@ -69,14 +69,9 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
       strcpy(coremthd, APP<Dtype>::prune_coremthd.c_str());
       APP<Dtype>::prune_coremthd_ = strtok(coremthd, "-");
   }
-  APP<Dtype>::criteria = "L1-norm";
   APP<Dtype>::num_once_prune = param_.num_once_prune();
   APP<Dtype>::prune_interval = param_.prune_interval();
   APP<Dtype>::clear_history_interval = 1;
-  APP<Dtype>::rgamma = 30;   //param_.rgamma();
-  APP<Dtype>::rpower = -1.3; //param_.rpower();
-  APP<Dtype>::cgamma = 70;   //param_.cgamma();
-  APP<Dtype>::cpower = -1.2; //param_.cpower(); 
   APP<Dtype>::prune_begin_iter = param_.prune_begin_iter();
   APP<Dtype>::iter_size = param_.iter_size();
   APP<Dtype>::AA = param_.aa();
@@ -91,12 +86,9 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   APP<Dtype>::IF_scheme1_when_Reg_rank = param.if_scheme1_when_reg_rank();
   APP<Dtype>::IF_eswpf = param_.if_eswpf(); /// if early stop when prune finished
   APP<Dtype>::prune_threshold = param_.prune_threshold();
-  APP<Dtype>::num_iter_reg = 10000;
   APP<Dtype>::reg_cushion_iter = 2000;
-  APP<Dtype>::hrank_momentum = 0.999;
   // APP<Dtype>::mask_generate_mechanism = param_.mask_generate_mechanism();
   // APP<Dtype>::score_decay = param_.score_decay();
-  APP<Dtype>::snapshot_prefix = param_.snapshot_prefix();
   // ------------------------------------------
 
   CHECK_GE(param_.average_loss(), 1) << "average_loss should be non-negative.";
@@ -590,6 +582,7 @@ void Solver<Dtype>::Snapshot() {
   SnapshotSolverState(model_filename);
 }
 
+/*
 /// @mingsuntse, Deprecated -- use built-in solverstate
 template <typename Dtype>
 void Solver<Dtype>::PruneStateShot() {
@@ -701,7 +694,7 @@ void Solver<Dtype>::Logshot() {
     }
 
 }
-
+*/
 
 template <typename Dtype>
 void Solver<Dtype>::CheckSnapshotWritePermissions() {
