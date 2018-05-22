@@ -12,7 +12,13 @@ void Im2colLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   force_nd_im2col_ = conv_param.force_nd_im2col();
   const int input_num_dims = bottom[0]->shape().size();
   channel_axis_ = bottom[0]->CanonicalAxisIndex(conv_param.axis());
-  const int first_spatial_dim = channel_axis_ + 1;
+  if (input_num_dims == 5 &&
+      channel_axis_ == 1 &&
+      bottom[0]->shape(2) == 1)
+    forced_3d_ = true;
+  else
+    forced_3d_ = false;
+  const int first_spatial_dim = channel_axis_ + 1 + forced_3d_;
   num_spatial_axes_ = input_num_dims - first_spatial_dim;
   CHECK_GE(num_spatial_axes_, 1);
   vector<int> dim_blob_shape(1, num_spatial_axes_);
@@ -111,13 +117,14 @@ void Im2colLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   const int* stride_data = stride_.cpu_data();
   const int* pad_data = pad_.cpu_data();
   const int* dilation_data = dilation_.cpu_data();
+  if (forced_3d_) top_shape[channel_axis_ + 1] = 1;
   for (int i = 0; i < num_spatial_axes_; ++i) {
     top_shape[channel_axis_] *= kernel_shape_data[i];
-    const int input_dim = bottom[0]->shape(channel_axis_ + i + 1);
+    const int input_dim = bottom[0]->shape(channel_axis_ + i + 1 + forced_3d_);
     const int kernel_extent = dilation_data[i] * (kernel_shape_data[i] - 1) + 1;
     const int output_dim = (input_dim + 2 * pad_data[i] - kernel_extent)
         / stride_data[i] + 1;
-    top_shape[channel_axis_ + i + 1] = output_dim;
+    top_shape[channel_axis_ + i + 1 + forced_3d_] = output_dim;
   }
   top[0]->Reshape(top_shape);
   num_ = bottom[0]->count(0, channel_axis_);
@@ -141,8 +148,8 @@ void Im2colLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     DCHECK_EQ(dilation_.count(), num_spatial_axes_);
     if (!force_nd_im2col_ && num_spatial_axes_ == 2) {
       im2col_cpu(bottom_data + n * bottom_dim_, channels_,
-          bottom[0]->shape(channel_axis_ + 1),
-          bottom[0]->shape(channel_axis_ + 2),
+          bottom[0]->shape(channel_axis_ + 1 + forced_3d_),
+          bottom[0]->shape(channel_axis_ + 2 + forced_3d_),
           kernel_shape_.cpu_data()[0], kernel_shape_.cpu_data()[1],
           pad_.cpu_data()[0], pad_.cpu_data()[1],
           stride_.cpu_data()[0], stride_.cpu_data()[1],
@@ -150,8 +157,8 @@ void Im2colLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
           top_data + n * top_dim_);
     } else {
       im2col_nd_cpu(bottom_data + n * bottom_dim_, num_spatial_axes_,
-          bottom[0]->shape().data() + channel_axis_,
-          top[0]->shape().data() + channel_axis_,
+          bottom[0]->shape().data() + channel_axis_ + forced_3d_,
+          top[0]->shape().data() + channel_axis_ + forced_3d_,
           kernel_shape_.cpu_data(), pad_.cpu_data(), stride_.cpu_data(),
           dilation_.cpu_data(), top_data + n * top_dim_);
     }
@@ -166,8 +173,8 @@ void Im2colLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
   for (int n = 0; n < num_; ++n) {
     if (!force_nd_im2col_ && num_spatial_axes_ == 2) {
       col2im_cpu(top_diff + n * top_dim_, channels_,
-          bottom[0]->shape(channel_axis_ + 1),
-          bottom[0]->shape(channel_axis_ + 2),
+          bottom[0]->shape(channel_axis_ + 1 + forced_3d_),
+          bottom[0]->shape(channel_axis_ + 2 + forced_3d_),
           kernel_shape_.cpu_data()[0], kernel_shape_.cpu_data()[1],
           pad_.cpu_data()[0], pad_.cpu_data()[1],
           stride_.cpu_data()[0], stride_.cpu_data()[1],
@@ -175,8 +182,8 @@ void Im2colLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
           bottom_diff + n * bottom_dim_);
     } else {
       col2im_nd_cpu(top_diff + n * top_dim_, num_spatial_axes_,
-          bottom[0]->shape().data() + channel_axis_,
-          top[0]->shape().data() + channel_axis_,
+          bottom[0]->shape().data() + channel_axis_ + forced_3d_,
+          top[0]->shape().data() + channel_axis_ + forced_3d_,
           kernel_shape_.cpu_data(), pad_.cpu_data(), stride_.cpu_data(),
           dilation_.cpu_data(), bottom_diff + n * bottom_dim_);
     }

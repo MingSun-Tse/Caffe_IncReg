@@ -20,6 +20,7 @@
 #include "caffe/layers/cudnn_conv_layer.hpp"
 #include "caffe/layers/cudnn_lcn_layer.hpp"
 #include "caffe/layers/cudnn_lrn_layer.hpp"
+#include "caffe/layers/cudnn_ndconv_layer.hpp"
 #include "caffe/layers/cudnn_pooling_layer.hpp"
 #include "caffe/layers/cudnn_relu_layer.hpp"
 #include "caffe/layers/cudnn_sigmoid_layer.hpp"
@@ -36,7 +37,7 @@ namespace caffe {
 // Get convolution layer according to engine.
 template <typename Dtype>
 shared_ptr<Layer<Dtype> > GetConvolutionLayer(
-    const LayerParameter& param) {
+  const LayerParameter& param) {
   ConvolutionParameter conv_param = param.convolution_param();
   ConvolutionParameter_Engine engine = conv_param.engine();
 #ifdef USE_CUDNN
@@ -67,10 +68,33 @@ shared_ptr<Layer<Dtype> > GetConvolutionLayer(
 #endif
   } else {
     LOG(FATAL) << "Layer " << param.name() << " has unknown engine.";
+    throw;  // Avoids missing return warning
   }
 }
 
 REGISTER_LAYER_CREATOR(Convolution, GetConvolutionLayer);
+
+// Get NdConvolution layer if CUDNN is available
+
+#ifdef USE_CUDNN
+template <typename Dtype>
+shared_ptr<Layer<Dtype> > GetNdConvolutionLayer(
+  const LayerParameter& param) {
+  ConvolutionParameter_Engine engine = param.convolution_param().engine();
+  if (engine == ConvolutionParameter_Engine_DEFAULT) {
+    engine = ConvolutionParameter_Engine_CUDNN;
+  }
+  if (engine == ConvolutionParameter_Engine_CAFFE) {
+    NOT_IMPLEMENTED;
+  } else if (engine == ConvolutionParameter_Engine_CUDNN) {
+    return shared_ptr<Layer<Dtype> >(new CudnnNdConvolutionLayer<Dtype>(param));
+  } else {
+    LOG(FATAL) << "Layer " << param.name() << " has unknown engine.";
+  }
+}
+
+REGISTER_LAYER_CREATOR(NdConvolution, GetNdConvolutionLayer);
+#endif
 
 // Get pooling layer according to engine.
 template <typename Dtype>
@@ -104,6 +128,7 @@ shared_ptr<Layer<Dtype> > GetPoolingLayer(const LayerParameter& param) {
 #endif
   } else {
     LOG(FATAL) << "Layer " << param.name() << " has unknown engine.";
+    throw;  // Avoids missing return warning
   }
 }
 
@@ -141,10 +166,33 @@ shared_ptr<Layer<Dtype> > GetLRNLayer(const LayerParameter& param) {
 #endif
   } else {
     LOG(FATAL) << "Layer " << param.name() << " has unknown engine.";
+    throw;  // Avoids missing return warning
   }
 }
 
 REGISTER_LAYER_CREATOR(LRN, GetLRNLayer);
+
+
+// Get NdPooling layer if CUDNN is available
+#ifdef USE_CUDNN
+template <typename Dtype>
+shared_ptr<Layer<Dtype> > GetNdPoolingLayer(const LayerParameter& param) {
+  PoolingParameter_Engine engine = param.pooling_param().engine();
+  if (engine == PoolingParameter_Engine_DEFAULT) {
+    engine = PoolingParameter_Engine_CUDNN;
+  }
+  if (engine == PoolingParameter_Engine_CAFFE) {
+    NOT_IMPLEMENTED;
+  } else if (engine == PoolingParameter_Engine_CUDNN) {
+    return shared_ptr<Layer<Dtype> >(new CudnnNdPoolingLayer<Dtype>(param));
+  } else {
+    LOG(FATAL) << "Layer " << param.name() << " has unknown engine.";
+  }
+}
+
+REGISTER_LAYER_CREATOR(NdPooling, GetNdPoolingLayer);
+#endif
+
 
 // Get relu layer according to engine.
 template <typename Dtype>
@@ -164,6 +212,7 @@ shared_ptr<Layer<Dtype> > GetReLULayer(const LayerParameter& param) {
 #endif
   } else {
     LOG(FATAL) << "Layer " << param.name() << " has unknown engine.";
+    throw;  // Avoids missing return warning
   }
 }
 
@@ -187,6 +236,7 @@ shared_ptr<Layer<Dtype> > GetSigmoidLayer(const LayerParameter& param) {
 #endif
   } else {
     LOG(FATAL) << "Layer " << param.name() << " has unknown engine.";
+    throw;  // Avoids missing return warning
   }
 }
 
@@ -210,6 +260,7 @@ shared_ptr<Layer<Dtype> > GetSoftmaxLayer(const LayerParameter& param) {
 #endif
   } else {
     LOG(FATAL) << "Layer " << param.name() << " has unknown engine.";
+    throw;  // Avoids missing return warning
   }
 }
 
@@ -233,6 +284,7 @@ shared_ptr<Layer<Dtype> > GetTanHLayer(const LayerParameter& param) {
 #endif
   } else {
     LOG(FATAL) << "Layer " << param.name() << " has unknown engine.";
+    throw;  // Avoids missing return warning
   }
 }
 

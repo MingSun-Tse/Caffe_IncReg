@@ -1,10 +1,8 @@
 #ifdef USE_CUDNN
 #include <algorithm>
 #include <vector>
-#include <math.h>
-#include <stdlib.h> // rand() and srand()
-#include <time.h>
-#include "caffe/adaptive_probabilistic_pruning.hpp"
+
+#include "caffe/layers/cudnn_conv_layer.hpp"
 
 namespace caffe {
 
@@ -19,89 +17,91 @@ namespace caffe {
 template <typename Dtype>
 void CuDNNConvolutionLayer<Dtype>::LayerSetUp(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
-    ConvolutionLayer<Dtype>::LayerSetUp(bottom, top);
-    // Initialize CUDA streams and cuDNN.
-    stream_ = new cudaStream_t[this->group_ * CUDNN_STREAMS_PER_GROUP];
-    handle_ = new cudnnHandle_t[this->group_ * CUDNN_STREAMS_PER_GROUP];
+  ConvolutionLayer<Dtype>::LayerSetUp(bottom, top);
+  // Initialize CUDA streams and cuDNN.
+  stream_         = new cudaStream_t[this->group_ * CUDNN_STREAMS_PER_GROUP];
+  handle_         = new cudnnHandle_t[this->group_ * CUDNN_STREAMS_PER_GROUP];
 
-    // Initialize algorithm arrays
-    fwd_algo_ = new cudnnConvolutionFwdAlgo_t[bottom.size()];
-    bwd_filter_algo_ = new cudnnConvolutionBwdFilterAlgo_t[bottom.size()];
-    bwd_data_algo_ = new cudnnConvolutionBwdDataAlgo_t[bottom.size()];
+  // Initialize algorithm arrays
+  fwd_algo_       = new cudnnConvolutionFwdAlgo_t[bottom.size()];
+  bwd_filter_algo_= new cudnnConvolutionBwdFilterAlgo_t[bottom.size()];
+  bwd_data_algo_  = new cudnnConvolutionBwdDataAlgo_t[bottom.size()];
 
-    // initialize size arrays
-    workspace_fwd_sizes_ = new size_t[bottom.size()];
-    workspace_bwd_filter_sizes_ = new size_t[bottom.size()];
-    workspace_bwd_data_sizes_ = new size_t[bottom.size()];
+  // initialize size arrays
+  workspace_fwd_sizes_ = new size_t[bottom.size()];
+  workspace_bwd_filter_sizes_ = new size_t[bottom.size()];
+  workspace_bwd_data_sizes_ = new size_t[bottom.size()];
 
-    // workspace data
-    workspaceSizeInBytes = 0;
-    workspaceData = NULL;
-    workspace = new void *[this->group_ * CUDNN_STREAMS_PER_GROUP];
+  // workspace data
+  workspaceSizeInBytes = 0;
+  workspaceData = NULL;
+  workspace = new void*[this->group_ * CUDNN_STREAMS_PER_GROUP];
 
-    for (size_t i = 0; i < bottom.size(); ++i) {
-        // initialize all to default algorithms
-        fwd_algo_[i] = (cudnnConvolutionFwdAlgo_t) 0;
-        bwd_filter_algo_[i] = (cudnnConvolutionBwdFilterAlgo_t) 0;
-        bwd_data_algo_[i] = (cudnnConvolutionBwdDataAlgo_t) 0;
-        // default algorithms don't require workspace
-        workspace_fwd_sizes_[i] = 0;
-        workspace_bwd_data_sizes_[i] = 0;
-        workspace_bwd_filter_sizes_[i] = 0;
-    }
+  for (size_t i = 0; i < bottom.size(); ++i) {
+    // initialize all to default algorithms
+    fwd_algo_[i] = (cudnnConvolutionFwdAlgo_t)0;
+    bwd_filter_algo_[i] = (cudnnConvolutionBwdFilterAlgo_t)0;
+    bwd_data_algo_[i] = (cudnnConvolutionBwdDataAlgo_t)0;
+    // default algorithms don't require workspace
+    workspace_fwd_sizes_[i] = 0;
+    workspace_bwd_data_sizes_[i] = 0;
+    workspace_bwd_filter_sizes_[i] = 0;
+  }
 
-    for (int g = 0; g < this->group_ * CUDNN_STREAMS_PER_GROUP; g++) {
-        CUDA_CHECK(cudaStreamCreate(&stream_[g]));
-        CUDNN_CHECK(cudnnCreate(&handle_[g]));
-        CUDNN_CHECK(cudnnSetStream(handle_[g], stream_[g]));
-        workspace[g] = NULL;
-    }
+  for (int g = 0; g < this->group_ * CUDNN_STREAMS_PER_GROUP; g++) {
+    CUDA_CHECK(cudaStreamCreate(&stream_[g]));
+    CUDNN_CHECK(cudnnCreate(&handle_[g]));
+    CUDNN_CHECK(cudnnSetStream(handle_[g], stream_[g]));
+    workspace[g] = NULL;
+  }
 
-    // Set the indexing parameters.
-    bias_offset_ = (this->num_output_ / this->group_);
+  // Set the indexing parameters.
+  bias_offset_ = (this->num_output_ / this->group_);
 
-    // Create filter descriptor.
-    const int *kernel_shape_data = this->kernel_shape_.cpu_data();
-    const int kernel_h = kernel_shape_data[0];
-    const int kernel_w = kernel_shape_data[1];
-    cudnn::createFilterDesc<Dtype>(&filter_desc_,
-                                   this->num_output_ / this->group_, this->channels_ / this->group_,
-                                   kernel_h, kernel_w);
+  // Create filter descriptor.
+  const int* kernel_shape_data = this->kernel_shape_.cpu_data();
+  const int kernel_h = kernel_shape_data[0];
+  const int kernel_w = kernel_shape_data[1];
+  cudnn::createFilterDesc<Dtype>(&filter_desc_,
+      this->num_output_ / this->group_, this->channels_ / this->group_,
+      kernel_h, kernel_w);
 
-    // Create tensor descriptor(s) for data and corresponding convolution(s).
-    for (int i = 0; i < bottom.size(); i++) {
-        cudnnTensorDescriptor_t bottom_desc;
-        cudnn::createTensor4dDesc<Dtype>(&bottom_desc);
-        bottom_descs_.push_back(bottom_desc);
-        cudnnTensorDescriptor_t top_desc;
-        cudnn::createTensor4dDesc<Dtype>(&top_desc);
-        top_descs_.push_back(top_desc);
-        cudnnConvolutionDescriptor_t conv_desc;
-        cudnn::createConvolutionDesc<Dtype>(&conv_desc);
-        conv_descs_.push_back(conv_desc);
-    }
+  // Create tensor descriptor(s) for data and corresponding convolution(s).
+  for (int i = 0; i < bottom.size(); i++) {
+    cudnnTensorDescriptor_t bottom_desc;
+    cudnn::createTensor4dDesc<Dtype>(&bottom_desc);
+    bottom_descs_.push_back(bottom_desc);
+    cudnnTensorDescriptor_t top_desc;
+    cudnn::createTensor4dDesc<Dtype>(&top_desc);
+    top_descs_.push_back(top_desc);
+    cudnnConvolutionDescriptor_t conv_desc;
+    cudnn::createConvolutionDesc<Dtype>(&conv_desc);
+    conv_descs_.push_back(conv_desc);
+  }
 
-    // Tensor descriptor for bias.
-    if (this->bias_term_) {
-        cudnn::createTensor4dDesc<Dtype>(&bias_desc_);
-    }
+  // Tensor descriptor for bias.
+  if (this->bias_term_) {
+    cudnn::createTensor4dDesc<Dtype>(&bias_desc_);
+  }
 
-    handles_setup_ = true;
+  handles_setup_ = true;
 }
+
 template <typename Dtype>
 void CuDNNConvolutionLayer<Dtype>::Reshape(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
   ConvolutionLayer<Dtype>::Reshape(bottom, top);
-  CHECK_EQ(2, this->num_spatial_axes_)
+  CHECK_LE(2, this->num_spatial_axes_)
       << "CuDNNConvolution input must have 2 spatial axes "
       << "(e.g., height and width). "
       << "Use 'engine: CAFFE' for general ND convolution.";
   bottom_offset_ = this->bottom_dim_ / this->group_;
   top_offset_ = this->top_dim_ / this->group_;
-  const int height = bottom[0]->shape(this->channel_axis_ + 1);
-  const int width = bottom[0]->shape(this->channel_axis_ + 2);
-  const int height_out = top[0]->shape(this->channel_axis_ + 1);
-  const int width_out = top[0]->shape(this->channel_axis_ + 2);
+  const bool forced_3d = this->forced_3d_;
+  const int height = bottom[0]->shape(this->channel_axis_ + 1 + forced_3d);
+  const int width = bottom[0]->shape(this->channel_axis_ + 2 + forced_3d);
+  const int height_out = top[0]->shape(this->channel_axis_ + 1 + forced_3d);
+  const int width_out = top[0]->shape(this->channel_axis_ + 2 + forced_3d);
   const int* pad_data = this->pad_.cpu_data();
   const int pad_h = pad_data[0];
   const int pad_w = pad_data[1];
@@ -253,6 +253,7 @@ CuDNNConvolutionLayer<Dtype>::~CuDNNConvolutionLayer() {
   }
 
   cudaFree(workspaceData);
+  delete [] workspace;
   delete [] stream_;
   delete [] handle_;
   delete [] fwd_algo_;

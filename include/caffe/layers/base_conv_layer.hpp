@@ -54,7 +54,7 @@ class BaseConvolutionLayer : public Layer<Dtype> {
 
   /// @brief The spatial dimensions of the input.
   inline int input_shape(int i) {
-    return (*bottom_shape_)[channel_axis_ + i];
+    return (*bottom_shape_)[channel_axis_ + i + forced_3d_];
   }
   // reverse_dimensions should return true iff we are implementing deconv, so
   // that conv helpers know which dimensions are which.
@@ -91,37 +91,23 @@ class BaseConvolutionLayer : public Layer<Dtype> {
   int num_output_;
   bool bias_term_;
   bool is_1x1_;
-  bool force_nd_im2col_; // im2col,一般情况下num_spatial_axes_==2,即将2维图像拉成向量，但force_nd_im2col_针对的是更general的情况n-d“图像”
+  bool force_nd_im2col_;
+  bool forced_3d_;
 
  private:
   // wrap im2col/col2im so we don't have to remember the (long) argument lists
   inline void conv_im2col_cpu(const Dtype* data, Dtype* col_buff) {
     if (!force_nd_im2col_ && num_spatial_axes_ == 2) {
       im2col_cpu(data, conv_in_channels_,
-          conv_input_shape_.cpu_data()[1], conv_input_shape_.cpu_data()[2], // conv_input_shape_.cpu_data()[1]: height, 2: width
-          kernel_shape_.cpu_data()[0], kernel_shape_.cpu_data()[1], // kernel_shape_.cpu_data()[0]: kernel_h, 1: kernel_w
+          conv_input_shape_.cpu_data()[1], conv_input_shape_.cpu_data()[2],
+          kernel_shape_.cpu_data()[0], kernel_shape_.cpu_data()[1],
           pad_.cpu_data()[0], pad_.cpu_data()[1],
           stride_.cpu_data()[0], stride_.cpu_data()[1],
           dilation_.cpu_data()[0], dilation_.cpu_data()[1], col_buff);
-          
-          /*
-          std::cout << this->layer_param_.name() << ": baseconv im2col_cpu" << std::endl;
-          std::cout << num_kernels_im2col_ << " 1:"  // = conv_in_channels_ * conv_out_spatial_dim_
-                    << num_kernels_col2im_ << " 2:"  // = reverse_dimensions() ? top_dim_ : bottom_dim_
-                    << conv_out_channels_ << " 3:"   // the number of output channel
-                    << conv_in_channels_ << " 4:"    // the number of input channel
-                    << conv_out_spatial_dim_ << " 5:"// the spatial size of output feature map
-                    << kernel_dim_ << " 6:"          // the number of columns
-                    << col_offset_ << " 7:"          // = kernel_dim_ * conv_out_spatial_dim_
-                    << output_offset_ << std::endl;  // = conv_out_channels_ * conv_out_spatial_dim_ / group_
-          */
-          
-          
     } else {
       im2col_nd_cpu(data, num_spatial_axes_, conv_input_shape_.cpu_data(),
           col_buffer_shape_.data(), kernel_shape_.cpu_data(),
           pad_.cpu_data(), stride_.cpu_data(), dilation_.cpu_data(), col_buff);
-         
     }
   }
   inline void conv_col2im_cpu(const Dtype* col_buff, Dtype* data) {
@@ -132,12 +118,10 @@ class BaseConvolutionLayer : public Layer<Dtype> {
           pad_.cpu_data()[0], pad_.cpu_data()[1],
           stride_.cpu_data()[0], stride_.cpu_data()[1],
           dilation_.cpu_data()[0], dilation_.cpu_data()[1], data);
-          
     } else {
       col2im_nd_cpu(col_buff, num_spatial_axes_, conv_input_shape_.cpu_data(),
           col_buffer_shape_.data(), kernel_shape_.cpu_data(),
           pad_.cpu_data(), stride_.cpu_data(), dilation_.cpu_data(), data);
-          
     }
   }
 #ifndef CPU_ONLY
@@ -154,7 +138,6 @@ class BaseConvolutionLayer : public Layer<Dtype> {
           conv_input_shape_.gpu_data(), col_buffer_.gpu_shape(),
           kernel_shape_.gpu_data(), pad_.gpu_data(),
           stride_.gpu_data(), dilation_.gpu_data(), col_buff);
-        
     }
   }
   inline void conv_col2im_gpu(const Dtype* col_buff, Dtype* data) {

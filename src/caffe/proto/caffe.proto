@@ -15,8 +15,11 @@ message BlobProto {
   repeated double double_diff = 9 [packed = true];
 
   // 4D dimensions -- deprecated.  Use "shape" instead.
+  // blob defined/reshaped by 4D dimension will be automatically expanded to
+  // 5D by adding a singleton length (or temporal depth) dimension
   optional int32 num = 1 [default = 0];
   optional int32 channels = 2 [default = 0];
+  optional int32 length = 10 [default = 0];
   optional int32 height = 3 [default = 0];
   optional int32 width = 4 [default = 0];
 }
@@ -296,7 +299,6 @@ message CenterLossParameter {
   // May be negative to index from the end (e.g., -1 for the last axis).
   optional int32 axis = 3 [default = 1];
 }
-
 
 // A message that stores the solver snapshots
 message SolverState {
@@ -666,6 +668,11 @@ message ConvolutionParameter {
   // implementation; for input blobs with num_axes != 2, this option is
   // ignored and the ND implementation will be used.)
   optional bool force_nd_im2col = 17 [default = false];
+  
+  // nd convolution specific parameters
+  optional BlobShape pad_shape = 19;
+  optional BlobShape kernel_shape = 20;
+  optional BlobShape stride_shape = 21;
 }
 
 message CropParameter {
@@ -922,6 +929,7 @@ message LRNParameter {
 message MemoryDataParameter {
   optional uint32 batch_size = 1;
   optional uint32 channels = 2;
+  optional uint32 length = 5 [default = 1];
   optional uint32 height = 3;
   optional uint32 width = 4;
 }
@@ -968,6 +976,11 @@ message PoolingParameter {
   // If global_pooling then it will pool over the size of the bottom by doing
   // kernel_h = bottom->height and kernel_w = bottom->width
   optional bool global_pooling = 12 [default = false];
+  
+  // nd pooling specific parameters
+  optional BlobShape pad_shape = 13;
+  optional BlobShape kernel_shape = 14;
+  optional BlobShape stride_shape = 15;
 }
 
 message PowerParameter {

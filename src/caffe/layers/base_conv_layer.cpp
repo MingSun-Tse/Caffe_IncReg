@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <vector>
+
 #include "caffe/filler.hpp"
 #include "caffe/layers/base_conv_layer.hpp"
 #include "caffe/util/im2col.hpp"
@@ -7,6 +8,7 @@
 #include "caffe/adaptive_probabilistic_pruning.hpp"
 
 namespace caffe {
+
 template <typename Dtype>
 void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
@@ -14,21 +16,18 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   ConvolutionParameter conv_param = this->layer_param_.convolution_param();
   force_nd_im2col_ = conv_param.force_nd_im2col();
   channel_axis_ = bottom[0]->CanonicalAxisIndex(conv_param.axis());
-
-  // std::cout << "conv_param.axis(): " << conv_param.axis() << std::endl;
-  // std::cout << "channel_axis_: " << channel_axis_ << std::endl;
-    
-  const int first_spatial_axis = channel_axis_ + 1; // first_spatial_axis in 2D conv is height, its index is 2rd, the 1st is channel_axis_
   const int num_axes = bottom[0]->num_axes();
-  num_spatial_axes_ = num_axes - first_spatial_axis; // typically, 4 - 2
+  if (num_axes == 5 && channel_axis_ == 1 && bottom[0]->shape(2) == 1) {
+    forced_3d_ = true;
+  } else {
+    forced_3d_ = false;
+  }
+  const int first_spatial_axis = channel_axis_ + 1 + forced_3d_;
+  num_spatial_axes_ = num_axes - first_spatial_axis;
   CHECK_GE(num_spatial_axes_, 0);
-  vector<int> bottom_dim_blob_shape(1, num_spatial_axes_ + 1);
   vector<int> spatial_dim_blob_shape(1, std::max(num_spatial_axes_, 1));
   // Setup filter kernel dimensions (kernel_shape_).
   kernel_shape_.Reshape(spatial_dim_blob_shape);
- 
-  // std::cout << "spatial_dim_blob_shape  " << spatial_dim_blob_shape[0] << std::endl; 
- 
   int* kernel_shape_data = kernel_shape_.mutable_cpu_data();
   if (conv_param.has_kernel_h() || conv_param.has_kernel_w()) {
     CHECK_EQ(num_spatial_axes_, 2)
@@ -149,7 +148,11 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   if (this->blobs_.size() > 0) {
     CHECK_EQ(1 + bias_term_, this->blobs_.size())
         << "Incorrect number of weight blobs.";
-    if (weight_shape != this->blobs_[0]->shape()) {
+    // true_blob_shape is original blob_shape (n,c,h,w) in case of forced_3d_
+    // where blob_shape is expanded to (n,c,1,h,w)
+    vector<int> true_blob_shape = this->blobs_[0]->shape();
+    if (forced_3d_) true_blob_shape.erase(true_blob_shape.begin()+2);
+    if (weight_shape != true_blob_shape) {
       Blob<Dtype> weight_shaped_blob(weight_shape);
       LOG(FATAL) << "Incorrect weight shape: expected shape "
           << weight_shaped_blob.shape_string() << "; instead, shape was "
@@ -194,11 +197,11 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       this->blobs_backup_[1].reset(new Blob<Dtype>(bias_shape));
       this->history_score_[1].reset(new Blob<Dtype>(bias_shape));
       this->history_punish_[1].reset(new Blob<Dtype>(bias_shape));
+      
       shared_ptr<Filler<Dtype> > bias_filler(GetFiller<Dtype>(
           this->layer_param_.convolution_param().bias_filler()));
       bias_filler->Fill(this->blobs_[1].get());
     }
-    
     /// @mingsuntse: initialize masks
     caffe_gpu_set(this->masks_[0]->count(),
                   static_cast<Dtype>(1),
@@ -221,7 +224,7 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
                       this->history_punish_[1]->mutable_gpu_data());
     }
   }
-  kernel_dim_ = this->blobs_[0]->count(1); 
+  kernel_dim_ = this->blobs_[0]->count(1);
   weight_offset_ = conv_out_channels_ * kernel_dim_ / group_;
   // Propagate gradients to the parameters (as directed by backward pass).
   this->param_propagate_down_.resize(this->blobs_.size(), true);
@@ -230,14 +233,21 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   APP<Dtype>::group.push_back(this->group_);
   APP<Dtype>::num_ = this->num_;
   this->PruneSetUp(this->layer_param_.prune_param());
-  
 }
 
 template <typename Dtype>
 void BaseConvolutionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-  const int first_spatial_axis = channel_axis_ + 1; 
-  CHECK_EQ(bottom[0]->num_axes(), first_spatial_axis + num_spatial_axes_)
+  const int num_axes = bottom[0]->num_axes();
+  // Setting forced_3d_ in LayerSetup() alone is not sufficient as that can be
+  // skipped and Reshape() is directed called.
+  if (num_axes == 5 && channel_axis_ == 1 && bottom[0]->shape(2) == 1) {
+    forced_3d_ = true;
+  } else {
+    forced_3d_ = false;
+  }
+  const int first_spatial_axis = channel_axis_ + 1 + forced_3d_;
+  CHECK_EQ(num_axes, first_spatial_axis + num_spatial_axes_)
       << "bottom num_axes may not change.";
   num_ = bottom[0]->count(0, channel_axis_);
   CHECK_EQ(bottom[0]->shape(channel_axis_), channels_)
@@ -253,6 +263,8 @@ void BaseConvolutionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   vector<int> top_shape(bottom[0]->shape().begin(),
       bottom[0]->shape().begin() + channel_axis_);
   top_shape.push_back(num_output_);
+  if (forced_3d_)
+    top_shape.push_back(1);  // in place of length
   for (int i = 0; i < num_spatial_axes_; ++i) {
     top_shape.push_back(output_shape_[i]);
   }
@@ -272,9 +284,10 @@ void BaseConvolutionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   int* conv_input_shape_data = conv_input_shape_.mutable_cpu_data();
   for (int i = 0; i < num_spatial_axes_ + 1; ++i) {
     if (reverse_dimensions()) {
-      conv_input_shape_data[i] = top[0]->shape(channel_axis_ + i);
+      conv_input_shape_data[i] = top[0]->shape(channel_axis_ + i + forced_3d_);
     } else {
-      conv_input_shape_data[i] = bottom[0]->shape(channel_axis_ + i);
+      conv_input_shape_data[i] = bottom[0]->shape(channel_axis_ + i +
+          forced_3d_);
     }
   }
   // The im2col result buffer will only hold one image at a time to avoid
@@ -319,9 +332,6 @@ void BaseConvolutionLayer<Dtype>::forward_cpu_gemm(const Dtype* input,
         group_, conv_out_spatial_dim_, kernel_dim_,
         (Dtype)1., weights + weight_offset_ * g, col_buff + col_offset_ * g,
         (Dtype)0., output + output_offset_ * g);
-    /*
-     * (output + output_offset_ * g) = (weights + weight_offset_ * g) * (col_buff + col_offset_ * g)
-     */
   }
 }
 

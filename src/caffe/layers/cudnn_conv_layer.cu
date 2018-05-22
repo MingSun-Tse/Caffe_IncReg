@@ -1,9 +1,7 @@
 #ifdef USE_CUDNN
 #include <vector>
-#include "caffe/layers/cudnn_conv_layer.hpp"
-#include <climits>
 
-using namespace std;
+#include "caffe/layers/cudnn_conv_layer.hpp"
 
 namespace caffe {
 
@@ -28,7 +26,7 @@ void CuDNNConvolutionLayer<Dtype>::Forward_gpu(
             fwd_algo_[i], workspace[g], workspace_fwd_sizes_[i],
             cudnn::dataType<Dtype>::zero,
             top_descs_[i], top_data + top_offset_ * g));
-            
+
       // Bias.
       if (this->bias_term_) {
         const Dtype* bias_data = this->blobs_[1]->gpu_data();
@@ -50,26 +48,23 @@ void CuDNNConvolutionLayer<Dtype>::Forward_gpu(
 template <typename Dtype>
 void CuDNNConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
-
   const Dtype* weight = NULL;
   Dtype* weight_diff = NULL;
   if (this->param_propagate_down_[0]) {
     weight = this->blobs_[0]->gpu_data();
     weight_diff = this->blobs_[0]->mutable_gpu_diff();
   }
-
   Dtype* bias_diff = NULL;
   if (this->bias_term_ && this->param_propagate_down_[1]) {
     bias_diff = this->blobs_[1]->mutable_gpu_diff();
   }
-
   for (int i = 0; i < top.size(); ++i) {
     const Dtype* top_diff = top[i]->gpu_diff();
     // Backward through cuDNN in parallel over groups and gradients.
     for (int g = 0; g < this->group_; g++) {
       // Gradient w.r.t. bias.
       if (this->bias_term_ && this->param_propagate_down_[1]) {
-        CUDNN_CHECK(cudnnConvolutionBackwardBias(handle_[0*this->group_ + g],   /*what is CUDNN_CHECK() ?? */
+        CUDNN_CHECK(cudnnConvolutionBackwardBias(handle_[0*this->group_ + g],
               cudnn::dataType<Dtype>::one,
               top_descs_[i],  top_diff + top_offset_ * g,
               cudnn::dataType<Dtype>::one,

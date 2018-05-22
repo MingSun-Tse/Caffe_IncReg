@@ -6,6 +6,7 @@
 #include "caffe/blob.hpp"
 #include "caffe/layer.hpp"
 #include "caffe/proto/caffe.pb.h"
+
 #include "caffe/layers/conv_layer.hpp"
 
 namespace caffe {
@@ -35,13 +36,6 @@ class CuDNNConvolutionLayer : public ConvolutionLayer<Dtype> {
   virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
   virtual ~CuDNNConvolutionLayer();
-  
-  void UpdateMasks();
-  void UpdateHistoryScores();
-  int ProposeCandidate();
-  vector<int> GetColToPrune();
-  int GetMostFrequent(vector<int> candidate, int num_total_column);
-  void UpdateDiffs();
 
  protected:
   virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
@@ -49,8 +43,6 @@ class CuDNNConvolutionLayer : public ConvolutionLayer<Dtype> {
   virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
 
-
-  
   bool handles_setup_;
   cudnnHandle_t* handle_;
   cudaStream_t*  stream_;
@@ -72,8 +64,6 @@ class CuDNNConvolutionLayer : public ConvolutionLayer<Dtype> {
   size_t workspaceSizeInBytes;  // size of underlying storage
   void *workspaceData;  // underlying storage
   void **workspace;  // aliases into workspaceData
-
-
 };
 #endif
 
