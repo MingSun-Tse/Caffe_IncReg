@@ -10,6 +10,10 @@
 #endif  // USE_OPENCV
 #include <stdint.h>
 
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
+
 #include <algorithm>
 #include <fstream>  // NOLINT(readability/streams)
 #include <string>
@@ -176,6 +180,111 @@ bool ReadImageToDatum(const string& filename, const int label,
   } else {
     return false;
   }
+}
+
+// Check if a given path is a regular file or a path
+void check_path(const std::string& path, bool* is_file, bool* is_dir) {
+  struct stat path_stat;
+  stat(path.c_str(), &path_stat);
+  *is_file = S_ISREG(path_stat.st_mode);
+  *is_dir  = S_ISDIR(path_stat.st_mode);
+}
+
+bool ReadVideoToCVMat(const string& path,
+    const int start_frame, const int length, const int height, const int width,
+    const bool is_color, std::vector<cv::Mat>* cv_imgs) {
+
+  // Check if path is a directory that holds extracted images from a video,
+  // or a regular video file.
+  bool is_video_file, is_path;
+  check_path(path, &is_video_file, &is_path);
+  if (!is_video_file && !is_path) {
+    LOG(ERROR) << "Could not open or find file " << path;
+    return false;
+  }
+
+  cv::Mat cv_img, cv_img_origin;
+
+  // In case of a video file
+  if (is_video_file) {
+    cv::VideoCapture cap;
+    cap.open(path);
+
+    if (!cap.isOpened()) {
+      LOG(ERROR) << "Cannot open a video file=" << path;
+      return false;
+    }
+
+    int num_frames = cap.get(CV_CAP_PROP_FRAME_COUNT) + 1;
+    int end_frame = start_frame + length - 1;
+    if (num_frames < end_frame) {
+      LOG(ERROR) << "not enough frames; num_frames=" << num_frames <<
+                    ", start_frame=" << start_frame <<
+                    ", length=" << length;
+      return false;
+    }
+
+    // CV_CAP_PROP_POS_FRAMES is 0-based whereas start_frame is 1-based
+    cap.set(CV_CAP_PROP_POS_FRAMES, start_frame - 2);
+    for (size_t i = start_frame; i <= end_frame; ++i) {
+      cap.read(cv_img_origin);
+      if (!cv_img_origin.data) {
+        LOG(INFO) << "Could not read frame=" << i <<
+                      " from a video file=" << path <<
+                      ", where num of frames=" << num_frames <<
+                      ". Use previous frame.";
+        cv_imgs->push_back(cv_img.clone());
+        cv_img_origin.release();
+        continue;
+      }
+
+      // Force color
+      if (is_color && cv_img_origin.channels() == 1) {
+        cv::cvtColor(cv_img_origin, cv_img_origin, CV_GRAY2BGR);
+      // Force grayscale
+      } else if (!is_color && cv_img_origin.channels() == 3) {
+        cv::cvtColor(cv_img_origin, cv_img_origin, CV_BGR2GRAY);
+      }
+
+      if (height > 0 && width > 0) {
+        cv::resize(cv_img_origin, cv_img, cv::Size(width, height));
+      } else {
+        cv_img = cv_img_origin;
+      }
+      cv_imgs->push_back(cv_img.clone());
+      cv_img_origin.release();
+    }
+    cap.release();
+
+  // In case of a directory with extracted frames within
+  } else {
+    int cv_read_flag = (is_color ? CV_LOAD_IMAGE_COLOR :
+      CV_LOAD_IMAGE_GRAYSCALE);
+
+    // Filename: 6-digit zero-padded
+    int end_frame = start_frame + length - 1;
+    char image_filename[256];
+
+    for (int i = start_frame; i <= end_frame; ++i) {
+      snprintf(image_filename, sizeof(image_filename), "%s/image_%04d.jpg",
+               path.c_str(), i);
+      cv_img_origin = cv::imread(image_filename, cv_read_flag);
+      if (!cv_img_origin.data) {
+        LOG(ERROR) << "Could not read frame=" << i <<
+                      " from an image file=" << image_filename;
+        cv_imgs->clear();
+        return false;
+      }
+      if (height > 0 && width > 0) {
+        cv::resize(cv_img_origin, cv_img, cv::Size(width, height));
+      } else {
+        cv_img = cv_img_origin;
+      }
+      cv_imgs->push_back(cv_img.clone());
+      cv_img_origin.release();
+    }
+  }
+  return true;
 }
 #endif  // USE_OPENCV
 

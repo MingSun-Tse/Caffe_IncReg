@@ -44,42 +44,6 @@ void CuDNNConvolutionLayer<Dtype>::Forward_gpu(
     // stream, by launching an empty kernel into the default (null) stream.
     // NOLINT_NEXT_LINE(whitespace/operators)
     sync_conv_groups<<<1, 1>>>();
-    
-    // Restore weights ----------------
-    /*
-    if (IF_RESTORE) {
-        // cout << layer_name << ": restore weights! " << endl;
-        this->blobs_[0]->mutable_cpu_data();
-        // this->blobs_[0]->gpu_data(); 
-        // Interesting! If the above line is added, something like "control" seems to transfer from cpu to gpu. 
-        // Then modifying cpu weights won't affect their gpu counterparts.
-        for (int i = 0; i < count; ++i) {
-            muweight[i] = weight_backup[i];
-        }
-        
-        /*
-        // ========================
-        // Chech restore
-        cout << "weights from cpu:" << endl;
-        for (int i = 0; i < 20; ++i) {
-            cout << muweight[i] << " ";
-        }
-        cout << endl;
-
-        Dtype weight_cpu[count];
-        const Dtype* weight_gpu = this->blobs_[0]->gpu_data();
-        cout << "weights copied from gpu:" << endl;
-        cudaMemcpy(weight_cpu, weight_gpu, sizeof(Dtype) * count, cudaMemcpyDeviceToHost);
-        for (int i = 0; i < 20; ++i) {
-            cout << weight_cpu[i] << " ";
-        }
-        cout << endl;
-        // ========================
-        */
-    }
-    */
-    // --------------------------------
-   
   }
 }
 
@@ -92,7 +56,6 @@ void CuDNNConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
   if (this->param_propagate_down_[0]) {
     weight = this->blobs_[0]->gpu_data();
     weight_diff = this->blobs_[0]->mutable_gpu_diff();
-
   }
 
   Dtype* bias_diff = NULL;
@@ -128,10 +91,6 @@ void CuDNNConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
               filter_desc_, weight_diff + this->weight_offset_ * g));
       }
 
-
-
-
-
       // Gradient w.r.t. bottom data.
       if (propagate_down[i]) {
         if (weight == NULL) {
@@ -157,7 +116,6 @@ void CuDNNConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     sync_conv_groups<<<1, 1>>>();
   }
 }
-
 
 INSTANTIATE_LAYER_GPU_FUNCS(CuDNNConvolutionLayer);
 

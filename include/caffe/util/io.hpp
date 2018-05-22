@@ -148,6 +148,11 @@ cv::Mat DecodeDatumToCVMatNative(const Datum& datum);
 cv::Mat DecodeDatumToCVMat(const Datum& datum, bool is_color);
 
 void CVMatToDatum(const cv::Mat& cv_img, Datum* datum);
+
+void check_path(const std::string& path, bool* is_file, bool* is_dir);
+bool ReadVideoToCVMat(const string& filename,
+    const int frame_num, const int length, const int height, const int width,
+    const bool is_color, std::vector<cv::Mat>* cv_imgs);
 #endif  // USE_OPENCV
 
 }  // namespace caffe

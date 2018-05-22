@@ -27,11 +27,15 @@ class Blob {
        : data_(), diff_(), count_(0), capacity_(0) {}
 
   /// @brief Deprecated; use <code>Blob(const vector<int>& shape)</code>.
+  explicit Blob(const int num, const int channels, const int length,
+      const int height, const int width);
   explicit Blob(const int num, const int channels, const int height,
       const int width);
   explicit Blob(const vector<int>& shape);
 
   /// @brief Deprecated; use <code>Reshape(const vector<int>& shape)</code>.
+  void Reshape(const int num, const int channels, const int height, const int length,
+      const int width);
   void Reshape(const int num, const int channels, const int height,
       const int width);
   /**
@@ -132,35 +136,52 @@ class Blob {
   inline int num() const { return LegacyShape(0); }
   /// @brief Deprecated legacy shape accessor channels: use shape(1) instead.
   inline int channels() const { return LegacyShape(1); }
-  /// @brief Deprecated legacy shape accessor height: use shape(2) instead.
-  inline int height() const { return LegacyShape(2); }
-  /// @brief Deprecated legacy shape accessor width: use shape(3) instead.
-  inline int width() const { return LegacyShape(3); }
+  /// @brief Deprecated legacy shape accessor length: use shape(2) instead.
+  inline int length() const { return (num_axes() == 5) ? LegacyShape(2) : 1; }
+  /// @brief Deprecated legacy shape accessor height: use shape(3) instead.
+  inline int height() const {
+    return (num_axes() == 5) ? LegacyShape(3) : LegacyShape(2);
+  }
+  /// @brief Deprecated legacy shape accessor width: use shape(4) instead.
+  inline int width() const {
+    return (num_axes() == 5) ? LegacyShape(4) : LegacyShape(3);
+  }
   inline int LegacyShape(int index) const {
-    CHECK_LE(num_axes(), 4)
-        << "Cannot use legacy accessors on Blobs with > 4 axes.";
-    CHECK_LT(index, 4);
-    CHECK_GE(index, -4);
+    CHECK_LE(num_axes(), 5)
+        << "Cannot use legacy accessors on Blobs with > 5 axes.";
+    CHECK_LT(index, 5);
+    CHECK_GE(index, -5);
     if (index >= num_axes() || index < -num_axes()) {
-      // Axis is out of range, but still in [0, 3] (or [-4, -1] for reverse
+      // Axis is out of range, but still in [0, 4] (or [-5, -1] for reverse
       // indexing) -- this special case simulates the one-padding used to fill
       // extraneous axes of legacy blobs.
       return 1;
     }
     return shape(index);
   }
-
+  
   inline int offset(const int n, const int c = 0, const int h = 0,
       const int w = 0) const {
+    // backward compatibility
+    return offset(n, c, 0, h, w);
+  }
+
+  inline int offset(const int n, const int c, const int l, const int h,
+      const int w) const {
     CHECK_GE(n, 0);
     CHECK_LE(n, num());
     CHECK_GE(channels(), 0);
     CHECK_LE(c, channels());
+    CHECK_GE(length(), 0);
+    CHECK_LE(l, length());
     CHECK_GE(height(), 0);
     CHECK_LE(h, height());
     CHECK_GE(width(), 0);
     CHECK_LE(w, width());
-    return ((n * channels() + c) * height() + h) * width() + w;
+    // in data transformer, a unit blob is used to hold (c,h,w)-contiguous data
+    // and populate a (l,c,h,w)-dim video clip, hence, blob must be contiguous
+    // over channels, height, and width.
+    return (((n * channels() + c) * length() + l) * height() + h) * width() + w;
   }
 
   inline int offset(const vector<int>& indices) const {
@@ -188,14 +209,24 @@ class Blob {
   void CopyFrom(const Blob<Dtype>& source, bool copy_diff = false,
       bool reshape = false);
 
+  inline Dtype data_at(const int n, const int c, const int l,
+      const int h, const int w) const {
+    return cpu_data()[offset(n, c, l, h, w)];
+  }
+  
   inline Dtype data_at(const int n, const int c, const int h,
       const int w) const {
-    return cpu_data()[offset(n, c, h, w)];
+    return cpu_data()[offset(n, c, 0, h, w)];
+  }
+  
+  inline Dtype diff_at(const int n, const int c, const int l,
+      const int h, const int w) const {
+    return cpu_diff()[offset(n, c, l, h, w)];
   }
 
   inline Dtype diff_at(const int n, const int c, const int h,
       const int w) const {
-    return cpu_diff()[offset(n, c, h, w)];
+    return cpu_diff()[offset(n, c, 0, h, w)];
   }
 
   inline Dtype data_at(const vector<int>& index) const {
@@ -220,6 +251,7 @@ class Blob {
   void set_cpu_data(Dtype* data);
   const int* gpu_shape() const;
   const Dtype* gpu_data() const;
+  void set_gpu_data(Dtype* data);
   const Dtype* cpu_diff() const;
   const Dtype* gpu_diff() const;
   Dtype* mutable_cpu_data();

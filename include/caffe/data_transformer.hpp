@@ -63,6 +63,9 @@ class DataTransformer {
    */
   void Transform(const vector<cv::Mat> & mat_vector,
                 Blob<Dtype>* transformed_blob);
+  void Transform(const vector<cv::Mat> & mat_vector,
+                               Blob<Dtype>* transformed_blob,
+                               const bool is_video);
 
   /**
    * @brief Applies the transformation defined in the data layer's
@@ -75,6 +78,13 @@ class DataTransformer {
    *    set_cpu_data() is used. See image_data_layer.cpp for an example.
    */
   void Transform(const cv::Mat& cv_img, Blob<Dtype>* transformed_blob);
+  void Transform(const cv::Mat& cv_img, Blob<Dtype>* transformed_blob,
+                                       const bool is_video,
+                                       const int frame,
+                                       const bool rand_mirror,
+                                       const int rand_h_off,
+                                       const int rand_w_off);
+  
 #endif  // USE_OPENCV
 
   /**
@@ -117,6 +127,7 @@ class DataTransformer {
    */
 #ifdef USE_OPENCV
   vector<int> InferBlobShape(const vector<cv::Mat> & mat_vector);
+  vector<int> InferBlobShape(const vector<cv::Mat> & mat_vector, const bool is_video);
   /**
    * @brief Infers the shape of transformed_blob will have when
    *    the transformation is applied to the data.
@@ -137,6 +148,7 @@ class DataTransformer {
    *    A uniformly random integer value from ({0, 1, ..., n-1}).
    */
   virtual int Rand(int n);
+  void SetRandFromSeed(const unsigned int rng_seed);
 
   void Transform(const Datum& datum, Dtype* transformed_data);
   // Tranformation parameters
