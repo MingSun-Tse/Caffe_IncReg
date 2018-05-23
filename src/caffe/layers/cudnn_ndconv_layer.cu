@@ -14,6 +14,7 @@ __global__ void sync_ndconv_groups() { }
 template <typename Dtype>
 void CudnnNdConvolutionLayer<Dtype>::Forward_gpu(
   const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
+  this->PruneForward();
   for (int i = 0; i < bottom.size(); ++i) {
     const Dtype* bottom_data = bottom[i]->gpu_data();
     Dtype* top_data = top[i]->mutable_gpu_data();
@@ -201,6 +202,7 @@ void CudnnNdConvolutionLayer<Dtype>::Backward_gpu(
 #endif
       }
     }
+    this->PruneBackward(top);
 
     // Synchronize the work across groups, each of which went into its own
     // stream, by launching an empty kernel into the default (null) stream.

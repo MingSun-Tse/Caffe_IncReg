@@ -811,7 +811,6 @@ void Layer<Dtype>::RestoreMasks() {
     const int group = APP<Dtype>::group[L];
     const int num_row_per_g = num_row / group;
     const string mthd = APP<Dtype>::prune_method;
-
     Dtype num_pruned_col = 0;
     int num_pruned_row = 0;
     if (APP<Dtype>::prune_unit == "Weight") {
@@ -862,14 +861,13 @@ void Layer<Dtype>::RestoreMasks() {
         APP<Dtype>::num_pruned_row[L] = num_pruned_row;
     }
     this->UpdatePrunedRatio();
-    
     Dtype pruned_ratio = 0;
     if      (APP<Dtype>::prune_unit == "Weight") { pruned_ratio = APP<Dtype>::pruned_ratio[L];     }
     else if (APP<Dtype>::prune_unit == "Row"   ) { pruned_ratio = APP<Dtype>::pruned_ratio_row[L]; }
     else if (APP<Dtype>::prune_unit == "Col"   ) { pruned_ratio = APP<Dtype>::pruned_ratio_col[L]; }
     if (pruned_ratio >= APP<Dtype>::prune_ratio[L]) {
         APP<Dtype>::iter_prune_finished[L] = -1; /// To check multi-GPU
-        cout << L << ": " << layer_name << " prune finished" << endl;
+        cout << L << ": " << layer_name << " prune finished." << endl;
     }
     LOG(INFO) << "  Masks restored,"
               << "  num_pruned_col=" << APP<Dtype>::num_pruned_col[L] << "(" << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << ")"
@@ -892,14 +890,14 @@ void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     const string layer_name = this->layer_param_.name();
     if (APP<Dtype>::layer_index.count(layer_name) == 0) {
         APP<Dtype>::layer_index[layer_name] = APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt;
-        if (!strcmp(this->type(), "Convolution")) {
+        if (!strcmp(this->type(), "Convolution") or !strcmp(this->type(), "NdConvolution")) {
             ++ APP<Dtype>::conv_layer_cnt;
         } else if (!strcmp(this->type(), "InnerProduct")) {
             ++ APP<Dtype>::fc_layer_cnt;
         } else {
             LOG(FATAL) << "Seems wrong, pruning setup can ONLY be put in the layers with learnable parameters (Conv and FC), please check.";
         }
-        LOG(INFO) << "A new layer registered: " << layer_name
+        LOG(INFO) << "New layer registered: " << layer_name
             << ". Its layer_index: " << APP<Dtype>::layer_index[layer_name] << endl;
     }
     const int L = APP<Dtype>::layer_index[layer_name];
@@ -925,7 +923,7 @@ void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     APP<Dtype>::filter_spatial_size.push_back(this->blobs_[0]->shape()[2] * this->blobs_[0]->shape()[3]);
     APP<Dtype>::priority.push_back(prune_param.priority());
     APP<Dtype>::iter_prune_finished.push_back(INT_MAX);
-    LOG(INFO) << "Pruning setup done.";
+    LOG(INFO) << "Pruning setup done: " << layer_name;
 }
 
 template <typename Dtype> 

@@ -156,8 +156,6 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
     }
     LOG_IF(INFO, Caffe::root_solver())
         << "Setting up " << layer_names_[layer_id];
-
-
     for (int top_id = 0; top_id < top_vecs_[layer_id].size(); ++top_id) {
       if (blob_loss_weights_.size() <= top_id_vecs_[layer_id][top_id]) {
         blob_loss_weights_.resize(top_id_vecs_[layer_id][top_id] + 1, Dtype(0));
@@ -168,9 +166,9 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
       
       /// --------------------------------------------------------------------
       /// @mingsuntse GFLOPs
-      if (phase_ == TRAIN && APP<Dtype>::layer_index.count(layer_param.name()) && layer_param.type() == "Convolution") {
+      if (phase_ == TRAIN && APP<Dtype>::layer_index.count(layer_param.name()) && layer_param.type().find("Convolution") != -1) {
           const int L = APP<Dtype>::layer_index[layer_param.name()];
-          APP<Dtype>::GFLOPs[L] *= (top_vecs_[layer_id][top_id]->shape()[2] * top_vecs_[layer_id][top_id]->shape()[3]);
+          APP<Dtype>::GFLOPs[L] *= top_vecs_[layer_id][top_id]->count(2); // shape()[2] * top_vecs_[layer_id][top_id]->shape()[3]);
           // std::cout << this->blobs_[0]->shape()[0]
                     // << " " << this->blobs_[0]->shape()[1]
                     // << " " << this->blobs_[0]->shape()[2]

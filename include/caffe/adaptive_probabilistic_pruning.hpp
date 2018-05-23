@@ -149,7 +149,7 @@ public:
     template<typename Dtype>  int     APP<Dtype>::num_log = 0; // > 0: logging is true
     template<typename Dtype>  string  APP<Dtype>::mask_generate_mechanism = "group-wise";
     template<typename Dtype>  int APP<Dtype>::show_interval = 10; 
-    template<typename Dtype>  string APP<Dtype>::show_layer = "0011";
+    template<typename Dtype>  string APP<Dtype>::show_layer = "1001";
     template<typename Dtype>  int APP<Dtype>::show_num_layer = 100;
     template<typename Dtype>  int APP<Dtype>::show_num_weight = 20;
 }

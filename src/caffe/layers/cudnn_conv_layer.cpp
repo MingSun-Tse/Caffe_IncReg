@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "caffe/layers/cudnn_conv_layer.hpp"
+#include "caffe/adaptive_probabilistic_pruning.hpp"
 
 namespace caffe {
 
@@ -84,7 +85,7 @@ void CuDNNConvolutionLayer<Dtype>::LayerSetUp(
     cudnn::createTensor4dDesc<Dtype>(&bias_desc_);
   }
 
-  handles_setup_ = true;
+  handles_setup_ = true;  
 }
 
 template <typename Dtype>

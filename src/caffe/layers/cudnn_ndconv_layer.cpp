@@ -6,6 +6,8 @@
 #include "caffe/layers/cudnn_ndconv_layer.hpp"
 #include "caffe/util/im2col.hpp"
 #include "caffe/util/math_functions.hpp"
+#include "caffe/adaptive_probabilistic_pruning.hpp"
+
 namespace caffe {
 
 // Set to three for the benefit of the backward pass, which
@@ -75,12 +77,25 @@ void CudnnNdConvolutionLayer<Dtype>::LayerSetUp(
   } else {
     if (bias_term_) {
       this->blobs_.resize(2);
-    } else {
+      this->masks_.resize(2);
+      this->blobs_backup_.resize(2);
+      this->history_score_.resize(2);
+      this->history_punish_.resize(2);
+      } else {
       this->blobs_.resize(1);
+      this->masks_.resize(1);
+      this->blobs_backup_.resize(1);
+      this->history_score_.resize(1);
+      this->history_punish_.resize(1);
     }
     // Initialize and fill the weights:
     // output channels x input channels per-group x kernel height x kernel width
     this->blobs_[0].reset(new Blob<Dtype>(weight_shape));
+    this->masks_[0].reset(new Blob<Dtype>(weight_shape));
+    this->blobs_backup_[0].reset(new Blob<Dtype>(weight_shape));
+    this->history_score_[0].reset(new Blob<Dtype>(weight_shape));
+    this->history_punish_[0].reset(new Blob<Dtype>(weight_shape));
+    
     shared_ptr<Filler<Dtype> > weight_filler(GetFiller<Dtype>(
           this->layer_param_.convolution_param().weight_filler()));
     weight_filler->Fill(this->blobs_[0].get());
@@ -88,12 +103,38 @@ void CudnnNdConvolutionLayer<Dtype>::LayerSetUp(
     if (bias_term_) {
       vector<int> bias_shape(1, num_output_);
       this->blobs_[1].reset(new Blob<Dtype>(bias_shape));
+      this->masks_[1].reset(new Blob<Dtype>(bias_shape));
+      this->blobs_backup_[1].reset(new Blob<Dtype>(bias_shape));
+      this->history_score_[1].reset(new Blob<Dtype>(bias_shape));
+      this->history_punish_[1].reset(new Blob<Dtype>(bias_shape));
+      
       shared_ptr<Filler<Dtype> > bias_filler(GetFiller<Dtype>(
             this->layer_param_.convolution_param().bias_filler()));
       bias_filler->Fill(this->blobs_[1].get());
     }
+    /// @mingsuntse: initialize masks
+    caffe_gpu_set(this->masks_[0]->count(),
+                  static_cast<Dtype>(1),
+                  this->masks_[0]->mutable_gpu_data());
+    caffe_gpu_set(this->history_score_[0]->count(),
+                  static_cast<Dtype>(0),
+                  this->history_score_[0]->mutable_gpu_data());
+    caffe_gpu_set(this->history_punish_[0]->count(),
+                  static_cast<Dtype>(0),
+                  this->history_punish_[0]->mutable_gpu_data());
+    if (bias_term_) {
+        caffe_gpu_set(this->masks_[1]->count(),
+                      static_cast<Dtype>(1),
+                      this->masks_[1]->mutable_gpu_data());
+        caffe_gpu_set(this->history_score_[1]->count(),
+                      static_cast<Dtype>(0),
+                      this->history_score_[1]->mutable_gpu_data());
+        caffe_gpu_set(this->history_punish_[1]->count(),
+                      static_cast<Dtype>(0),
+                      this->history_punish_[1]->mutable_gpu_data());
+    }
   }
-
+  
   // Propagate gradients to the parameters (as directed by backward pass).
   this->param_propagate_down_.resize(this->blobs_.size(), true);
 
@@ -148,6 +189,11 @@ void CudnnNdConvolutionLayer<Dtype>::LayerSetUp(
   }
 
   handles_setup_ = true;
+  
+  /// @mingsuntse: for pruning
+  APP<Dtype>::group.push_back(this->group_);
+  APP<Dtype>::num_ = this->num_;
+  this->PruneSetUp(this->layer_param_.prune_param());
 }
 
 template <typename Dtype>
