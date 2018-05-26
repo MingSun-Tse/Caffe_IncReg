@@ -1254,6 +1254,7 @@ message VideoDataParameter {
   optional bool is_color = 12 [default = true];
   optional string root_folder = 13 [default = ""];
   optional DB backend = 14 [default = LEVELDB];
+  optional uint32 prefetch = 15 [default = 4];
 }
 
 message WindowDataParameter {

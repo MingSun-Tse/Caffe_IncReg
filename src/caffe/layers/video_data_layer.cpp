@@ -16,26 +16,12 @@
 #include "caffe/util/rng.hpp"
 
 namespace caffe {
-
-/*
-// 20180526
-template <typename Dtype>
-VideoDataLayer<Dtype>::VideoDataLayer(const LayerParameter& param)
-  : BasePrefetchingDataLayer<Dtype>(param),
-    offset_() {
-  db_.reset(db::GetDB(param.video_data_param().backend()));
-  db_->Open(param.video_data_param().source(), db::READ);
-  cursor_.reset(db_->NewCursor());
-}
-*/
-
-
+    
 template <typename Dtype>
 VideoDataLayer<Dtype>::VideoDataLayer(const LayerParameter& param)
   : BasePrefetchingDataLayer<Dtype>(param),
     reader_(param, true) {   // 20180526
 }
-
 
 template <typename Dtype>
 VideoDataLayer<Dtype>::~VideoDataLayer<Dtype>() {
@@ -48,13 +34,7 @@ void VideoDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>&
   if (this->layer_param_.video_data_param().backend() == VideoDataParameter_DB_LMDB) {
       const int batch_size = this->layer_param_.video_data_param().batch_size();
       // Read a data point, and use it to initialize the top blob.
-	  
-	  /*
-	  // 20180526
-      Datum datum;
-      datum.ParseFromString(cursor_->value());
-	  */
-	  Datum& datum = *(reader_.full().peek());  // 20180526
+      Datum& datum = *(reader_.full().peek());
 
       // Use data_transformer to infer the expected blob shape from datum.
       vector<int> top_shape = this->data_transformer_->InferBlobShape(datum, true, 16, 3);
@@ -70,18 +50,14 @@ void VideoDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>&
       LOG(INFO) << "output data size: " << top[0]->shape(0) << ","  //40,16,3,112,112
           << top[0]->shape(1) << "," << top[0]->shape(2) << ","
           << top[0]->shape(3) << "," << top[0]->shape(4);
+      
       // label
-      //if (this->output_labels_) {
-      //  vector<int> label_shape(1, batch_size);
-      //  top[1]->Reshape(label_shape);
-      //  for (int i = 0; i < this->PREFETCH_COUNT; ++i) {
-      //    this->prefetch_[i].label_.Reshape(label_shape);
-      //  }
-      //}
-      vector<int> label_shape(1, batch_size);
-      top[1]->Reshape(label_shape);
-      for (int i = 0; i < this->PREFETCH_COUNT; ++i) {
-        this->prefetch_[i].label_.Reshape(label_shape);
+      if (this->output_labels_) {
+       vector<int> label_shape(1, batch_size);
+       top[1]->Reshape(label_shape);
+       for (int i = 0; i < this->PREFETCH_COUNT; ++i) {
+         this->prefetch_[i].label_.Reshape(label_shape);
+       }
       }
   } else {
       const int new_length = this->layer_param_.video_data_param().new_length();
@@ -106,9 +82,7 @@ void VideoDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>&
         video_and_label.third = label;
         lines_.push_back(video_and_label);
       }
-
       CHECK(!lines_.empty()) << "File is empty";
-
       if (this->layer_param_.video_data_param().shuffle()) {
         // randomly shuffle data
         LOG(INFO) << "Shuffling data";
@@ -156,9 +130,7 @@ void VideoDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>&
       const int batch_size = this->layer_param_.video_data_param().batch_size();
       CHECK_GT(batch_size, 0) << "Positive batch size required";
       top_shape[0] = batch_size;
-      for (int i = 0; i < sizeof(this->prefetch_) / sizeof(this->prefetch_[0]); ++i) { 
-      // replace `this->PREFETCH_COUNT`  with `sizeof(this->prefetch_) / sizeof(this->prefetch_[0])`
-      // because in this caffe version, prefetch_ is not vector
+      for (int i = 0; i < this->PREFETCH_COUNT; ++i) { 
         this->prefetch_[i].data_.Reshape(top_shape);
       }
       top[0]->Reshape(top_shape);
@@ -169,7 +141,7 @@ void VideoDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>&
       // label
       vector<int> label_shape(1, batch_size);
       top[1]->Reshape(label_shape);
-      for (int i = 0; i < sizeof(this->prefetch_) / sizeof(this->prefetch_[0]); ++i) { // this->PREFETCH_COUNT
+      for (int i = 0; i < this->PREFETCH_COUNT; ++i) {
         this->prefetch_[i].label_.Reshape(label_shape);
       }
   }
@@ -193,64 +165,40 @@ void VideoDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
   CHECK(batch->data_.count());
   CHECK(this->transformed_data_.count());
   const int batch_size = this->layer_param_.video_data_param().batch_size();
-  
+  const int new_length = this->layer_param_.video_data_param().new_length();
+  const int img_channel = 3; // TODO(mingsuntse): replace this to automatic channel
   if (this->layer_param_.video_data_param().backend() == VideoDataParameter_DB_LMDB) {
-      Datum datum; // 20180526
-      for (int item_id = 0; item_id < batch_size; ++item_id) {
-        if (item_id == batch_size-1) LOG(INFO) << "Loading batch " << item_id+1;
-		
+    Datum& datum = *(reader_.full().peek());
+    vector<int> top_shape = this->data_transformer_->InferBlobShape(datum, true, new_length, img_channel);
+    this->transformed_data_.Reshape(top_shape);
+    top_shape[0] = batch_size;
+    batch->data_.Reshape(top_shape);
+      
+    Dtype* top_data = batch->data_.mutable_cpu_data();
+    Dtype* top_label = NULL;  // suppress warnings about uninitialized variables
+    if (this->output_labels_) {
+        top_label = batch->label_.mutable_cpu_data();
+    }
+    
+    for (int item_id = 0; item_id < batch_size; ++item_id) {
         timer.Start();
-		/*
-		 // 20180526
-        while (Skip()) {
-          Next();
-        }
-		
-        datum.ParseFromString(cursor_->value());
-		*/
-		
+        // get a datum
+        Datum& datum = *(reader_.full().pop("Waiting for data"));
         read_time += timer.MicroSeconds();
-        if (item_id == 0) {
-			
-		  Datum& datum = *(reader_.full().peek()); // 20180526
-          // Reshape according to the first datum of each batch
-          // on single input batches allows for inputs of varying dimension.
-          // Use data_transformer to infer the expected blob shape from datum.
-          
-          // 将top shape转换到 1 3 16 112 112
-          vector<int> top_shape = this->data_transformer_->InferBlobShape(datum, true, 16, 3);
-          //LOG(INFO) << top_shape[0] << " " << top_shape[1] << " "<< top_shape[2] << " "<< top_shape[3] << " "<< top_shape[4]; 
-          
-          // 单容器 1 3 16 112 112
-          this->transformed_data_.Reshape(top_shape);
-          
-          // batch个单容器 20 3 16 112 112
-          // Reshape batch according to the batch_size.
-          top_shape[0] = batch_size;
-          batch->data_.Reshape(top_shape);
-          //LOG(INFO) << batch->data_.shape_string();
-        }
-
         // Apply data transformations (mirror, scale, crop...)
         timer.Start();
-        Datum& datum = *(reader_.full().pop("Waiting for data")); // 20180526
-        // Copy data
-        int offset = batch->data_.offset(item_id); //LOG(INFO) << "offset " << offset;   // 112x112x16x3 = 602112 = offset
-        Dtype* top_data = batch->data_.mutable_cpu_data();
-        this->transformed_data_.set_cpu_data(top_data + offset);  // 将 item 3 16 112 112的指针地址给transformed_data_
-        this->data_transformer_->Transform(datum, &(this->transformed_data_), true, 16, 3);  // 将datum的值复制到transformed_data_
-        
+        int offset = batch->data_.offset(item_id); // 112x112x16x3 = 602112 = offset
+        this->transformed_data_.set_cpu_data(top_data + offset);
+        this->data_transformer_->Transform(datum, &(this->transformed_data_), true, new_length, img_channel);
         // Copy label.
-        Dtype* top_label = batch->label_.mutable_cpu_data();
-        top_label[item_id] = datum.label();
-        
+        if (this->output_labels_) {
+            top_label[item_id] = datum.label();
+        }
         trans_time += timer.MicroSeconds();
-		reader_.free().push(const_cast<Datum*>(&datum));
-        //Next();
-      }
+        reader_.free().push(const_cast<Datum*>(&datum));
+    }
   } else {
       VideoDataParameter video_data_param = this->layer_param_.video_data_param();
-      const int new_length = video_data_param.new_length();
       const int new_height = video_data_param.new_height();
       const int new_width = video_data_param.new_width();
       const bool is_color = video_data_param.is_color();
@@ -341,7 +289,7 @@ void VideoDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
 
 template <typename Dtype>
 bool VideoDataLayer<Dtype>::Skip() {
-  const int size = Caffe::solver_count();
+  /// const int size = Caffe::solver_count();
   /// int rank = Caffe::solver_rank(); // TODO(mingsuntse): check solver_rank
   const bool keep = /// (offset_ % size) == rank ||
               // In test mode, only rank 0 runs, so avoid skipping

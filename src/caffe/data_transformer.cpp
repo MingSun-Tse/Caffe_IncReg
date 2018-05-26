@@ -820,7 +820,7 @@ vector<int> DataTransformer<Dtype>::InferBlobShape(const Datum& datum, const int
 template<typename Dtype>
 vector<int> DataTransformer<Dtype>::InferBlobShape(const Datum& datum, const bool is_video, const int frame_count, const int img_channel) {
     if (is_video) {
-        if (datum.encoded()) {   // 20180523
+        if (datum.encoded()) {
 #ifdef USE_OPENCV
         CHECK(!(param_.force_color() && param_.force_gray()))
             << "cannot set both force_color and force_gray";
@@ -855,10 +855,10 @@ vector<int> DataTransformer<Dtype>::InferBlobShape(const Datum& datum, const boo
       return shape;
      */ 
       const int crop_size = param_.crop_size();
-      const int datum_channels = datum.channels()/frame_count;
+      const int datum_channels = datum.channels() / frame_count;
       const int datum_height = datum.height();
       const int datum_width = datum.width();
-      const int datum_number = datum.channels()/img_channel;
+      const int datum_number = datum.channels() / img_channel;
       // Check dimensions.
       CHECK_GT(datum_channels, 0);
       CHECK_GT(datum_number, 0);
@@ -872,10 +872,9 @@ vector<int> DataTransformer<Dtype>::InferBlobShape(const Datum& datum, const boo
       shape[3] = (crop_size)? crop_size: datum_height;
       shape[4] = (crop_size)? crop_size: datum_width;
       return shape;
-    
     }
     else
-        LOG(FATAL) << "datum video==false is not implemented";
+        LOG(FATAL) << "datum video == false is not implemented";
 }
 
 template<typename Dtype>
