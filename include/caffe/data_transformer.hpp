@@ -35,7 +35,11 @@ class DataTransformer {
    *    This is destination blob. It can be part of top blob's data if
    *    set_cpu_data() is used. See data_layer.cpp for an example.
    */
-  void Transform(const Datum& datum, Blob<Dtype>* transformed_blob);
+  void Transform(const Datum& datum, Blob<Dtype>* transformed_blob, const int& cnt = 0);
+  void Transform(const Datum& datum, Blob<Dtype>* transformed_blob, 
+                                     const bool is_video, 
+                                     const int frame_count, 
+                                     const int img_channel);
 
   /**
    * @brief Applies the transformation defined in the data layer's
@@ -77,14 +81,13 @@ class DataTransformer {
    *    This is destination blob. It can be part of top blob's data if
    *    set_cpu_data() is used. See image_data_layer.cpp for an example.
    */
-  void Transform(const cv::Mat& cv_img, Blob<Dtype>* transformed_blob);
+  void Transform(const cv::Mat& cv_img, Blob<Dtype>* transformed_blob, const int& cnt = 0);
   void Transform(const cv::Mat& cv_img, Blob<Dtype>* transformed_blob,
                                        const bool is_video,
                                        const int frame,
                                        const bool rand_mirror,
                                        const int rand_h_off,
                                        const int rand_w_off);
-  
 #endif  // USE_OPENCV
 
   /**
@@ -108,6 +111,16 @@ class DataTransformer {
    *    Datum containing the data to be transformed.
    */
   vector<int> InferBlobShape(const Datum& datum);
+  /**
+   * @brief Infers the shape of transformed_blob, using 4D data to simulate 5D.
+   *
+   * @param datum, input_length
+   */
+   vector<int> InferBlobShape(const Datum& datum, const int& input_length);
+  /**
+   * @brief Infers the shape of transformed_blob, for video lmdb data
+   */
+   vector<int> InferBlobShape(const Datum& datum, const bool is_video, const int frame_count, const int img_channel);
   /**
    * @brief Infers the shape of transformed_blob will have when
    *    the transformation is applied to the data.
@@ -150,7 +163,8 @@ class DataTransformer {
   virtual int Rand(int n);
   void SetRandFromSeed(const unsigned int rng_seed);
 
-  void Transform(const Datum& datum, Dtype* transformed_data);
+  void Transform(const Datum& datum, Dtype* transformed_data, const int& cnt = 0);
+
   // Tranformation parameters
   TransformationParameter param_;
 

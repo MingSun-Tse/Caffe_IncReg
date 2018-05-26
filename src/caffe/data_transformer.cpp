@@ -9,6 +9,7 @@
 #include "caffe/util/io.hpp"
 #include "caffe/util/math_functions.hpp"
 #include "caffe/util/rng.hpp"
+#include "caffe/adaptive_probabilistic_pruning.hpp"
 
 namespace caffe {
 
@@ -40,7 +41,7 @@ DataTransformer<Dtype>::DataTransformer(const TransformationParameter& param,
 
 template<typename Dtype>
 void DataTransformer<Dtype>::Transform(const Datum& datum,
-                                       Dtype* transformed_data) {
+                                       Dtype* transformed_data, const int& item_id) {
   const string& data = datum.data();
   const int datum_channels = datum.channels();
   const int datum_height = datum.height();
@@ -74,10 +75,8 @@ void DataTransformer<Dtype>::Transform(const Datum& datum,
       }
     }
   }
-
   int height = datum_height;
   int width = datum_width;
-
   int h_off = 0;
   int w_off = 0;
   if (crop_size) {
@@ -85,51 +84,55 @@ void DataTransformer<Dtype>::Transform(const Datum& datum,
     width = crop_size;
     // We only do random crop when we do training.
     if (phase_ == TRAIN) {
-      h_off = Rand(datum_height - crop_size + 1);
-      w_off = Rand(datum_width - crop_size + 1);
+      APP<Dtype>::h_off = item_id % APP<Dtype>::input_length > 0 ? APP<Dtype>::h_off : Rand(datum_height - crop_size + 1);
+      APP<Dtype>::w_off = item_id % APP<Dtype>::input_length > 0 ? APP<Dtype>::w_off : Rand(datum_width - crop_size + 1);
+      h_off = APP<Dtype>::h_off;
+      w_off = APP<Dtype>::w_off;
     } else {
       h_off = (datum_height - crop_size) / 2;
       w_off = (datum_width - crop_size) / 2;
     }
   }
-
   Dtype datum_element;
   int top_index, data_index;
-  for (int c = 0; c < datum_channels; ++c) {
-    for (int h = 0; h < height; ++h) {
-      for (int w = 0; w < width; ++w) {
-        data_index = (c * datum_height + h_off + h) * datum_width + w_off + w;
-        if (do_mirror) {
-          top_index = (c * height + h) * width + (width - 1 - w);
-        } else {
-          top_index = (c * height + h) * width + w;
-        }
-        if (has_uint8) {
-          datum_element =
-            static_cast<Dtype>(static_cast<uint8_t>(data[data_index]));
-        } else {
-          datum_element = datum.float_data(data_index);
-        }
-        if (has_mean_file) {
-          transformed_data[top_index] =
-            (datum_element - mean[data_index]) * scale;
-        } else {
-          if (has_mean_values) {
-            transformed_data[top_index] =
-              (datum_element - mean_values_[c]) * scale;
-          } else {
-            transformed_data[top_index] = datum_element * scale;
+  if (APP<Dtype>::simulate_5d) {
+      // TODO(mingsuntse): add simulate_5d
+  } else {
+      for (int c = 0; c < datum_channels; ++c) {
+        for (int h = 0; h < height; ++h) {
+          for (int w = 0; w < width; ++w) {
+            data_index = (c * datum_height + h_off + h) * datum_width + w_off + w;
+            if (do_mirror) {
+              top_index = (c * height + h) * width + (width - 1 - w);
+            } else {
+              top_index = (c * height + h) * width + w;
+            }
+            if (has_uint8) {
+              datum_element =
+                static_cast<Dtype>(static_cast<uint8_t>(data[data_index]));
+            } else {
+              datum_element = datum.float_data(data_index);
+            }
+            if (has_mean_file) {
+              transformed_data[top_index] =
+                (datum_element - mean[data_index]) * scale;
+            } else {
+              if (has_mean_values) {
+                transformed_data[top_index] =
+                  (datum_element - mean_values_[c]) * scale;
+              } else {
+                transformed_data[top_index] = datum_element * scale;
+              }
+            }
           }
         }
       }
-    }
   }
 }
 
-
 template<typename Dtype>
 void DataTransformer<Dtype>::Transform(const Datum& datum,
-                                       Blob<Dtype>* transformed_blob) {
+                                       Blob<Dtype>* transformed_blob, const int& item_id) {
   // If datum is encoded, decoded and transform the cv::image.
   if (datum.encoded()) {
 #ifdef USE_OPENCV
@@ -143,7 +146,7 @@ void DataTransformer<Dtype>::Transform(const Datum& datum,
       cv_img = DecodeDatumToCVMatNative(datum);
     }
     // Transform the cv::image into blob.
-    return Transform(cv_img, transformed_blob);
+    return Transform(cv_img, transformed_blob, item_id);
 #else
     LOG(FATAL) << "Encoded datum requires OpenCV; compile with USE_OPENCV.";
 #endif  // USE_OPENCV
@@ -178,7 +181,7 @@ void DataTransformer<Dtype>::Transform(const Datum& datum,
   }
 
   Dtype* transformed_data = transformed_blob->mutable_cpu_data();
-  Transform(datum, transformed_data);
+  Transform(datum, transformed_data, item_id);
 }
 
 template<typename Dtype>
@@ -228,7 +231,7 @@ void DataTransformer<Dtype>::Transform(const vector<cv::Mat> & mat_vector,
                                        Blob<Dtype>* transformed_blob,
                                        const bool is_video) {
   if (is_video) {
-    const int mat_num = mat_vector.size();
+    const int mat_num = mat_vector.size(); // = length
     const int num = transformed_blob->shape(0);
     const int channels = transformed_blob->shape(1);
     const int length = transformed_blob->shape(2);
@@ -260,7 +263,7 @@ void DataTransformer<Dtype>::Transform(const vector<cv::Mat> & mat_vector,
     Blob<Dtype> uni_blob(uni_blob_shape);
     int offset;
     for (int item_id = 0; item_id < mat_num; ++item_id) {
-      Transform(mat_vector[item_id],
+      Transform(mat_vector[item_id], // mat_vector[item_id] is one single image
                 &uni_blob,
                 is_video,
                 item_id,
@@ -298,7 +301,7 @@ void DataTransformer<Dtype>::Transform(const vector<cv::Mat> & mat_vector,
 
 template<typename Dtype>
 void DataTransformer<Dtype>::Transform(const cv::Mat& cv_img,
-                                       Blob<Dtype>* transformed_blob) {
+                                       Blob<Dtype>* transformed_blob, const int& item_id) { // TODO(mingsuntse): check this 
   const int crop_size = param_.crop_size();
   const int img_channels = cv_img.channels();
   const int img_height = cv_img.rows;
@@ -352,8 +355,10 @@ void DataTransformer<Dtype>::Transform(const cv::Mat& cv_img,
     CHECK_EQ(crop_size, width);
     // We only do random crop when we do training.
     if (phase_ == TRAIN) {
-      h_off = Rand(img_height - crop_size + 1);
-      w_off = Rand(img_width - crop_size + 1);
+      APP<Dtype>::h_off = item_id % APP<Dtype>::input_length > 0 ? APP<Dtype>::h_off : Rand(img_height - crop_size + 1);
+      APP<Dtype>::w_off = item_id % APP<Dtype>::input_length > 0 ? APP<Dtype>::w_off : Rand(img_width - crop_size + 1);
+      h_off = APP<Dtype>::h_off;
+      w_off = APP<Dtype>::w_off;
     } else {
       h_off = (img_height - crop_size) / 2;
       w_off = (img_width - crop_size) / 2;
@@ -375,26 +380,152 @@ void DataTransformer<Dtype>::Transform(const cv::Mat& cv_img,
     for (int w = 0; w < width; ++w) {
       for (int c = 0; c < img_channels; ++c) {
         if (do_mirror) {
-          top_index = (c * height + h) * width + (width - 1 - w);
+          top_index = APP<Dtype>::simulate_5d
+                        ? transformed_blob->offset(item_id / APP<Dtype>::input_length, c, item_id % APP<Dtype>::input_length, h, width - 1 - w)
+                        : (c * height + h) * width + (width - 1 - w);
         } else {
-          top_index = (c * height + h) * width + w;
+          top_index = APP<Dtype>::simulate_5d
+                        ? transformed_blob->offset(item_id / APP<Dtype>::input_length, c, item_id % APP<Dtype>::input_length, h, w)
+                        : (c * height + h) * width + w;
         }
-        // int top_index = (c * height + h) * width + w;
         Dtype pixel = static_cast<Dtype>(ptr[img_index++]);
         if (has_mean_file) {
           int mean_index = (c * img_height + h_off + h) * img_width + w_off + w;
-          transformed_data[top_index] =
-            (pixel - mean[mean_index]) * scale;
+          transformed_data[top_index] = (pixel - mean[mean_index]) * scale;
         } else {
           if (has_mean_values) {
-            transformed_data[top_index] =
-              (pixel - mean_values_[c]) * scale;
+            transformed_data[top_index] = (pixel - mean_values_[c]) * scale;
           } else {
             transformed_data[top_index] = pixel * scale;
           }
         }
       }
     }
+  }
+}
+
+template<typename Dtype>
+void DataTransformer<Dtype>::Transform(const Datum& datum, Blob<Dtype>* transformed_blob,
+                                                        const bool is_video,
+                                                        const int frame_count,
+                                                        const int img_channel) {
+  // If datum is encoded, decode and transform the cv::image.
+  if (is_video) {
+    if (datum.encoded()) {
+#ifdef USE_OPENCV
+        CHECK(!(param_.force_color() && param_.force_gray()))
+            << "cannot set both force_color and force_gray";
+        cv::Mat cv_img;
+        if (param_.force_color() || param_.force_gray()) {
+        // If force_color then decode in color otherwise decode in gray.
+          cv_img = DecodeDatumToCVMat(datum, param_.force_color());
+        } else {
+          cv_img = DecodeDatumToCVMatNative(datum);
+        }
+        // Transform the cv::image into blob.
+        return Transform(cv_img, transformed_blob);
+#else
+        LOG(FATAL) << "Encoded datum requires OpenCV; compile with USE_OPENCV.";
+#endif  // USE_OPENCV
+    } else {
+        if (param_.force_color() || param_.force_gray()) {
+            LOG(ERROR) << "force_color and force_gray only for encoded datum";
+        }
+    }
+
+    const int crop_size = param_.crop_size();                 // 112
+    const int datum_channels = datum.channels() / frame_count;    // 3
+    const int datum_number = datum.channels() / img_channel;      // 16 length
+    const int datum_height = datum.height();                    // 112
+    const int datum_width = datum.width();                    // 112
+
+    // Check dimensions.
+    const int num = transformed_blob->num();                    // 1
+    const int channels = transformed_blob->channels();        // 3
+    const int length = transformed_blob->length();            // 16
+    const int height = transformed_blob->height();            // 112
+    const int width = transformed_blob->width();                // 112
+
+    CHECK_LE(height, datum_height);
+    CHECK_LE(width, datum_width);
+    CHECK_EQ(channels, datum_channels);
+    CHECK_EQ(length, datum_number);
+    CHECK_GE(num, 1);
+
+    if (crop_size) {
+        CHECK_EQ(crop_size, height);
+        CHECK_EQ(crop_size, width);
+    } else {
+        CHECK_EQ(datum_height, height);
+        CHECK_EQ(datum_width, width);
+    }
+
+    const string& data = datum.data();
+
+    //const int crop_size = param_.crop_size();
+    const Dtype scale = param_.scale();
+    const bool do_mirror = param_.mirror() && Rand(2);
+    const bool has_mean_file = param_.has_mean_file();
+    const bool has_uint8 = data.size() > 0;
+    const bool has_mean_values = mean_values_.size() > 0;
+
+    CHECK_GT(datum_channels, 0);
+    CHECK_GE(datum_height, crop_size);
+    CHECK_GE(datum_width, crop_size);
+
+    Dtype* mean = NULL;
+    if (has_mean_file) {
+        CHECK_EQ(datum_channels, data_mean_.channels());
+        CHECK_EQ(datum_height, data_mean_.height());
+        CHECK_EQ(datum_width, data_mean_.width());
+        mean = data_mean_.mutable_cpu_data();
+    }
+    if (has_mean_values) {
+        CHECK(mean_values_.size() == 1 || mean_values_.size() == datum_channels) <<
+         "Specify either 1 mean_value or as many as channels: " << datum_channels;
+        if (datum_channels > 1 && mean_values_.size() == 1) {
+          // Replicate the mean_value for simplicity
+          for (int c = 1; c < datum_channels; ++c) {
+            mean_values_.push_back(mean_values_[0]);
+          }
+        }
+    }
+    int d_height = datum_height;
+    int d_width = datum_width;
+
+    int h_off = 0;
+    int w_off = 0;
+    if (crop_size) {
+        d_height = crop_size;
+        d_width = crop_size;
+        // We only do random crop when we do training.
+        if (phase_ == TRAIN) {
+          h_off = Rand(datum_height - crop_size + 1);
+          w_off = Rand(datum_width - crop_size + 1);
+        } else {
+          h_off = (datum_height - crop_size) / 2;
+          w_off = (datum_width - crop_size) / 2;
+        }
+    }
+    const int mean_value[3] = {90, 98, 102};
+    int datum_index_log = 0;
+    int datum_index = 0;
+    int buff_off = 0;
+    for (int l = 0; l < datum_number; ++l) {
+        for (int c = 0; c < datum_channels; ++c) {
+          for (int h = 0; h < d_height; ++h) {
+            for (int w = 0; w < d_width; ++w) {
+                datum_index = ((l * datum_channels + c) * datum_height + h_off + h) * datum_width + w + w_off;
+                Dtype pixel = static_cast<Dtype>(static_cast<uint8_t>(data[datum_index]));
+                const int offset = do_mirror ? transformed_blob->offset(0, c, l, h, d_width-1-w) 
+                                             : transformed_blob->offset(0, c, l, h, w);
+                *(transformed_blob->mutable_cpu_data() + offset) = pixel - mean_value[c] ;
+            }
+          }
+        }
+    }
+  } else {
+      LOG(FATAL) << "error in DataTransformer<Dtype>::Transform";
   }
 }
 
@@ -411,7 +542,7 @@ void DataTransformer<Dtype>::Transform(const cv::Mat& cv_img,
   const int img_channels = cv_img.channels();
   const int img_height = cv_img.rows;
   const int img_width = cv_img.cols;
-
+  // cout << img_channels << " " << img_height << " " << img_width << endl;
   // Check dimensions.
   const int channels = transformed_blob->channels();
   const int height = transformed_blob->height();
@@ -556,7 +687,6 @@ void DataTransformer<Dtype>::Transform(Blob<Dtype>* input_blob,
   CHECK_GE(input_height, height);
   CHECK_GE(input_width, width);
 
-
   const Dtype scale = param_.scale();
   const bool do_mirror = param_.mirror() && Rand(2);
   const bool has_mean_file = param_.has_mean_file();
@@ -672,6 +802,80 @@ vector<int> DataTransformer<Dtype>::InferBlobShape(const Datum& datum) {
   shape[2] = (crop_size)? crop_size: datum_height;
   shape[3] = (crop_size)? crop_size: datum_width;
   return shape;
+}
+
+/// @mingsuntse, use 4D input data to simulate 5D
+template<typename Dtype>
+vector<int> DataTransformer<Dtype>::InferBlobShape(const Datum& datum, const int& input_length) {
+    vector<int> shape(5);
+    vector<int> shape_4d = InferBlobShape(datum);
+    shape[0] = 1;
+    shape[1] = shape_4d[1];
+    shape[2] = input_length;
+    shape[3] = shape_4d[2];
+    shape[4] = shape_4d[3];
+    return shape;
+}
+
+template<typename Dtype>
+vector<int> DataTransformer<Dtype>::InferBlobShape(const Datum& datum, const bool is_video, const int frame_count, const int img_channel) {
+    if (is_video) {
+        if (datum.encoded()) {   // 20180523
+#ifdef USE_OPENCV
+        CHECK(!(param_.force_color() && param_.force_gray()))
+            << "cannot set both force_color and force_gray";
+        cv::Mat cv_img;
+        if (param_.force_color() || param_.force_gray()) {
+        // If force_color then decode in color otherwise decode in gray.
+          cv_img = DecodeDatumToCVMat(datum, param_.force_color());
+        } else {
+          cv_img = DecodeDatumToCVMatNative(datum);
+        }
+        // InferBlobShape using the cv::image.
+        return InferBlobShape(cv_img);
+#else
+        LOG(FATAL) << "Encoded datum requires OpenCV; compile with USE_OPENCV.";
+#endif  // USE_OPENCV
+    }
+    /*
+      const int crop_size = param_.crop_size();
+      const int datum_channels = datum.channels();
+      const int datum_height = datum.height();
+      const int datum_width = datum.width();
+      // Check dimensions.
+      CHECK_GT(datum_channels, 0);
+      CHECK_GE(datum_height, crop_size);
+      CHECK_GE(datum_width, crop_size);
+      // Build BlobShape.
+      vector<int> shape(4);
+      shape[0] = 1;
+      shape[1] = datum_channels;
+      shape[2] = (crop_size)? crop_size: datum_height;
+      shape[3] = (crop_size)? crop_size: datum_width;
+      return shape;
+     */ 
+      const int crop_size = param_.crop_size();
+      const int datum_channels = datum.channels()/frame_count;
+      const int datum_height = datum.height();
+      const int datum_width = datum.width();
+      const int datum_number = datum.channels()/img_channel;
+      // Check dimensions.
+      CHECK_GT(datum_channels, 0);
+      CHECK_GT(datum_number, 0);
+      CHECK_GE(datum_height, crop_size);
+      CHECK_GE(datum_width, crop_size);
+      // Build BlobShape.
+      vector<int> shape(5);
+      shape[0] = 1;             // num of batches
+      shape[1] = datum_channels;  // num of channels
+      shape[2] = datum_number;           // this is actually "length" of C3D blob
+      shape[3] = (crop_size)? crop_size: datum_height;
+      shape[4] = (crop_size)? crop_size: datum_width;
+      return shape;
+    
+    }
+    else
+        LOG(FATAL) << "datum video==false is not implemented";
 }
 
 template<typename Dtype>

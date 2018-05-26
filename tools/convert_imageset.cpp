@@ -116,7 +116,7 @@ int main(int argc, char** argv) {
       if ( p == fn.npos )
         LOG(WARNING) << "Failed to guess the encoding of '" << fn << "'";
       enc = fn.substr(p);
-      std::transform(enc.begin(), enc.end(), enc.begin(), ::tolower);
+      std::transform(enc.begin(), enc.end(), enc.begin(), ::tolower); // enc is like "jpeg", "png"
     }
     status = ReadImageToDatum(root_folder + lines[line_id].first,
         lines[line_id].second, resize_height, resize_width, is_color,

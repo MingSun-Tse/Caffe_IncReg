@@ -8,6 +8,7 @@
 #include "caffe/data_transformer.hpp"
 #include "caffe/layers/data_layer.hpp"
 #include "caffe/util/benchmark.hpp"
+#include "caffe/adaptive_probabilistic_pruning.hpp"
 
 namespace caffe {
 
@@ -30,20 +31,30 @@ void DataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
   Datum& datum = *(reader_.full().peek());
 
   // Use data_transformer to infer the expected blob shape from datum.
-  vector<int> top_shape = this->data_transformer_->InferBlobShape(datum);
+  APP<Dtype>::simulate_5d = this->layer_param_.data_param().simulate_5d();
+  vector<int> top_shape = this->layer_param_.data_param().simulate_5d() 
+                            ? this->data_transformer_->InferBlobShape(datum, APP<Dtype>::input_length)
+                            : this->data_transformer_->InferBlobShape(datum);
   this->transformed_data_.Reshape(top_shape);
   // Reshape top[0] and prefetch_data according to the batch_size.
-  top_shape[0] = batch_size;
+  top_shape[0] = this->layer_param_.data_param().simulate_5d() ? batch_size / APP<Dtype>::input_length : batch_size;
   top[0]->Reshape(top_shape);
   for (int i = 0; i < this->PREFETCH_COUNT; ++i) {
     this->prefetch_[i].data_.Reshape(top_shape);
   }
-  LOG(INFO) << "output data size: " << top[0]->num() << ","
+  if (this->layer_param_.data_param().simulate_5d()) {
+    LOG(INFO) << "output data size: " << top[0]->shape(0) << ","
+      << top[0]->shape(1) << "," << top[0]->shape(2) << ","
+      << top[0]->shape(3) << "," << top[0]->shape(4);
+  } else {
+    LOG(INFO) << "output data size: " << top[0]->num() << ","
       << top[0]->channels() << "," << top[0]->height() << ","
       << top[0]->width();
+  }
   // label
   if (this->output_labels_) {
-    vector<int> label_shape(1, batch_size);
+    const int size = this->layer_param_.data_param().simulate_5d() ? batch_size / APP<Dtype>::input_length : batch_size;
+    vector<int> label_shape(1, size);
     top[1]->Reshape(label_shape);
     for (int i = 0; i < this->PREFETCH_COUNT; ++i) {
       this->prefetch_[i].label_.Reshape(label_shape);
@@ -67,15 +78,17 @@ void DataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
   const int batch_size = this->layer_param_.data_param().batch_size();
   Datum& datum = *(reader_.full().peek());
   // Use data_transformer to infer the expected blob shape from datum.
-  vector<int> top_shape = this->data_transformer_->InferBlobShape(datum);
+  vector<int> top_shape = this->layer_param_.data_param().simulate_5d() 
+                            ? this->data_transformer_->InferBlobShape(datum, APP<Dtype>::input_length)
+                            : this->data_transformer_->InferBlobShape(datum);
   this->transformed_data_.Reshape(top_shape);
+  
   // Reshape batch according to the batch_size.
-  top_shape[0] = batch_size;
+  top_shape[0] = this->layer_param_.data_param().simulate_5d() ? batch_size / APP<Dtype>::input_length : batch_size;
   batch->data_.Reshape(top_shape);
 
   Dtype* top_data = batch->data_.mutable_cpu_data();
   Dtype* top_label = NULL;  // suppress warnings about uninitialized variables
-
   if (this->output_labels_) {
     top_label = batch->label_.mutable_cpu_data();
   }
@@ -86,12 +99,18 @@ void DataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
     read_time += timer.MicroSeconds();
     timer.Start();
     // Apply data transformations (mirror, scale, crop...)
-    int offset = batch->data_.offset(item_id);
-    this->transformed_data_.set_cpu_data(top_data + offset);
-    this->data_transformer_->Transform(datum, &(this->transformed_data_));
+    if (this->layer_param_.data_param().simulate_5d()) {
+      this->transformed_data_.set_cpu_data(top_data); // no offset, take offset into consideration in the Transform function
+      this->data_transformer_->Transform(datum, &(this->transformed_data_), item_id);
+    } else {
+      const int offset = batch->data_.offset(item_id);
+      this->transformed_data_.set_cpu_data(top_data + offset);
+      this->data_transformer_->Transform(datum, &(this->transformed_data_));
+    }
     // Copy label.
+    const int length = this->layer_param_.data_param().simulate_5d() ? APP<Dtype>::input_length : 1;
     if (this->output_labels_) {
-      top_label[item_id] = datum.label();
+      top_label[item_id / length] = datum.label();
     }
     trans_time += timer.MicroSeconds();
 

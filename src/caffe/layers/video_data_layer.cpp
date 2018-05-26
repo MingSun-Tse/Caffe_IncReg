@@ -17,6 +17,26 @@
 
 namespace caffe {
 
+/*
+// 20180526
+template <typename Dtype>
+VideoDataLayer<Dtype>::VideoDataLayer(const LayerParameter& param)
+  : BasePrefetchingDataLayer<Dtype>(param),
+    offset_() {
+  db_.reset(db::GetDB(param.video_data_param().backend()));
+  db_->Open(param.video_data_param().source(), db::READ);
+  cursor_.reset(db_->NewCursor());
+}
+*/
+
+
+template <typename Dtype>
+VideoDataLayer<Dtype>::VideoDataLayer(const LayerParameter& param)
+  : BasePrefetchingDataLayer<Dtype>(param),
+    reader_(param, true) {   // 20180526
+}
+
+
 template <typename Dtype>
 VideoDataLayer<Dtype>::~VideoDataLayer<Dtype>() {
   this->StopInternalThread();
@@ -25,93 +45,133 @@ VideoDataLayer<Dtype>::~VideoDataLayer<Dtype>() {
 template <typename Dtype>
 void VideoDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>&
       bottom, const vector<Blob<Dtype>*>& top) {
-  const int new_length = this->layer_param_.video_data_param().new_length();
-  const int new_height = this->layer_param_.video_data_param().new_height();
-  const int new_width  = this->layer_param_.video_data_param().new_width();
-  const bool is_color  = this->layer_param_.video_data_param().is_color();
-  string root_folder = this->layer_param_.video_data_param().root_folder();
+  if (this->layer_param_.video_data_param().backend() == VideoDataParameter_DB_LMDB) {
+      const int batch_size = this->layer_param_.video_data_param().batch_size();
+      // Read a data point, and use it to initialize the top blob.
+	  
+	  /*
+	  // 20180526
+      Datum datum;
+      datum.ParseFromString(cursor_->value());
+	  */
+	  Datum& datum = *(reader_.full().peek());  // 20180526
 
-  CHECK((new_height == 0 && new_width == 0) ||
-      (new_height > 0 && new_width > 0)) << "Current implementation requires "
-      "new_height and new_width to be set at the same time.";
-  // Read the file with filenames and labels
-  const string& source = this->layer_param_.video_data_param().source();
-  LOG(INFO) << "Opening file " << source;
-  std::ifstream infile(source.c_str());
-  string filename;
-  int frame_num, label;
-  while (infile >> filename >> frame_num >> label) {
-    triplet video_and_label;
-    video_and_label.first = filename;
-    video_and_label.second = frame_num;
-    video_and_label.third = label;
-    lines_.push_back(video_and_label);
-  }
-
-  CHECK(!lines_.empty()) << "File is empty";
-
-  if (this->layer_param_.video_data_param().shuffle()) {
-    // randomly shuffle data
-    LOG(INFO) << "Shuffling data";
-    const unsigned int prefetch_rng_seed = caffe_rng_rand();
-    prefetch_rng_.reset(new Caffe::RNG(prefetch_rng_seed));
-    ShuffleVideos();
+      // Use data_transformer to infer the expected blob shape from datum.
+      vector<int> top_shape = this->data_transformer_->InferBlobShape(datum, true, 16, 3);
+      LOG(INFO) << top_shape[0] << " " << top_shape[1] << " "<< top_shape[2] << " "<< top_shape[3] << " "<< top_shape[4]; //1 16 3 112 112
+      this->transformed_data_.Reshape(top_shape);
+      // Reshape top[0] and prefetch_data according to the batch_size.
+      top_shape[0] = batch_size;
+      for (int i = 0; i < this->PREFETCH_COUNT; ++i) {
+        this->prefetch_[i].data_.Reshape(top_shape);
+      }
+      top[0]->Reshape(top_shape);
+      
+      LOG(INFO) << "output data size: " << top[0]->shape(0) << ","  //40,16,3,112,112
+          << top[0]->shape(1) << "," << top[0]->shape(2) << ","
+          << top[0]->shape(3) << "," << top[0]->shape(4);
+      // label
+      //if (this->output_labels_) {
+      //  vector<int> label_shape(1, batch_size);
+      //  top[1]->Reshape(label_shape);
+      //  for (int i = 0; i < this->PREFETCH_COUNT; ++i) {
+      //    this->prefetch_[i].label_.Reshape(label_shape);
+      //  }
+      //}
+      vector<int> label_shape(1, batch_size);
+      top[1]->Reshape(label_shape);
+      for (int i = 0; i < this->PREFETCH_COUNT; ++i) {
+        this->prefetch_[i].label_.Reshape(label_shape);
+      }
   } else {
-    if (this->phase_ == TRAIN &&  // this->phase_ == TRAIN && Caffe::solver_rank() > 0 &&
-        this->layer_param_.video_data_param().rand_skip() == 0) {
-      LOG(WARNING) << "Shuffling or skipping recommended for multi-GPU";
-    }
-  }
-  LOG(INFO) << "A total of " << lines_.size() << " video chunks.";
+      const int new_length = this->layer_param_.video_data_param().new_length();
+      const int new_height = this->layer_param_.video_data_param().new_height();
+      const int new_width  = this->layer_param_.video_data_param().new_width();
+      const bool is_color  = this->layer_param_.video_data_param().is_color();
+      string root_folder = this->layer_param_.video_data_param().root_folder();
 
-  lines_id_ = 0;
-  // Check if we would need to randomly skip a few data points
-  if (this->layer_param_.video_data_param().rand_skip()) {
-    unsigned int skip = caffe_rng_rand() %
-        this->layer_param_.video_data_param().rand_skip();
-    LOG(INFO) << "Skipping first " << skip << " data points.";
-    CHECK_GT(lines_.size(), skip) << "Not enough points to skip";
-    lines_id_ = skip;
-  }
-  // Read a video clip, and use it to initialize the top blob.
-  std::vector<cv::Mat> cv_imgs;
-  bool read_video_result = ReadVideoToCVMat(root_folder +
-                                            lines_[lines_id_].first,
-                                            lines_[lines_id_].second,
-                                            new_length, new_height, new_width,
-                                            is_color,
-                                            &cv_imgs);
-  CHECK(read_video_result) << "Could not load " << lines_[lines_id_].first <<
-                              " at frame " << lines_[lines_id_].second << ".";
-  CHECK_EQ(cv_imgs.size(), new_length) << "Could not load " <<
-                                          lines_[lines_id_].first <<
-                                          " at frame " <<
-                                          lines_[lines_id_].second <<
-                                          " correctly.";
-  // Use data_transformer to infer the expected blob shape from a cv_image.
-  const bool is_video = true;
-  vector<int> top_shape = this->data_transformer_->InferBlobShape(cv_imgs,
-                                                                  is_video);
-  this->transformed_data_.Reshape(top_shape);
-  // Reshape prefetch_data and top[0] according to the batch_size.
-  const int batch_size = this->layer_param_.video_data_param().batch_size();
-  CHECK_GT(batch_size, 0) << "Positive batch size required";
-  top_shape[0] = batch_size;
-  for (int i = 0; i < sizeof(this->prefetch_) / sizeof(this->prefetch_[0]); ++i) { 
-  // replace `this->prefetch_.size()`  with `sizeof(this->prefetch_) / sizeof(this->prefetch_[0])`
-  // because in this caffe version, prefetch_ is not vector
-    this->prefetch_[i].data_.Reshape(top_shape);
-  }
-  top[0]->Reshape(top_shape);
+      CHECK((new_height == 0 && new_width == 0) ||
+          (new_height > 0 && new_width > 0)) << "Current implementation requires "
+          "new_height and new_width to be set at the same time.";
+      // Read the file with filenames and labels
+      const string& source = this->layer_param_.video_data_param().source();
+      LOG(INFO) << "Opening file " << source;
+      std::ifstream infile(source.c_str());
+      string filename;
+      int frame_num, label;
+      while (infile >> filename >> frame_num >> label) {
+        triplet video_and_label;
+        video_and_label.first = filename;
+        video_and_label.second = frame_num;
+        video_and_label.third = label;
+        lines_.push_back(video_and_label);
+      }
 
-  LOG(INFO) << "output data size: " << top[0]->shape(0) << ","
-      << top[0]->shape(1) << "," << top[0]->shape(2) << ","
-      << top[0]->shape(3) << "," << top[0]->shape(4);
-  // label
-  vector<int> label_shape(1, batch_size);
-  top[1]->Reshape(label_shape);
-  for (int i = 0; i < sizeof(this->prefetch_) / sizeof(this->prefetch_[0]); ++i) { // this->prefetch_.size()
-    this->prefetch_[i].label_.Reshape(label_shape);
+      CHECK(!lines_.empty()) << "File is empty";
+
+      if (this->layer_param_.video_data_param().shuffle()) {
+        // randomly shuffle data
+        LOG(INFO) << "Shuffling data";
+        const unsigned int prefetch_rng_seed = caffe_rng_rand();
+        prefetch_rng_.reset(new Caffe::RNG(prefetch_rng_seed));
+        ShuffleVideos();
+      } else {
+        if (this->phase_ == TRAIN &&  // this->phase_ == TRAIN && Caffe::solver_rank() > 0 &&
+            this->layer_param_.video_data_param().rand_skip() == 0) {
+          LOG(WARNING) << "Shuffling or skipping recommended for multi-GPU";
+        }
+      }
+      LOG(INFO) << "A total of " << lines_.size() << " video chunks.";
+
+      lines_id_ = 0;
+      // Check if we would need to randomly skip a few data points
+      if (this->layer_param_.video_data_param().rand_skip()) {
+        unsigned int skip = caffe_rng_rand() %
+            this->layer_param_.video_data_param().rand_skip();
+        LOG(INFO) << "Skipping first " << skip << " data points.";
+        CHECK_GT(lines_.size(), skip) << "Not enough points to skip";
+        lines_id_ = skip;
+      }
+      // Read a video clip, and use it to initialize the top blob.
+      std::vector<cv::Mat> cv_imgs;
+      bool read_video_result = ReadVideoToCVMat(root_folder +
+                                                lines_[lines_id_].first,
+                                                lines_[lines_id_].second,
+                                                new_length, new_height, new_width,
+                                                is_color,
+                                                &cv_imgs);
+      CHECK(read_video_result) << "Could not load " << lines_[lines_id_].first <<
+                                  " at frame " << lines_[lines_id_].second << ".";
+      CHECK_EQ(cv_imgs.size(), new_length) << "Could not load " <<
+                                              lines_[lines_id_].first <<
+                                              " at frame " <<
+                                              lines_[lines_id_].second <<
+                                              " correctly.";
+      // Use data_transformer to infer the expected blob shape from a cv_image.
+      const bool is_video = true;
+      vector<int> top_shape = this->data_transformer_->InferBlobShape(cv_imgs,
+                                                                      is_video);
+      this->transformed_data_.Reshape(top_shape);
+      // Reshape prefetch_data and top[0] according to the batch_size.
+      const int batch_size = this->layer_param_.video_data_param().batch_size();
+      CHECK_GT(batch_size, 0) << "Positive batch size required";
+      top_shape[0] = batch_size;
+      for (int i = 0; i < sizeof(this->prefetch_) / sizeof(this->prefetch_[0]); ++i) { 
+      // replace `this->PREFETCH_COUNT`  with `sizeof(this->prefetch_) / sizeof(this->prefetch_[0])`
+      // because in this caffe version, prefetch_ is not vector
+        this->prefetch_[i].data_.Reshape(top_shape);
+      }
+      top[0]->Reshape(top_shape);
+
+      LOG(INFO) << "output data size: " << top[0]->shape(0) << ","
+          << top[0]->shape(1) << "," << top[0]->shape(2) << ","
+          << top[0]->shape(3) << "," << top[0]->shape(4);
+      // label
+      vector<int> label_shape(1, batch_size);
+      top[1]->Reshape(label_shape);
+      for (int i = 0; i < sizeof(this->prefetch_) / sizeof(this->prefetch_[0]); ++i) { // this->PREFETCH_COUNT
+        this->prefetch_[i].label_.Reshape(label_shape);
+      }
   }
 }
 
@@ -132,87 +192,172 @@ void VideoDataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
   CPUTimer timer;
   CHECK(batch->data_.count());
   CHECK(this->transformed_data_.count());
-  VideoDataParameter video_data_param = this->layer_param_.video_data_param();
-  const int batch_size = video_data_param.batch_size();
-  const int new_length = video_data_param.new_length();
-  const int new_height = video_data_param.new_height();
-  const int new_width = video_data_param.new_width();
-  const bool is_color = video_data_param.is_color();
-  string root_folder = video_data_param.root_folder();
+  const int batch_size = this->layer_param_.video_data_param().batch_size();
+  
+  if (this->layer_param_.video_data_param().backend() == VideoDataParameter_DB_LMDB) {
+      Datum datum; // 20180526
+      for (int item_id = 0; item_id < batch_size; ++item_id) {
+        if (item_id == batch_size-1) LOG(INFO) << "Loading batch " << item_id+1;
+		
+        timer.Start();
+		/*
+		 // 20180526
+        while (Skip()) {
+          Next();
+        }
+		
+        datum.ParseFromString(cursor_->value());
+		*/
+		
+        read_time += timer.MicroSeconds();
+        if (item_id == 0) {
+			
+		  Datum& datum = *(reader_.full().peek()); // 20180526
+          // Reshape according to the first datum of each batch
+          // on single input batches allows for inputs of varying dimension.
+          // Use data_transformer to infer the expected blob shape from datum.
+          
+          // 将top shape转换到 1 3 16 112 112
+          vector<int> top_shape = this->data_transformer_->InferBlobShape(datum, true, 16, 3);
+          //LOG(INFO) << top_shape[0] << " " << top_shape[1] << " "<< top_shape[2] << " "<< top_shape[3] << " "<< top_shape[4]; 
+          
+          // 单容器 1 3 16 112 112
+          this->transformed_data_.Reshape(top_shape);
+          
+          // batch个单容器 20 3 16 112 112
+          // Reshape batch according to the batch_size.
+          top_shape[0] = batch_size;
+          batch->data_.Reshape(top_shape);
+          //LOG(INFO) << batch->data_.shape_string();
+        }
 
-  // Reshape according to the first image of each batch
-  // on single input batches allows for inputs of varying dimension.
-  std::vector<cv::Mat> cv_imgs;
-  bool read_video_result = ReadVideoToCVMat(root_folder +
-                                             lines_[lines_id_].first,
-                                             lines_[lines_id_].second,
-                                             new_length, new_height, new_width,
-                                             is_color,
-                                             &cv_imgs);
-  CHECK(read_video_result) << "Could not load " << lines_[lines_id_].first <<
-                              " at frame " << lines_[lines_id_].second << ".";
-  CHECK_EQ(cv_imgs.size(), new_length) << "Could not load " <<
-                                          lines_[lines_id_].first <<
-                                          " at frame " <<
-                                          lines_[lines_id_].second <<
-                                          " correctly.";
-  // Use data_transformer to infer the expected blob shape from a cv_imgs.
-  bool is_video = true;
-  vector<int> top_shape = this->data_transformer_->InferBlobShape(cv_imgs,
-                                                                  is_video);
-  this->transformed_data_.Reshape(top_shape);
-  // Reshape batch according to the batch_size.
-  top_shape[0] = batch_size;
-  batch->data_.Reshape(top_shape);
-
-  Dtype* prefetch_data = batch->data_.mutable_cpu_data();
-  Dtype* prefetch_label = batch->label_.mutable_cpu_data();
-
-  // datum scales
-  const int lines_size = lines_.size();
-  for (int item_id = 0; item_id < batch_size; ++item_id) {
-    // get a blob
-    timer.Start();
-    CHECK_GT(lines_size, lines_id_);
-    std::vector<cv::Mat> cv_imgs;
-    bool read_video_result = ReadVideoToCVMat(root_folder +
-                                               lines_[lines_id_].first,
-                                               lines_[lines_id_].second,
-                                               new_length, new_height,
-                                               new_width, is_color, &cv_imgs);
-    CHECK(read_video_result) << "Could not load " << lines_[lines_id_].first <<
-                                " at frame " << lines_[lines_id_].second << ".";
-    CHECK_EQ(cv_imgs.size(), new_length) << "Could not load " <<
-                                             lines_[lines_id_].first <<
-                                            " at frame " <<
-                                            lines_[lines_id_].second <<
-                                            " correctly.";
-    read_time += timer.MicroSeconds();
-    timer.Start();
-    // Apply transformations (mirror, crop...) to the image
-    int offset = batch->data_.offset(item_id);
-    this->transformed_data_.set_cpu_data(prefetch_data + offset);
-    const bool is_video = true;
-    this->data_transformer_->Transform(cv_imgs, &(this->transformed_data_),
-                                       is_video);
-    trans_time += timer.MicroSeconds();
-
-    prefetch_label[item_id] = lines_[lines_id_].third;
-    // go to the next iter
-    lines_id_++;
-    if (lines_id_ >= lines_size) {
-      // We have reached the end. Restart from the first.
-      DLOG(INFO) << "Restarting data prefetching from start.";
-      lines_id_ = 0;
-      if (this->layer_param_.video_data_param().shuffle()) {
-        ShuffleVideos();
+        // Apply data transformations (mirror, scale, crop...)
+        timer.Start();
+        Datum& datum = *(reader_.full().pop("Waiting for data")); // 20180526
+        // Copy data
+        int offset = batch->data_.offset(item_id); //LOG(INFO) << "offset " << offset;   // 112x112x16x3 = 602112 = offset
+        Dtype* top_data = batch->data_.mutable_cpu_data();
+        this->transformed_data_.set_cpu_data(top_data + offset);  // 将 item 3 16 112 112的指针地址给transformed_data_
+        this->data_transformer_->Transform(datum, &(this->transformed_data_), true, 16, 3);  // 将datum的值复制到transformed_data_
+        
+        // Copy label.
+        Dtype* top_label = batch->label_.mutable_cpu_data();
+        top_label[item_id] = datum.label();
+        
+        trans_time += timer.MicroSeconds();
+		reader_.free().push(const_cast<Datum*>(&datum));
+        //Next();
       }
-    }
+  } else {
+      VideoDataParameter video_data_param = this->layer_param_.video_data_param();
+      const int new_length = video_data_param.new_length();
+      const int new_height = video_data_param.new_height();
+      const int new_width = video_data_param.new_width();
+      const bool is_color = video_data_param.is_color();
+      string root_folder = video_data_param.root_folder();
+
+      // Reshape according to the first image of each batch
+      // on single input batches allows for inputs of varying dimension.
+      std::vector<cv::Mat> cv_imgs;
+      bool read_video_result = ReadVideoToCVMat(root_folder +
+                                                 lines_[lines_id_].first,
+                                                 lines_[lines_id_].second,
+                                                 new_length, new_height, new_width,
+                                                 is_color,
+                                                 &cv_imgs);
+      CHECK(read_video_result) << "Could not load " << lines_[lines_id_].first <<
+                                  " at frame " << lines_[lines_id_].second << ".";
+      CHECK_EQ(cv_imgs.size(), new_length) << "Could not load " <<
+                                              lines_[lines_id_].first <<
+                                              " at frame " <<
+                                              lines_[lines_id_].second <<
+                                              " correctly.";
+      // Use data_transformer to infer the expected blob shape from a cv_imgs.
+      bool is_video = true;
+      vector<int> top_shape = this->data_transformer_->InferBlobShape(cv_imgs,
+                                                                      is_video);
+      this->transformed_data_.Reshape(top_shape);
+      // Reshape batch according to the batch_size.
+      top_shape[0] = batch_size;
+      batch->data_.Reshape(top_shape);
+
+      Dtype* prefetch_data = batch->data_.mutable_cpu_data();
+      Dtype* prefetch_label = batch->label_.mutable_cpu_data();
+
+      // datum scales
+      const int lines_size = lines_.size();
+      for (int item_id = 0; item_id < batch_size; ++item_id) {
+        // get a blob
+        timer.Start();
+        CHECK_GT(lines_size, lines_id_);
+        std::vector<cv::Mat> cv_imgs;
+        bool read_video_result = ReadVideoToCVMat(root_folder +
+                                                   lines_[lines_id_].first,
+                                                   lines_[lines_id_].second,
+                                                   new_length, new_height,
+                                                   new_width, is_color, &cv_imgs);
+        CHECK(read_video_result) << "Could not load " << lines_[lines_id_].first <<
+                                    " at frame " << lines_[lines_id_].second << ".";
+        CHECK_EQ(cv_imgs.size(), new_length) << "Could not load " <<
+                                                 lines_[lines_id_].first <<
+                                                " at frame " <<
+                                                lines_[lines_id_].second <<
+                                                " correctly.";
+        read_time += timer.MicroSeconds();
+        timer.Start();
+        // Apply transformations (mirror, crop...) to the image
+        int offset = batch->data_.offset(item_id);
+        this->transformed_data_.set_cpu_data(prefetch_data + offset);
+        const bool is_video = true;
+        this->data_transformer_->Transform(cv_imgs, &(this->transformed_data_),
+                                           is_video);
+        // Check
+        std::cout << "example " << item_id << ":";
+        for (int i = 0; i < 20; ++i) {
+            std::cout << this->transformed_data_.cpu_data()[i] << " ";
+        }
+        std::cout << std::endl;
+        trans_time += timer.MicroSeconds();
+
+        prefetch_label[item_id] = lines_[lines_id_].third;
+        // go to the next iter
+        lines_id_++;
+        if (lines_id_ >= lines_size) {
+          // We have reached the end. Restart from the first.
+          DLOG(INFO) << "Restarting data prefetching from start.";
+          lines_id_ = 0;
+          if (this->layer_param_.video_data_param().shuffle()) {
+            ShuffleVideos();
+          }
+        }
+      }
   }
+  timer.Stop();
   batch_timer.Stop();
   DLOG(INFO) << "Prefetch batch: " << batch_timer.MilliSeconds() << " ms.";
   DLOG(INFO) << "     Read time: " << read_time / 1000 << " ms.";
   DLOG(INFO) << "Transform time: " << trans_time / 1000 << " ms.";
+}
+
+template <typename Dtype>
+bool VideoDataLayer<Dtype>::Skip() {
+  const int size = Caffe::solver_count();
+  /// int rank = Caffe::solver_rank(); // TODO(mingsuntse): check solver_rank
+  const bool keep = /// (offset_ % size) == rank ||
+              // In test mode, only rank 0 runs, so avoid skipping
+              this->layer_param_.phase() == TEST;
+  return !keep;
+}
+
+template<typename Dtype>
+void VideoDataLayer<Dtype>::Next() {
+  cursor_->Next();
+  if (!cursor_->valid()) {
+    LOG_IF(INFO, Caffe::root_solver())
+        << "Restarting data prefetching from start.";
+    cursor_->SeekToFirst();
+  }
+  offset_++;
 }
 
 INSTANTIATE_CLASS(VideoDataLayer);

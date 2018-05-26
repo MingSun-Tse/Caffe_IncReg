@@ -46,6 +46,7 @@ class DB {
 };
 
 DB* GetDB(DataParameter::DB backend);
+DB* GetDB(VideoDataParameter::DB backend);
 DB* GetDB(const string& backend);
 
 }  // namespace db

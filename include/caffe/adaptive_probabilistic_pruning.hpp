@@ -78,6 +78,10 @@ public:
     
     static int num_log;
     static string mask_generate_mechanism;
+    static int input_length; // for 3D CNN
+    static bool simulate_5d;
+    static int h_off;
+    static int w_off;
     
     static int show_interval;
     static string show_layer;
@@ -148,6 +152,10 @@ public:
     // 3. Logging
     template<typename Dtype>  int     APP<Dtype>::num_log = 0; // > 0: logging is true
     template<typename Dtype>  string  APP<Dtype>::mask_generate_mechanism = "group-wise";
+    template<typename Dtype>  int     APP<Dtype>::input_length = 16; // TODO(mingsuntse): to use solver.prototxt or autoset.
+    template<typename Dtype>  bool    APP<Dtype>::simulate_5d = false;
+    template<typename Dtype>  int     APP<Dtype>::h_off = 0; // used in data transformation
+    template<typename Dtype>  int     APP<Dtype>::w_off = 0;
     template<typename Dtype>  int APP<Dtype>::show_interval = 10; 
     template<typename Dtype>  string APP<Dtype>::show_layer = "1001";
     template<typename Dtype>  int APP<Dtype>::show_num_layer = 100;

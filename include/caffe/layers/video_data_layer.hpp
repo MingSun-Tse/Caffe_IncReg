@@ -7,10 +7,12 @@
 
 #include "caffe/blob.hpp"
 #include "caffe/data_transformer.hpp"
+#include "caffe/data_reader.hpp"
 #include "caffe/internal_thread.hpp"
 #include "caffe/layer.hpp"
 #include "caffe/layers/base_data_layer.hpp"
 #include "caffe/proto/caffe.pb.h"
+#include "caffe/util/db.hpp"
 
 // an extension the std::pair which used to store image filename and
 // its label (int). now, a frame number associated with the video filename
@@ -30,8 +32,7 @@ namespace caffe {
 template <typename Dtype>
 class VideoDataLayer : public BasePrefetchingDataLayer<Dtype> {
  public:
-  explicit VideoDataLayer(const LayerParameter& param)
-      : BasePrefetchingDataLayer<Dtype>(param) {}
+  explicit VideoDataLayer(const LayerParameter& param);
   virtual ~VideoDataLayer();
   virtual void DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
@@ -47,6 +48,16 @@ class VideoDataLayer : public BasePrefetchingDataLayer<Dtype> {
 
   vector<triplet> lines_;
   int lines_id_;
+  
+  // For loading video LMDB data
+  void Next();
+  bool Skip();
+  shared_ptr<db::DB> db_;
+  shared_ptr<db::Cursor> cursor_;
+  uint64_t offset_;
+  
+  // 20180526
+  DataReader reader_;
 };
 
 
