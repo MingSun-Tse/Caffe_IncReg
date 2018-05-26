@@ -38,7 +38,6 @@ void VideoDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>&
 
       // Use data_transformer to infer the expected blob shape from datum.
       vector<int> top_shape = this->data_transformer_->InferBlobShape(datum, true, 16, 3);
-      LOG(INFO) << top_shape[0] << " " << top_shape[1] << " "<< top_shape[2] << " "<< top_shape[3] << " "<< top_shape[4]; //1 16 3 112 112
       this->transformed_data_.Reshape(top_shape);
       // Reshape top[0] and prefetch_data according to the batch_size.
       top_shape[0] = batch_size;

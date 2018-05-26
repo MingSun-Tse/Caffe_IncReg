@@ -293,7 +293,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             exit(1);
         }
         const Dtype AA = APP<Dtype>::AA;
-        
+        // cout << "weight shape: " << net_params[param_id]->shape_string() << endl;
         if (APP<Dtype>::step_ % APP<Dtype>::prune_interval == 0) {
             if (APP<Dtype>::prune_coremthd == "Reg-rank" || APP<Dtype>::prune_coremthd == "Reg") {
                 // Sort 01: sort by L1-norm
@@ -327,7 +327,6 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                 vector<mypair> col_hrank(num_col); // the history_rank of each column, history_rank is like the new score
                 // cout << "ave-magnitude_col " << this->iter_ << " " << layer_name << ":";
                 for (int j = 0; j < num_col; ++j) {
-                    
                     Dtype sum = 0; // for print ave magnitude
                     for (int i = 0; i < num_row; ++i) {
                         sum += fabs(weight[i * num_col + j]);
