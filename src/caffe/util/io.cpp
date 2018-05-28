@@ -62,7 +62,7 @@ bool ReadProtoFromBinaryFile(const char* filename, Message* proto) {
 
   bool success = proto->ParseFromCodedStream(coded_input);
   LOG(INFO) << "Read Proto From Binary File: '" << filename << "', suspend for 2 seconds..";
-  sleep(2);
+  // sleep(2);
   
   delete coded_input;
   delete raw_input;
@@ -73,8 +73,8 @@ bool ReadProtoFromBinaryFile(const char* filename, Message* proto) {
 void WriteProtoToBinaryFile(const Message& proto, const char* filename) {
   fstream output(filename, ios::out | ios::trunc | ios::binary);
   CHECK(proto.SerializeToOstream(&output));
-  LOG(INFO) << "Write Proto To Binary File, suspend for 2 seconds..";
-  sleep(2);
+  LOG(INFO) << "Write Proto To Binary File: '" << filename << "', suspend for 2 seconds..";
+  // sleep(2);
 }
 
 #ifdef USE_OPENCV
