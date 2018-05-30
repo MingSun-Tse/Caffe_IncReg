@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 #include <map>
-#define ShowTimingLog 1
+//#define ShowTimingLog 1
 
 namespace caffe {
 using namespace std;
@@ -154,7 +154,7 @@ public:
     template<typename Dtype>  bool    APP<Dtype>::simulate_5d = false;
     template<typename Dtype>  int     APP<Dtype>::h_off = 0; // used in data transformation
     template<typename Dtype>  int     APP<Dtype>::w_off = 0;
-    template<typename Dtype>  int APP<Dtype>::show_interval = 10; 
+    template<typename Dtype>  int APP<Dtype>::show_interval = 1; 
     template<typename Dtype>  string APP<Dtype>::show_layer = "1001";
     template<typename Dtype>  int APP<Dtype>::show_num_layer = 100;
     template<typename Dtype>  int APP<Dtype>::show_num_weight = 20;

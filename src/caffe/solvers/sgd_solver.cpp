@@ -293,7 +293,6 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             exit(1);
         }
         const Dtype AA = APP<Dtype>::AA;
-        // cout << "weight shape: " << net_params[param_id]->shape_string() << endl;
         if (APP<Dtype>::step_ % APP<Dtype>::prune_interval == 0) {
             if (APP<Dtype>::prune_coremthd == "Reg-rank" || APP<Dtype>::prune_coremthd == "Reg") {
                 // Sort 01: sort by L1-norm
@@ -372,17 +371,17 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
 
                 // scheme 1, exponential center-symmetrical function
                 const Dtype kk = APP<Dtype>::kk; // u in the paper
-                const Dtype alpha = log(2/kk) / num_col_to_prune_;
+                const Dtype alpha = log(2/kk) / (num_col_to_prune_ + 1);
                 const Dtype N1 = -log(kk)/alpha; // symmetry point
                 // scheme 2, the dis-continual function
                 const Dtype kk2 = APP<Dtype>::kk2;
-                const Dtype alpha1 = (num_col_to_prune_ == 1) ? 0 : log(1/kk2) / (num_col_to_prune_ - 1);
-                const Dtype alpha2 = (num_col_to_prune_ == num_col_-1) ? 0 : log(1/kk2) / (num_col_-1 - num_col_to_prune_);
+                const Dtype alpha1 = (num_col_to_prune_ == 1)          ? 0 : log(1/kk2) / (num_col_to_prune_ - 1);
+                const Dtype alpha2 = (num_col_to_prune_ == num_col_-1) ? 0 : log(1/kk2) / (num_col_ - 1 - num_col_to_prune_);
                 for (int j = 0; j < num_col_; ++j) { // j: rank 
                     const int col_of_rank_j = col_hrank[j + num_pruned_col].second; // Note the real rank is j + num_pruned_col
                     const Dtype Delta = APP<Dtype>::IF_scheme1_when_Reg_rank
-                                          ? (j < N1                ? AA * exp(-alpha  * j) : 2*kk*AA - AA * exp(-alpha * (2 * N1 - j)))
-                                          : (j < num_col_to_prune_ ? AA * exp(-alpha1 * j) : -AA * exp(-alpha2 * (num_col_-1 - j)));
+                                          ? (j < N1                ? AA * exp(-alpha  * j) : 2*kk*AA - AA * exp(-alpha  * (2 * N1 - j)))
+                                          : (j < num_col_to_prune_ ? AA * exp(-alpha1 * j) :         - AA * exp(-alpha2 * (num_col_-1 - j)));
                     const Dtype old_reg = muhistory_punish[col_of_rank_j];
                     const Dtype new_reg = std::max(old_reg + Delta, Dtype(0));
                     for (int i = 0; i < num_row; ++i) {
@@ -905,8 +904,9 @@ void SGDSolver<Dtype>::SnapshotSolverStateToBinaryProto(
     BlobProto* history_score_blob = state.add_history_score(); /// @mingsuntse, for pruning
     BlobProto* history_punish_blob = state.add_history_punish();
     history_[i]->ToProto(history_blob);
-    if (APP<Dtype>::prune_coremthd.substr(0,3) == "Reg" or APP<Dtype>::prune_coremthd.substr(0,2) == "PP") { // i: param_id
-        const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[i].first];
+    const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[i].first];
+    if (APP<Dtype>::layer_index.count(layer_name) && 
+            (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg" or APP<Dtype>::prune_coremthd.substr(0, 2) == "PP")) { // i: param_id
         local_blob_index = layer_name == previous_layer_name ? local_blob_index + 1 : 0;
         this->net_->layer_by_name(layer_name)->history_score()[local_blob_index]->ToProto(history_score_blob);
         this->net_->layer_by_name(layer_name)->history_punish()[local_blob_index]->ToProto(history_punish_blob);
@@ -974,8 +974,9 @@ void SGDSolver<Dtype>::RestoreSolverStateFromBinaryProto(
   int local_blob_index = 0;
   for (int i = 0; i < history_.size(); ++i) {
     history_[i]->FromProto(state.history(i));
-    if (APP<Dtype>::prune_coremthd.substr(0,3) == "Reg" or APP<Dtype>::prune_coremthd.substr(0,2) == "PP") {
-        const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[i].first];
+    const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[i].first];
+    if (APP<Dtype>::layer_index.count(layer_name) && 
+            (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg" or APP<Dtype>::prune_coremthd.substr(0, 2) == "PP")) {
         local_blob_index = layer_name == previous_layer_name ? local_blob_index + 1 : 0;
         this->net_->layer_by_name(layer_name)->history_score()[local_blob_index]->FromProto(state.history_score(i));
         this->net_->layer_by_name(layer_name)->history_punish()[local_blob_index]->FromProto(state.history_punish(i));
