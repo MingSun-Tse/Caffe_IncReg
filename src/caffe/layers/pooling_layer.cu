@@ -210,7 +210,6 @@ void PoolingLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     LOG(FATAL) << "Unknown pooling method.";
   }
   CUDA_POST_KERNEL_CHECK;
-  std::cout << "Pooling forward" << std::endl;
 }
 
 

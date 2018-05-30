@@ -304,7 +304,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                     if (APP<Dtype>::IF_col_pruned[L][j][0]) { // TODO(mingsuntse): fix this [0]
                         col_score[j].first = muhistory_score[j]; // make the pruned sink down
                         continue;
-                    } 
+                    }
                     col_score[j].first  = 0;
                     for (int i = 0; i < num_row; ++i) {
                         col_score[j].first += fabs(weight[i * num_col + j]);

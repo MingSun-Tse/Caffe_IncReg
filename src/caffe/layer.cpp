@@ -157,7 +157,7 @@ void Layer<Dtype>::UpdateNumPrunedRow() {
     Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
     const int count = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
-    const int fanl = APP<Dtype>::filter_spatial_size[L+1]; /// filter_area_next_layer
+    const int spatial_size = APP<Dtype>::filter_spatial_size[L+1];
     const int num_col = count / num_row;
     const int num_row_per_g = num_row / APP<Dtype>::group[L+1];
     
@@ -168,7 +168,7 @@ void Layer<Dtype>::UpdateNumPrunedRow() {
             const int g   = i / num_row_per_g;
             bool IF_consecutive_pruned = true; /// If the corresponding columns in next layer are pruned consecutively, 
                                                /// then this row can be removed.
-            for (int j = chl * fanl; j < (chl + 1) * fanl; ++j) {
+            for (int j = chl * spatial_size; j < (chl + 1) * spatial_size; ++j) {
                 if (!APP<Dtype>::IF_col_pruned[L + 1][j][g]) { 
                     IF_consecutive_pruned = false; 
                     break;
@@ -897,8 +897,8 @@ void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
         } else {
             LOG(FATAL) << "Seems wrong, pruning setup can ONLY be put in the layers with learnable parameters (Conv and FC), please check.";
         }
-        LOG(INFO) << "New layer registered: " << layer_name
-            << ". Its layer_index: " << APP<Dtype>::layer_index[layer_name] << endl;
+        LOG(INFO) << "New learnable layer registered: " << layer_name
+            << ". Its layer index: " << APP<Dtype>::layer_index[layer_name] << endl;
     }
     const int L = APP<Dtype>::layer_index[layer_name];
     
@@ -952,7 +952,8 @@ void Layer<Dtype>::PruneForward() {
                 // Note that, UpdateNumPrunedRow/Col before pruning, so that when calculating score, the zombie weights will not be counted.
                 // The last conv and last fc layer need not updating num of pruned row.
                 // In fact, the last conv should be updated row and the first fc should be updated col, but for simplicity, which are ignored for now.
-                if (APP<Dtype>::prune_unit == "Col" && L != APP<Dtype>::conv_layer_cnt-1) { 
+                if (APP<Dtype>::prune_unit == "Col" && L != APP<Dtype>::conv_layer_cnt - 1 
+                                                    && L != APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt - 1) { // The last conv layer and last fc layer need not update row
                     if (APP<Dtype>::step_-1 - APP<Dtype>::iter_prune_finished[L+1] <= 1) {
                         this->UpdateNumPrunedRow();
                     }

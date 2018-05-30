@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 #include <map>
-//#define ShowTimingLog 1
+#define ShowTimingLog 1
 
 namespace caffe {
 using namespace std;

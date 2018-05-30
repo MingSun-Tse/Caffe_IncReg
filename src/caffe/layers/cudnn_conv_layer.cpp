@@ -85,7 +85,8 @@ void CuDNNConvolutionLayer<Dtype>::LayerSetUp(
     cudnn::createTensor4dDesc<Dtype>(&bias_desc_);
   }
 
-  handles_setup_ = true;  
+  handles_setup_ = true;
+  
 }
 
 template <typename Dtype>
