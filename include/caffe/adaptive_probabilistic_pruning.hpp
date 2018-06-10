@@ -58,10 +58,11 @@ public:
     static vector<int> group;
     static vector<int> priority;
     
+    static vector<vector<int> > rows_to_prune;
+    static vector<vector<int> > pruned_rows;
     static vector<Dtype> num_pruned_col;
     static vector<int>   num_pruned_row;
     static vector<int>   num_pruned_weight;
-    static vector<int>   pruned_rows;
     static vector<bool>  IF_update_row_col_layer;
     static vector<vector<bool> > IF_row_pruned;
     static vector<vector<vector<bool> > > IF_col_pruned;
@@ -131,11 +132,12 @@ public:
     template<typename Dtype>  vector<int>  APP<Dtype>::priority;
     
     // 2.2 Pruning state (key)
+    template<typename Dtype>  vector<vector<int> > APP<Dtype>::rows_to_prune;
+    template<typename Dtype>  vector<vector<int> > APP<Dtype>::pruned_rows;
+    template<typename Dtype>  vector<bool>   APP<Dtype>::IF_update_row_col_layer;
     template<typename Dtype>  vector<Dtype>  APP<Dtype>::num_pruned_col;
     template<typename Dtype>  vector<int>    APP<Dtype>::num_pruned_row;
     template<typename Dtype>  vector<int>    APP<Dtype>::num_pruned_weight;
-    template<typename Dtype>  vector<int>    APP<Dtype>::pruned_rows; /// used in UpdateNumCol
-    template<typename Dtype>  vector<bool>   APP<Dtype>::IF_update_row_col_layer; /// used in UpdateNumCol
     template<typename Dtype>  vector<vector<bool> >   APP<Dtype>::IF_row_pruned;
     template<typename Dtype>  vector<vector<vector<bool> > >  APP<Dtype>::IF_col_pruned;
     template<typename Dtype>  vector<vector<bool> >   APP<Dtype>::IF_weight_pruned;

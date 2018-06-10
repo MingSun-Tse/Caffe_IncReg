@@ -380,7 +380,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                 for (int j = 0; j < num_col_; ++j) { // j: rank 
                     const int col_of_rank_j = col_hrank[j + num_pruned_col].second; // Note the real rank is j + num_pruned_col
                     const Dtype Delta = APP<Dtype>::IF_scheme1_when_Reg_rank
-                                          ? (j < N1                ? AA * exp(-alpha  * j) : 2*kk*AA - AA * exp(-alpha  * (2 * N1 - j)))
+                                          ? (j < N1                ? AA * exp(-alpha  * j) : 2*kk*AA - AA * exp(-alpha  * (2 * N1     - j)))
                                           : (j < num_col_to_prune_ ? AA * exp(-alpha1 * j) :         - AA * exp(-alpha2 * (num_col_-1 - j)));
                     const Dtype old_reg = muhistory_punish[col_of_rank_j];
                     const Dtype new_reg = std::max(old_reg + Delta, Dtype(0));
@@ -388,13 +388,35 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                         muhistory_punish[i * num_col + col_of_rank_j] = new_reg;
                     }
                     if (new_reg >= APP<Dtype>::target_reg) {
-                        for (int g = 0; g < APP<Dtype>::group[L]; ++g) { APP<Dtype>::IF_col_pruned[L][j][g] = true; }
+                        for (int g = 0; g < APP<Dtype>::group[L]; ++g) { 
+                          APP<Dtype>::IF_col_pruned[L][col_of_rank_j][g] = true;
+                        }
                         APP<Dtype>::num_pruned_col[L] += 1;
                         for (int i = 0; i < num_row; ++i) {
                             mumasks[i * num_col + col_of_rank_j] = 0;
                             muweight[i* num_col + col_of_rank_j] = 0;
                         }
                         muhistory_score[col_of_rank_j] = APP<Dtype>::step_ - 1000000 - (muhistory_punish[col_of_rank_j] - APP<Dtype>::target_reg);
+                        
+                        // Check whether the corresponding row in the last layer could be pruned
+                        if (L != 0 && L != APP<Dtype>::conv_layer_cnt) { // Not the fist Conv and first FC layer
+                          const int filter_spatial_size = net_params[param_id]->count(2);
+                          const int channel = col_of_rank_j / filter_spatial_size;
+                          bool IF_consecutive_pruned = true;
+                          for (int j = channel * filter_spatial_size; j < (channel+1) * filter_spatial_size; ++j) {
+                            
+                            if (!APP<Dtype>::IF_col_pruned[L][j][0]) {
+                              IF_consecutive_pruned = false;
+                              break;
+                            }
+                          }
+                          if (IF_consecutive_pruned) {
+                            const int num_chl_per_g = num_col / filter_spatial_size;
+                            for (int g = 0; g < APP<Dtype>::group[L]; ++g) {
+                              APP<Dtype>::rows_to_prune[L - 1].push_back(channel + g * num_chl_per_g);
+                            }
+                          }
+                        }
                     }
                     if (new_reg < old_reg) {
                         cout << "reduce reg: " << layer_name << "-" << col_of_rank_j 

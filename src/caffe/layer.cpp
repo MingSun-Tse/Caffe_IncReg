@@ -154,37 +154,18 @@ bool Layer<Dtype>::IF_hppf() {
 template <typename Dtype> 
 void Layer<Dtype>::UpdateNumPrunedRow() {
     const int L = APP<Dtype>::layer_index[this->layer_param_.name()];
-    Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
-    const int count = this->blobs_[0]->count();
-    const int num_row = this->blobs_[0]->shape()[0];
-    const int spatial_size = APP<Dtype>::filter_spatial_size[L+1];
-    const int num_col = count / num_row;
-    const int num_row_per_g = num_row / APP<Dtype>::group[L+1];
+    const int num_col = this->blobs_[0]->count(1);
     
     cout << "        " << this->layer_param_.name() << " in UpdateNumPrunedRow" << endl;
-    for (int i = 0; i < num_row; ++i) {
-        if (!APP<Dtype>::IF_row_pruned[L][i]) {
-            const int chl = i % num_row_per_g;
-            const int g   = i / num_row_per_g;
-            bool IF_consecutive_pruned = true; /// If the corresponding columns in next layer are pruned consecutively, 
-                                               /// then this row can be removed.
-            for (int j = chl * spatial_size; j < (chl + 1) * spatial_size; ++j) {
-                if (!APP<Dtype>::IF_col_pruned[L + 1][j][g]) { 
-                    IF_consecutive_pruned = false; 
-                    break;
-                }
-            }
-            if (IF_consecutive_pruned) {
-                for (int j = 0; j < num_col; ++j) {
-                    muweight[i * num_col + j] = 0;
-                    this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
-                }
-                APP<Dtype>::IF_row_pruned[L][i] = true;
-                ++ APP<Dtype>::num_pruned_row[L];
-                cout << " " << this->layer_param_.name() << " prune a row successfully: " << i << endl;
-            }
-        }
+    vector<int>::iterator it;
+    for (it = APP<Dtype>::rows_to_prune[L].begin(); it != APP<Dtype>::rows_to_prune[L].end(); ++it) {
+      caffe_gpu_set(num_col, (Dtype)0, this->blobs_[0]->mutable_gpu_data() + *it * num_col);
+      caffe_gpu_set(num_col, (Dtype)0, this->masks_[0]->mutable_gpu_data() + *it * num_col);
+      APP<Dtype>::IF_row_pruned[L][*it] = true;
+      cout << " " << this->layer_param_.name() << " prune a row successfully: " << (*it) << endl;
     }
+    APP<Dtype>::num_pruned_row[L] += APP<Dtype>::rows_to_prune[L].size();
+    APP<Dtype>::rows_to_prune[L].clear();
 }
 
 template <typename Dtype> 
@@ -195,23 +176,23 @@ void Layer<Dtype>::UpdateNumPrunedCol() {
     const int num_col = count / num_row;
     const int num_chl = this->blobs_[0]->shape()[1];
     const int num_row_per_g = num_row / APP<Dtype>::group[L];
-    const int filter_area = this->blobs_[0]->count(2);
+    const int filter_spatial_size = this->blobs_[0]->count(2);
     
     cout << "        " << this->layer_param_.name() << " in UpdateNumPrunedCol" << endl;
     vector<int>::iterator it;
-    for (it = APP<Dtype>::pruned_rows.begin(); it != APP<Dtype>::pruned_rows.end(); ++it) {
+    for (it = APP<Dtype>::pruned_rows[L-1].begin(); it != APP<Dtype>::pruned_rows[L-1].end(); ++it) {
         const int chl = *it % num_chl;
         const int g   = *it / num_chl;
         for (int i = g * num_row_per_g; i < (g + 1) * num_row_per_g; ++i) {
-            for (int j = chl * filter_area; j < (chl + 1) * filter_area; ++j) {
+            for (int j = chl * filter_spatial_size; j < (chl + 1) * filter_spatial_size; ++j) {
                 this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
                 APP<Dtype>::IF_col_pruned[L][j][g] = true;
             }
         }
-        APP<Dtype>::num_pruned_col[L] += filter_area * 1.0 / APP<Dtype>::group[L];
+        APP<Dtype>::num_pruned_col[L] += filter_spatial_size * 1.0 / APP<Dtype>::group[L];
         cout << "  " << this->layer_param_.name() << " prune a channel successfully: " << chl << endl;
     }
-    APP<Dtype>::pruned_rows.clear();
+    APP<Dtype>::pruned_rows[L-1].clear();
 }
 
 
@@ -430,7 +411,7 @@ void Layer<Dtype>::FilterPrune() {
         }
         APP<Dtype>::IF_row_pruned[L][r] = true;
         ++ APP<Dtype>::num_pruned_row[L];
-        APP<Dtype>::pruned_rows.push_back(r);
+        APP<Dtype>::pruned_rows[L].push_back(r);
     }
 }
 
@@ -630,9 +611,7 @@ void Layer<Dtype>::ProbPruneRow(const int& prune_interval) {
                 for (int j = 0; j < num_col; ++j) { 
                     muweight[row_of_rank_rk * num_col + j] = 0; // once pruned, zero out weights
                 } 
-                if (L != APP<Dtype>::conv_layer_cnt - 1) {
-                    APP<Dtype>::pruned_rows.push_back(row_of_rank_rk);
-                }
+                APP<Dtype>::pruned_rows[L].push_back(row_of_rank_rk);
             }
             // Print
             if (new_prob > old_prob) {
@@ -906,6 +885,8 @@ void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     // Note: These varibales will be called for every GPU, whereas since we use `layer_index` to index, so it doesn't matter.
     // Set up prune parameters of layer
     APP<Dtype>::IF_update_row_col_layer.push_back(prune_param.if_update_row_col());
+    APP<Dtype>::rows_to_prune.push_back(vector<int>());
+    APP<Dtype>::pruned_rows.push_back(vector<int>());
     APP<Dtype>::pruned_ratio_col.push_back(0);
     APP<Dtype>::pruned_ratio_row.push_back(0);
     APP<Dtype>::GFLOPs.push_back(this->blobs_[0]->count()); // further calculated in `net.cpp`, after layer SetUp
@@ -919,7 +900,7 @@ void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     APP<Dtype>::IF_col_pruned.push_back(vector<vector<bool> >(num_col, vec_tmp));
     APP<Dtype>::IF_weight_pruned.push_back(vector<bool>(count, false));
     // Info shared among layers
-    APP<Dtype>::filter_spatial_size.push_back(this->blobs_[0]->shape()[2] * this->blobs_[0]->shape()[3]);
+    APP<Dtype>::filter_spatial_size.push_back(this->blobs_[0]->shape()[2] * this->blobs_[0]->shape()[3]); // TODO(mingsuntse): check 3D CNN, this is okay?
     APP<Dtype>::priority.push_back(prune_param.priority());
     APP<Dtype>::iter_prune_finished.push_back(INT_MAX);
     LOG(INFO) << "Pruning setup done: " << layer_name;
@@ -952,14 +933,18 @@ void Layer<Dtype>::PruneForward() {
                 // Note that, UpdateNumPrunedRow/Col before pruning, so that when calculating score, the zombie weights will not be counted.
                 // The last conv and last fc layer need not updating num of pruned row.
                 // In fact, the last conv should be updated row and the first fc should be updated col, but for simplicity, which are ignored for now.
-                if (APP<Dtype>::prune_unit == "Col" && L != APP<Dtype>::conv_layer_cnt - 1 
-                                                    && L != APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt - 1) { // The last conv layer and last fc layer need not update row
-                    if (APP<Dtype>::step_-1 - APP<Dtype>::iter_prune_finished[L+1] <= 1) {
-                        this->UpdateNumPrunedRow();
-                    }
-                } else if (APP<Dtype>::prune_unit == "Row" && mthd != "TP_Row" && APP<Dtype>::pruned_rows.size()) {
+                if (APP<Dtype>::prune_unit == "Col" 
+                      && L != APP<Dtype>::conv_layer_cnt - 1 
+                      && L != APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt - 1 // The last conv layer and last fc layer need not update row.
+                      && APP<Dtype>::step_-1 - APP<Dtype>::iter_prune_finished[L+1] <= 1) {
+                  this->UpdateNumPrunedRow();
+                } else if (APP<Dtype>::prune_unit == "Row"
+                      && L != 0
+                      && L != APP<Dtype>::conv_layer_cnt // The first conv layer and first fc layer need not update column.
+                      && mthd != "TP_Row" // Don't update column for TP, because their method doesn't mention this.
+                      && APP<Dtype>::pruned_rows[L-1].size()) {
                     this->UpdateNumPrunedCol();
-                } /// Note we don't update column for TP, because their method didn't mention this.
+                }
                 this->UpdatePrunedRatio();
                 this->IF_prune_finished();
             }

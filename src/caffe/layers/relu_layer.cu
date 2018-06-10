@@ -30,7 +30,7 @@ void ReLULayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   //     << " blocks: " << CAFFE_GET_BLOCKS(count)
   //     << " threads: " << CAFFE_CUDA_NUM_THREADS;
   
-  std::cout << "ReLU forward" << std::endl;
+  //std::cout << "ReLU forward" << std::endl;
 }
 
 template <typename Dtype>

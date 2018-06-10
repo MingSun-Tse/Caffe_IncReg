@@ -65,7 +65,6 @@ void LRNLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   default:
     LOG(FATAL) << "Unknown normalization region.";
   }
-  std::cout << "LRN forward" << std::endl;
 }
 
 // TODO: check if it would be faster to just put it into the previous kernel.
