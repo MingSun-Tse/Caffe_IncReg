@@ -23,11 +23,13 @@ public:
     static string prune_coremthd_;  // if prune_method == "Reg-L1_Col", then prune_unit = "Col", prune_coremthd = "Reg-L1", prune_coremthd_ = "Reg"
     static int num_once_prune;
     static int prune_interval;
+    static int retain_interval;
     static int clear_history_interval;
     static int prune_begin_iter;
     static int iter_size;
     static Dtype score_decay;
     static Dtype AA;
+    static Dtype prune_ratio_step;
     static Dtype kk;
     static Dtype kk2;
     static Dtype speedup;
@@ -36,6 +38,7 @@ public:
     static bool IF_speedup_count_fc;
     static bool IF_compr_count_conv;
     static bool IF_eswpf;
+    static bool IF_acc_retained;
     static Dtype prune_threshold;
     static Dtype target_reg;
     static int reg_cushion_iter; // In the beginning of reg, improve the reg little-by-little to mitigate the side-effect. `reg_cushion_iter` is the iter of this mitigation perioid
@@ -69,6 +72,7 @@ public:
     static vector<vector<bool> > IF_weight_pruned;
     static vector<int> iter_prune_finished;
     static vector<Dtype> prune_ratio;
+    static vector<Dtype> prune_ratio_; // The prune_ratio for current pruning iteration in multi-step pruning.
     static vector<Dtype> pruned_ratio;
     static vector<Dtype> pruned_ratio_col;
     static vector<Dtype> pruned_ratio_row;
@@ -94,11 +98,13 @@ public:
     template<typename Dtype>  string  APP<Dtype>::prune_coremthd_ = "None";
     template<typename Dtype>  int     APP<Dtype>::num_once_prune;
     template<typename Dtype>  int     APP<Dtype>::prune_interval;
+    template<typename Dtype>  int     APP<Dtype>::retain_interval = 5000;
     template<typename Dtype>  int     APP<Dtype>::clear_history_interval;
     template<typename Dtype>  int     APP<Dtype>::prune_begin_iter;
     template<typename Dtype>  int     APP<Dtype>::iter_size;
     template<typename Dtype>  Dtype   APP<Dtype>::score_decay = 0;
     template<typename Dtype>  Dtype   APP<Dtype>::AA;
+    template<typename Dtype>  Dtype   APP<Dtype>::prune_ratio_step = 0.02;
     template<typename Dtype>  Dtype   APP<Dtype>::kk;
     template<typename Dtype>  Dtype   APP<Dtype>::kk2;
     template<typename Dtype>  Dtype   APP<Dtype>::speedup;
@@ -107,6 +113,7 @@ public:
     template<typename Dtype>  bool    APP<Dtype>::IF_speedup_count_fc;
     template<typename Dtype>  bool    APP<Dtype>::IF_compr_count_conv;
     template<typename Dtype>  bool    APP<Dtype>::IF_eswpf;
+    template<typename Dtype>  bool    APP<Dtype>::IF_acc_retained = true;
     template<typename Dtype>  Dtype   APP<Dtype>::prune_threshold;
     template<typename Dtype>  Dtype   APP<Dtype>::target_reg;
     template<typename Dtype>  int     APP<Dtype>::reg_cushion_iter;
@@ -119,7 +126,8 @@ public:
     template<typename Dtype>  long   APP<Dtype>::first_time = 0;
     template<typename Dtype>  int    APP<Dtype>::first_iter = 0;
     template<typename Dtype>  bool  APP<Dtype>::IF_scheme1_when_Reg_rank;
-    template<typename Dtype>  bool  APP<Dtype>::IF_alpf = false; /// if all layer prune finished
+    template<typename Dtype>  bool  APP<Dtype>::IF_alpf  = false; /// if all layer prune finished in the terms of final target
+    template<typename Dtype>  bool  APP<Dtype>::IF_alpf_ = false; /// if all layer prune finished in the current pruning iteration
     template<typename Dtype>  bool  APP<Dtype>::IF_speedup_achieved   = false;
     template<typename Dtype>  bool  APP<Dtype>::IF_compRatio_achieved = false;
 
@@ -143,6 +151,7 @@ public:
     template<typename Dtype>  vector<vector<bool> >   APP<Dtype>::IF_weight_pruned;
     template<typename Dtype>  vector<int>    APP<Dtype>::iter_prune_finished;
     template<typename Dtype>  vector<Dtype>  APP<Dtype>::prune_ratio;
+    template<typename Dtype>  vector<Dtype>  APP<Dtype>::prune_ratio_;
     template<typename Dtype>  vector<Dtype>  APP<Dtype>::pruned_ratio;
     template<typename Dtype>  vector<Dtype>  APP<Dtype>::pruned_ratio_col;
     template<typename Dtype>  vector<Dtype>  APP<Dtype>::pruned_ratio_row;

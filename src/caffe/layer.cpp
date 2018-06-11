@@ -85,7 +85,7 @@ void Layer<Dtype>::kmeans_cluster(vector<int> &cLabel, vector<Dtype> &cCentro, D
     }
 
     for (int k = 0; k < nCluster; k++)
-      cCentro[k] = ptrC[k]/ptrS[k]; // 更新中心值
+      cCentro[k] = ptrC[k]/ptrS[k];
 
     iter++;
   }
@@ -98,17 +98,15 @@ void Layer<Dtype>::IF_prune_finished() {
     if (APP<Dtype>::layer_index.count(layer_name) != 0) {
         const int L = APP<Dtype>::layer_index[layer_name];
         if (APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
-            Dtype pruned_ratio = 0;
+            Dtype pruned_ratio = APP<Dtype>::pruned_ratio_col[L];;
             if (APP<Dtype>::prune_unit == "Weight")   { pruned_ratio = APP<Dtype>::pruned_ratio[L];     }
             else if (APP<Dtype>::prune_unit == "Row") { pruned_ratio = APP<Dtype>::pruned_ratio_row[L]; }
-            else if (APP<Dtype>::prune_unit == "Col") { pruned_ratio = APP<Dtype>::pruned_ratio_col[L]; }
-            const bool layer_finish     = pruned_ratio >= APP<Dtype>::prune_ratio[L]; /// layer pruning target achieved
+            const bool layer_finish     = pruned_ratio >= APP<Dtype>::prune_ratio_[L]; /// layer pruning target achieved
             const bool net_finish_speed = APP<Dtype>::IF_speedup_achieved;   /// net pruning target of speed achieved
             const bool net_finish_param = APP<Dtype>::IF_compRatio_achieved; /// net pruning target of compression achieved
             
             if (layer_finish || net_finish_speed || net_finish_param) {
                 APP<Dtype>::iter_prune_finished[L] = APP<Dtype>::step_ - 1;
-                // if (APP<Dtype>::prune_coremthd.substr(0, 2) == "PP") { CleanWorkForPP(); } // last time, do some clean work
                 
                 // print when finished
                 char rlayer[10], rrow[10], rcol[10];
@@ -121,17 +119,9 @@ void Layer<Dtype>::IF_prune_finished() {
                      << "  net compRatio: " << APP<Dtype>::compRatio
                      << "  pruned_ratio: " << rlayer
                      << "  pruned_ratio_row: " << rrow
-                     << "  pruned_ratio_col: " << rcol 
-                     << "  prune_ratio: " << APP<Dtype>::prune_ratio[L] << std::endl;
+                     << "  pruned_ratio_col: " << rcol
+                     << "  current prune_ratio: " << APP<Dtype>::prune_ratio_[L] << std::endl;
                 
-                // IF_all_layer_prune_finished
-                APP<Dtype>::IF_alpf = true;
-                for (int i = 0; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
-                    if (APP<Dtype>::iter_prune_finished[i] == INT_MAX) {
-                        APP<Dtype>::IF_alpf = false;
-                        break;
-                    }
-                }
             }
         }
     }
@@ -425,7 +415,7 @@ void Layer<Dtype>::ProbPruneCol(const int& prune_interval) {
     const int num_col = count / num_row;
     const string layer_name = this->layer_param_.name();
     const int L = APP<Dtype>::layer_index[layer_name];
-    const int num_col_to_prune_ = ceil(APP<Dtype>::prune_ratio[L] * num_col); /// a little bit higher goal
+    const int num_col_to_prune_ = ceil(APP<Dtype>::prune_ratio[L] * num_col); // a little bit higher goal
     const int group = APP<Dtype>::group[L];
     
     /// Calculate history score
@@ -779,7 +769,6 @@ void Layer<Dtype>::PruneMinimals() {
 */
 template <typename Dtype>
 void Layer<Dtype>::RestoreMasks() {
-    /* Restore pruning state when retrain */
     const int count   = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
@@ -840,14 +829,16 @@ void Layer<Dtype>::RestoreMasks() {
         APP<Dtype>::num_pruned_row[L] = num_pruned_row;
     }
     this->UpdatePrunedRatio();
-    Dtype pruned_ratio = 0;
+    Dtype pruned_ratio = APP<Dtype>::pruned_ratio_col[L];
     if      (APP<Dtype>::prune_unit == "Weight") { pruned_ratio = APP<Dtype>::pruned_ratio[L];     }
     else if (APP<Dtype>::prune_unit == "Row"   ) { pruned_ratio = APP<Dtype>::pruned_ratio_row[L]; }
-    else if (APP<Dtype>::prune_unit == "Col"   ) { pruned_ratio = APP<Dtype>::pruned_ratio_col[L]; }
     if (pruned_ratio >= APP<Dtype>::prune_ratio[L]) {
-        APP<Dtype>::iter_prune_finished[L] = -1; /// To check multi-GPU
+        APP<Dtype>::iter_prune_finished[L] = -1; // TODO(mingsuntse): check multi-GPU
         cout << L << ": " << layer_name << " prune finished." << endl;
+    } else {
+        APP<Dtype>::prune_ratio_[L] += pruned_ratio;
     }
+    
     LOG(INFO) << "  Masks restored,"
               << "  num_pruned_col=" << APP<Dtype>::num_pruned_col[L] << "(" << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << ")"
               << "  num_pruned_row=" << APP<Dtype>::num_pruned_row[L] << "(" << APP<Dtype>::num_pruned_row[L] * 1.0 / num_row << ")"
@@ -861,6 +852,7 @@ void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
     APP<Dtype>::prune_ratio.push_back(prune_param.prune_ratio());
+    APP<Dtype>::prune_ratio_.push_back(APP<Dtype>::prune_ratio_step);
     APP<Dtype>::pruned_ratio.push_back(0); // used in TEST
     this->IF_masks_updated = true;
     if (this->phase_ == TEST) { return; }

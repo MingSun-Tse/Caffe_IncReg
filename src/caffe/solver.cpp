@@ -256,7 +256,7 @@ void Solver<Dtype>::Step(int iters) {
       }
     }
     // 分发参数
-    // std::cout << "call_backs_.size(): " << callbacks_.size() << std::endl; /// WANGHUAN
+    // std::cout << "call_backs_.size(): " << callbacks_.size() << std::endl;
     for (int i = 0; i < callbacks_.size(); ++i) {
       callbacks_[i]->on_start();
     }
@@ -267,10 +267,25 @@ void Solver<Dtype>::Step(int iters) {
 
     /// ----------------------------------------------------------------------
     // Before another forward, judge whether prune could be stopped
+    APP<Dtype>::IF_alpf_ = true;
+    for (int i = 0; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
+        if (APP<Dtype>::iter_prune_finished[i] == INT_MAX) {
+            APP<Dtype>::IF_alpf_ = false;
+            break;
+        }
+    }
+    
+    APP<Dtype>::IF_alpf = true; // IF_all_layer_prune_finished
+
     if (APP<Dtype>::IF_alpf && APP<Dtype>::IF_eswpf) {
         cout << "all layer prune finished: iter = " << iter_ << " -- early stopped." << endl;
         requested_early_exit_ = true;
         break;
+    }
+    if (APP<Dtype>::IF_alpf) {
+        APP<Dtype>::IF_acc_retained = false;
+        Snapshot();
+        APP<Dtype>::IF_alpf = false;
     }
     // GFLOPs, since it measures the speedup of the whole net, so put it here rather than in layer.
     Dtype GFLOPs_left   = 0;

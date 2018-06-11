@@ -274,7 +274,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
 
         // My layer_index only contains conv and fc layers, while caffe's layer_index contains literally all layers.
         map<string, int> layer_names_index = this->net_->layer_names_index();
-        cout << "my layer_index: " << L 
+        cout << "my layer_index: " << L
              << "  caffe's layer_index: " << layer_names_index[layer_name] << endl;
         */
         Dtype* muhistory_score  = this->net_->layer_by_name(layer_name)->history_score()[0]->mutable_cpu_data();
@@ -286,7 +286,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         const int num_row = net_params[param_id]->shape()[0];
         const int num_col = count / num_row;
         const int num_pruned_col = APP<Dtype>::num_pruned_col[L];
-        const int num_col_to_prune_ = ceil(num_col * APP<Dtype>::prune_ratio[L]) - num_pruned_col;
+        const int num_col_to_prune_ = ceil(num_col * APP<Dtype>::prune_ratio_step * 2); // Going to prune APP<Dtype>::prune_ratio_step, but set target as APP<Dtype>::prune_ratio_step * 2.
         const int num_col_ = num_col - num_pruned_col;
         if (num_col_to_prune_ <= 0) {
             LOG(FATAL) << "num_col_to_prune_ <= 0";
@@ -369,9 +369,9 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                 }
                 */
 
-                // scheme 1, exponential center-symmetrical function
+                // scheme 1, the exponential center-symmetrical function
                 const Dtype kk = APP<Dtype>::kk; // u in the paper
-                const Dtype alpha = log(2/kk) / (num_col_to_prune_ + 1);
+                const Dtype alpha = log(2/kk) / (num_col_to_prune_);
                 const Dtype N1 = -log(kk)/alpha; // symmetry point
                 // scheme 2, the dis-continual function
                 const Dtype kk2 = APP<Dtype>::kk2;
@@ -1009,20 +1009,36 @@ void SGDSolver<Dtype>::RestoreSolverStateFromBinaryProto(
 
 template <typename Dtype>
 const int SGDSolver<Dtype>::GetLayerIndex(const int& param_id) {
-    // Three occasions to return, `-1` means return
+    // Four occasions to return, `-1` means return
     // 1. Get layer index and layer name, if not registered, don't reg it.
     const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[param_id].first];
     if (APP<Dtype>::layer_index.count(layer_name) == 0) { return -1; }
     const int L = APP<Dtype>::layer_index[layer_name];
     
     // 2.
+    Dtype pruned_ratio = APP<Dtype>::pruned_ratio_col[L];
+    if      (APP<Dtype>::prune_unit == "Weight") { pruned_ratio = APP<Dtype>::pruned_ratio[L];     }
+    else if (APP<Dtype>::prune_unit == "Row"   ) { pruned_ratio = APP<Dtype>::pruned_ratio_row[L]; }
+    if (APP<Dtype>::step_ > 1 && APP<Dtype>::step_-1 - APP<Dtype>::iter_prune_finished[L] > APP<Dtype>::retain_interval) { APP<Dtype>::IF_acc_retained = true; }
+    if (APP<Dtype>::IF_acc_retained
+            && pruned_ratio < APP<Dtype>::prune_ratio[L]
+            && !APP<Dtype>::IF_speedup_achieved
+            && !APP<Dtype>::IF_compRatio_achieved) { // Only when accuracy has retained and the final target not achieved, start another pruning iteration.
+      APP<Dtype>::iter_prune_finished[L] = INT_MAX;
+      APP<Dtype>::prune_ratio_[L] = pruned_ratio + APP<Dtype>::prune_ratio_step;
+    } else {
+      return -1;
+    }
+
+    
+    // 3.
     const bool IF_want_prune  = APP<Dtype>::prune_method != "None" && APP<Dtype>::prune_ratio[L] > 0;
     const bool IF_been_pruned = APP<Dtype>::pruned_ratio[L] > 0;
     const bool IF_enough_iter = APP<Dtype>::step_ >= APP<Dtype>::prune_begin_iter+1;
     const bool IF_prune = IF_want_prune && (IF_been_pruned || IF_enough_iter);
     if (!(IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX)) { return -1; }
     
-    // 3. Do not reg biases
+    // 4. Do not reg biases
     const vector<int>& shape = this->net_->learnable_params()[param_id]->shape();
     if (shape.size() == 1) { return -1; }
     
