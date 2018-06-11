@@ -255,7 +255,6 @@ void Solver<Dtype>::Step(int iters) {
         break;
       }
     }
-    // 分发参数
     // std::cout << "call_backs_.size(): " << callbacks_.size() << std::endl;
     for (int i = 0; i < callbacks_.size(); ++i) {
       callbacks_[i]->on_start();
@@ -266,28 +265,8 @@ void Solver<Dtype>::Step(int iters) {
     Dtype loss = 0;
 
     /// ----------------------------------------------------------------------
-    // Before another forward, judge whether prune could be stopped
-    APP<Dtype>::IF_alpf_ = true;
-    for (int i = 0; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
-        if (APP<Dtype>::iter_prune_finished[i] == INT_MAX) {
-            APP<Dtype>::IF_alpf_ = false;
-            break;
-        }
-    }
-    
-    APP<Dtype>::IF_alpf = true; // IF_all_layer_prune_finished
-
-    if (APP<Dtype>::IF_alpf && APP<Dtype>::IF_eswpf) {
-        cout << "all layer prune finished: iter = " << iter_ << " -- early stopped." << endl;
-        requested_early_exit_ = true;
-        break;
-    }
-    if (APP<Dtype>::IF_alpf) {
-        APP<Dtype>::IF_acc_retained = false;
-        Snapshot();
-        APP<Dtype>::IF_alpf = false;
-    }
-    // GFLOPs, since it measures the speedup of the whole net, so put it here rather than in layer.
+    // Before another forward, verify whether prune could be stopped
+    // GFLOPs and num_params
     Dtype GFLOPs_left   = 0;
     Dtype GFLOPs_origin = 0;
     const int num_layer_count = APP<Dtype>::IF_speedup_count_fc ? APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt : APP<Dtype>::conv_layer_cnt;
@@ -318,6 +297,51 @@ void Solver<Dtype>::Step(int iters) {
          << "  Total GFLOPs_origin: " << GFLOPs_origin
          << " | conv counted: " << APP<Dtype>::IF_compr_count_conv
          << "  Total num_param_origin: " << num_param_origin << endl;
+         
+    // Check if all layer prune finished permanently
+    bool all_layer_prune_finished = true;
+    for (int i = 0; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
+        Dtype pruned_ratio = APP<Dtype>::pruned_ratio_col[i];
+        if      (APP<Dtype>::prune_unit == "Weight") { pruned_ratio = APP<Dtype>::pruned_ratio[i];     }
+        else if (APP<Dtype>::prune_unit == "Row"   ) { pruned_ratio = APP<Dtype>::pruned_ratio_row[i]; }
+        if (pruned_ratio < APP<Dtype>::prune_ratio[i]) {
+          all_layer_prune_finished = false;
+          break;
+        }
+    }
+    const bool IF_final_target_achieved = all_layer_prune_finished || APP<Dtype>::IF_speedup_achieved || APP<Dtype>::IF_compRatio_achieved;
+    if (IF_final_target_achieved && APP<Dtype>::IF_eswpf) {
+        cout << "all layer prune finished: iter = " << iter_ << " -- early stopped." << endl;
+        requested_early_exit_ = true;
+        break;
+    }
+    
+    // Check if all layer prune finished for current pruning stage
+    if (APP<Dtype>::IF_current_target_achieved) {
+      APP<Dtype>::stage_iter_prune_finished = *max_element(APP<Dtype>::iter_prune_finished.begin(), APP<Dtype>::iter_prune_finished.end());
+      cout << "current pruning stage finished! step: " << APP<Dtype>::stage_iter_prune_finished + 1 << endl;
+      
+      APP<Dtype>::IF_current_target_achieved = false; // Got in here ONLY once.
+      Snapshot();
+      APP<Dtype>::IF_acc_recovered = false; // signal for the beginning of retrain
+      
+      // Prepare for another pruning stage: only when the final target not achieved, will another pruning stage be prepared.
+      for (int L = 0; L < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++L) {
+        Dtype pruned_ratio = APP<Dtype>::pruned_ratio_col[L];
+        if      (APP<Dtype>::prune_unit == "Weight") { pruned_ratio = APP<Dtype>::pruned_ratio[L];     }
+        else if (APP<Dtype>::prune_unit == "Row"   ) { pruned_ratio = APP<Dtype>::pruned_ratio_row[L]; }
+        if (pruned_ratio < APP<Dtype>::prune_ratio[L] && !APP<Dtype>::IF_speedup_achieved && !APP<Dtype>::IF_compRatio_achieved) {
+            APP<Dtype>::current_prune_ratio[L] = pruned_ratio + APP<Dtype>::prune_ratio_step;
+            APP<Dtype>::iter_prune_finished[L] = INT_MAX;
+        }
+      }
+    }
+    
+    // Check if retrain can stop
+    if (APP<Dtype>::step_ - 1 - APP<Dtype>::stage_iter_prune_finished == APP<Dtype>::recover_interval) { 
+      APP<Dtype>::IF_acc_recovered = true;
+      cout << "start a new pruning stage! step: " << APP<Dtype>::step_ << endl;
+    }
     /// ----------------------------------------------------------------------
     
     // Speed check
@@ -327,7 +351,7 @@ void Solver<Dtype>::Step(int iters) {
     APP<Dtype>::inner_iter = 0;
     for (int i = 0; i < param_.iter_size(); ++i) {
       loss += net_->ForwardBackward();
-      ++ APP<Dtype>::inner_iter; /// WANGHUAN
+      ++ APP<Dtype>::inner_iter;
     }
     cout << "--- after ForwardBackward: " << (double)(clock() - t1) / CLOCKS_PER_SEC << endl;
     
@@ -336,7 +360,7 @@ void Solver<Dtype>::Step(int iters) {
     UpdateSmoothedLoss(loss, start_iter, average_loss);
 
     if (display) {
-      // -------------------------------
+      // -----------------------------------------------------------------------------------
       // calculate training speed
       const time_t current_time = time(NULL);
       if (APP<Dtype>::last_time == 0) {
@@ -347,7 +371,7 @@ void Solver<Dtype>::Step(int iters) {
       sprintf(train_speed, "%.3f(%.3f)s/iter", (current_time - APP<Dtype>::last_time ) * 1.0 / param_.display(),
                                                (current_time - APP<Dtype>::first_time) * 1.0 / (iter_ - APP<Dtype>::first_iter));
       APP<Dtype>::last_time = current_time;
-      // -------------------------------
+      // -----------------------------------------------------------------------------------
       
       LOG_IF(INFO, Caffe::root_solver()) << "Iteration " << iter_
           << ", smoothed loss = " << smoothed_loss_ << ", speed = " << train_speed; 
@@ -377,7 +401,7 @@ void Solver<Dtype>::Step(int iters) {
       callbacks_[i]->on_gradients_ready();
     }
     
-    ApplyUpdate(); // Then goes into sgd_solver
+    ApplyUpdate();
     cout << "--- after ApplyUpdate: " << (double)(clock() - t1) / CLOCKS_PER_SEC << endl;
 
     // Increment the internal iter_ counter -- its value should always indicate

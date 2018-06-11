@@ -83,7 +83,7 @@ class Layer {
   // Tool functions
   void RestoreMasks();
   void RestorePruneProb();
-  void IF_prune_finished();
+  void IF_layer_prune_finished();
   bool IF_hppf();
   void UpdateNumPrunedRow();
   void UpdateNumPrunedCol();

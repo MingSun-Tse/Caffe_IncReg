@@ -45,12 +45,12 @@ void Layer<Dtype>::kmeans_cluster(vector<int> &cLabel, vector<Dtype> &cCentro, D
   for (int k = 0; k < nCluster; k++)
     cCentro[k] = minWeight + (maxWeight - minWeight) * k / (nCluster - 1);
 
-  Dtype *ptrC = new Dtype[nCluster]; // 用来存各个中心的权重的和，和下面的相除得到各个中心新的值
-  int *ptrS = new int[nCluster]; // 用来存各个中心的权重的个数
+  Dtype *ptrC = new Dtype[nCluster];
+  int *ptrS = new int[nCluster];
   int iter = 0;
   double mCurDistance = 0.0;
   double mPreDistance = std::numeric_limits<double>::max();
-  Dtype distance, mindistance; // 临时变量，用于存每个weight到中心的距离和最短距离
+  Dtype distance, mindistance;
 
   // clustering
   while (iter < max_iter)
@@ -59,7 +59,7 @@ void Layer<Dtype>::kmeans_cluster(vector<int> &cLabel, vector<Dtype> &cCentro, D
     if (fabs(mPreDistance - mCurDistance) / mPreDistance < 0.01)  break;
     mPreDistance = mCurDistance; mCurDistance = 0.0;
     for (int n = 0; n < nWeights; n++){
-      if (!mask[n])  continue; // 如果mask为0，则跳过这个值
+      if (!mask[n])  continue;
       mindistance = std::numeric_limits<Dtype>::max();
       for (int k = 0; k < nCluster; k++){
         distance = fabs(cWeights[n] - cCentro[k]);
@@ -71,7 +71,6 @@ void Layer<Dtype>::kmeans_cluster(vector<int> &cLabel, vector<Dtype> &cCentro, D
       mCurDistance = mCurDistance + mindistance;
     }
 
-    // 更新中心，初始化为0
     for (int k = 0; k < nCluster; k++){
       ptrC[k] = 0.f;
       ptrS[k] = 0;
@@ -93,7 +92,7 @@ void Layer<Dtype>::kmeans_cluster(vector<int> &cLabel, vector<Dtype> &cCentro, D
 }
 
 template<typename Dtype>
-void Layer<Dtype>::IF_prune_finished() {
+void Layer<Dtype>::IF_layer_prune_finished() {
     const string layer_name = this->layer_param_.name();
     if (APP<Dtype>::layer_index.count(layer_name) != 0) {
         const int L = APP<Dtype>::layer_index[layer_name];
@@ -101,13 +100,12 @@ void Layer<Dtype>::IF_prune_finished() {
             Dtype pruned_ratio = APP<Dtype>::pruned_ratio_col[L];;
             if (APP<Dtype>::prune_unit == "Weight")   { pruned_ratio = APP<Dtype>::pruned_ratio[L];     }
             else if (APP<Dtype>::prune_unit == "Row") { pruned_ratio = APP<Dtype>::pruned_ratio_row[L]; }
-            const bool layer_finish     = pruned_ratio >= APP<Dtype>::prune_ratio_[L]; /// layer pruning target achieved
+            const bool layer_finish     = pruned_ratio >= APP<Dtype>::current_prune_ratio[L]; /// layer pruning target achieved
             const bool net_finish_speed = APP<Dtype>::IF_speedup_achieved;   /// net pruning target of speed achieved
             const bool net_finish_param = APP<Dtype>::IF_compRatio_achieved; /// net pruning target of compression achieved
             
             if (layer_finish || net_finish_speed || net_finish_param) {
                 APP<Dtype>::iter_prune_finished[L] = APP<Dtype>::step_ - 1;
-                
                 // print when finished
                 char rlayer[10], rrow[10], rcol[10];
                 sprintf(rlayer, "%6.4f", APP<Dtype>::pruned_ratio[L]);
@@ -120,8 +118,15 @@ void Layer<Dtype>::IF_prune_finished() {
                      << "  pruned_ratio: " << rlayer
                      << "  pruned_ratio_row: " << rrow
                      << "  pruned_ratio_col: " << rcol
-                     << "  current prune_ratio: " << APP<Dtype>::prune_ratio_[L] << std::endl;
+                     << "  current prune_ratio: " << APP<Dtype>::current_prune_ratio[L] << std::endl;
                 
+                APP<Dtype>::IF_current_target_achieved = true;
+                for (int i = 0; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
+                  if (APP<Dtype>::iter_prune_finished[i] == INT_MAX) {
+                      APP<Dtype>::IF_current_target_achieved = false;
+                      break;
+                  }
+                }
             }
         }
     }
@@ -836,7 +841,7 @@ void Layer<Dtype>::RestoreMasks() {
         APP<Dtype>::iter_prune_finished[L] = -1; // TODO(mingsuntse): check multi-GPU
         cout << L << ": " << layer_name << " prune finished." << endl;
     } else {
-        APP<Dtype>::prune_ratio_[L] += pruned_ratio;
+        APP<Dtype>::current_prune_ratio[L] += pruned_ratio;
     }
     
     LOG(INFO) << "  Masks restored,"
@@ -852,7 +857,7 @@ void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
     APP<Dtype>::prune_ratio.push_back(prune_param.prune_ratio());
-    APP<Dtype>::prune_ratio_.push_back(APP<Dtype>::prune_ratio_step);
+    APP<Dtype>::current_prune_ratio.push_back(APP<Dtype>::prune_ratio_step);
     APP<Dtype>::pruned_ratio.push_back(0); // used in TEST
     this->IF_masks_updated = true;
     if (this->phase_ == TEST) { return; }
@@ -938,7 +943,7 @@ void Layer<Dtype>::PruneForward() {
                     this->UpdateNumPrunedCol();
                 }
                 this->UpdatePrunedRatio();
-                this->IF_prune_finished();
+                this->IF_layer_prune_finished();
             }
         }
         
@@ -964,10 +969,7 @@ void Layer<Dtype>::PruneForward() {
                 //exit(1);
             }
             this->UpdatePrunedRatio();
-            this->IF_prune_finished();
-            if (L == APP<Dtype>::conv_layer_cnt - 1) { // To avoid the first fc from updating col
-                APP<Dtype>::pruned_rows.clear();
-            }
+            this->IF_layer_prune_finished();
         }
         #ifdef ShowTimingLog
         cout << "  after updating masks: " << (double)(clock() - t1) / CLOCKS_PER_SEC << endl;
@@ -998,13 +1000,17 @@ void Layer<Dtype>::PruneForward() {
                 cout << endl;
             }
         }
-        // Summary print 
+        // Summary print
         if (mthd != "None" && L < APP<Dtype>::show_num_layer) {
             cout << layer_name << "  IF_prune: " << IF_prune 
                  << "  pruned_ratio: " << APP<Dtype>::pruned_ratio[L];
             cout << "  pruned_ratio_row: " << APP<Dtype>::num_pruned_row[L] * 1.0 / num_row << "(" << APP<Dtype>::num_pruned_row[L] << ")"
                  << "  pruned_ratio_col: " << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << "(" << APP<Dtype>::num_pruned_col[L] << ")";
-            cout << "  prune_ratio: "  << APP<Dtype>::prune_ratio[L] << endl;
+            cout << "  current prune_ratio: "  << APP<Dtype>::current_prune_ratio[L];
+            cout << "  prune_ratio: "  << APP<Dtype>::prune_ratio[L];
+            cout << "  iter_prune_finished: " << APP<Dtype>::iter_prune_finished[L];
+            cout << "  IF_acc_recovered: " << APP<Dtype>::IF_acc_recovered;
+            cout << endl;
         }
         
         // Apply masks

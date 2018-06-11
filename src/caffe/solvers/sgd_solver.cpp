@@ -1014,34 +1014,19 @@ const int SGDSolver<Dtype>::GetLayerIndex(const int& param_id) {
     const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[param_id].first];
     if (APP<Dtype>::layer_index.count(layer_name) == 0) { return -1; }
     const int L = APP<Dtype>::layer_index[layer_name];
-    
-    // 2.
-    Dtype pruned_ratio = APP<Dtype>::pruned_ratio_col[L];
-    if      (APP<Dtype>::prune_unit == "Weight") { pruned_ratio = APP<Dtype>::pruned_ratio[L];     }
-    else if (APP<Dtype>::prune_unit == "Row"   ) { pruned_ratio = APP<Dtype>::pruned_ratio_row[L]; }
-    if (APP<Dtype>::step_ > 1 && APP<Dtype>::step_-1 - APP<Dtype>::iter_prune_finished[L] > APP<Dtype>::retain_interval) { APP<Dtype>::IF_acc_retained = true; }
-    if (APP<Dtype>::IF_acc_retained
-            && pruned_ratio < APP<Dtype>::prune_ratio[L]
-            && !APP<Dtype>::IF_speedup_achieved
-            && !APP<Dtype>::IF_compRatio_achieved) { // Only when accuracy has retained and the final target not achieved, start another pruning iteration.
-      APP<Dtype>::iter_prune_finished[L] = INT_MAX;
-      APP<Dtype>::prune_ratio_[L] = pruned_ratio + APP<Dtype>::prune_ratio_step;
-    } else {
-      return -1;
-    }
 
-    
-    // 3.
-    const bool IF_want_prune  = APP<Dtype>::prune_method != "None" && APP<Dtype>::prune_ratio[L] > 0;
-    const bool IF_been_pruned = APP<Dtype>::pruned_ratio[L] > 0;
-    const bool IF_enough_iter = APP<Dtype>::step_ >= APP<Dtype>::prune_begin_iter+1;
-    const bool IF_prune = IF_want_prune && (IF_been_pruned || IF_enough_iter);
-    if (!(IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX)) { return -1; }
-    
-    // 4. Do not reg biases
+    // 2. Do not reg biases
     const vector<int>& shape = this->net_->learnable_params()[param_id]->shape();
     if (shape.size() == 1) { return -1; }
     
+    // 3.
+    const bool IF_want_prune     = APP<Dtype>::prune_method != "None" && APP<Dtype>::prune_ratio[L] > 0;
+    const bool IF_been_pruned    = APP<Dtype>::pruned_ratio[L] > 0;
+    const bool IF_enough_iter    = APP<Dtype>::step_ >= APP<Dtype>::prune_begin_iter + 1;
+    const bool IF_not_recovering = APP<Dtype>::IF_acc_recovered;
+    const bool IF_prune = IF_want_prune && (IF_been_pruned || IF_enough_iter) && IF_not_recovering;
+    if (!(IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX)) { return -1; }
+
     return L;
 }
 
