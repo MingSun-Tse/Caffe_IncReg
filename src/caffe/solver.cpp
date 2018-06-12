@@ -74,6 +74,7 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   APP<Dtype>::clear_history_interval = 1;
   APP<Dtype>::prune_begin_iter = param_.prune_begin_iter();
   APP<Dtype>::iter_size = param_.iter_size();
+  APP<Dtype>::learning_rate = APP<Dtype>::IF_acc_far_from_borderline ? param_.base_lr() * 5 : param_.base_lr();
   APP<Dtype>::AA = param_.aa();
   APP<Dtype>::target_reg = param_.target_reg();
   APP<Dtype>::kk  = 0.25; //param_.kk(); 
@@ -331,13 +332,34 @@ void Solver<Dtype>::Step(int iters) {
         if      (APP<Dtype>::prune_unit == "Weight") { pruned_ratio = APP<Dtype>::pruned_ratio[L];     }
         else if (APP<Dtype>::prune_unit == "Row"   ) { pruned_ratio = APP<Dtype>::pruned_ratio_row[L]; }
         if (pruned_ratio < APP<Dtype>::prune_ratio[L] && !APP<Dtype>::IF_speedup_achieved && !APP<Dtype>::IF_compRatio_achieved) {
-            APP<Dtype>::current_prune_ratio[L] = pruned_ratio + APP<Dtype>::prune_ratio_step;
+            APP<Dtype>::current_prune_ratio[L] = pruned_ratio + APP<Dtype>::prune_ratio_step[L];
             APP<Dtype>::iter_prune_finished[L] = INT_MAX;
         }
       }
     }
     
-    // Check if retrain can stop
+    // Check if accuracy is not heavily hurt still
+    if (APP<Dtype>::IF_acc_far_from_borderline) {
+      if (param_.iter_size() % 4 != 0) { 
+        cout << "Wrong: 'iter_size' must be the multiple of 4, please check." << endl;
+        exit(1);
+      }
+      APP<Dtype>::iter_size = param_.iter_size() / 4; // indirectly decrease the batch size for faster pruning
+      for (int L = 0; L < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++L) {
+        APP<Dtype>::prune_ratio_step[L] = APP<Dtype>::base_prune_ratio_step * 2; // increase prune_step for faster pruning
+      }
+      if (!APP<Dtype>::IF_acc_recovered) {
+        APP<Dtype>::IF_acc_recovered = true; // IF_acc_far_from_borderline, directly start another pruning stage without retrain
+        cout << "accuracy still good, directly start a new pruning stage without retrain! step: " << APP<Dtype>::step_ << endl;
+      }
+    } else {
+      APP<Dtype>::iter_size = param_.iter_size();
+      for (int L = 0; L < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++L) {
+        APP<Dtype>::prune_ratio_step[L] = APP<Dtype>::base_prune_ratio_step;
+      }
+    }
+
+    // Check if retrain can be stopped
     if (APP<Dtype>::step_ - 1 - APP<Dtype>::stage_iter_prune_finished == APP<Dtype>::recover_interval) { 
       APP<Dtype>::IF_acc_recovered = true;
       cout << "start a new pruning stage! step: " << APP<Dtype>::step_ << endl;
@@ -349,15 +371,25 @@ void Solver<Dtype>::Step(int iters) {
     clock_t t1 = clock();
     
     APP<Dtype>::inner_iter = 0;
-    for (int i = 0; i < param_.iter_size(); ++i) {
+    for (int i = 0; i < APP<Dtype>::iter_size; ++i) {  // param_.iter_size();
       loss += net_->ForwardBackward();
       ++ APP<Dtype>::inner_iter;
     }
     cout << "--- after ForwardBackward: " << (double)(clock() - t1) / CLOCKS_PER_SEC << endl;
     
-    loss /= param_.iter_size();
+    loss /= APP<Dtype>::iter_size; // param_.iter_size();
     // average the loss across iterations for smoothed reporting
     UpdateSmoothedLoss(loss, start_iter, average_loss);
+    
+    // Check IF_acc_far_from_borderline
+    const Dtype baseline_acc = 0.8108;
+    const Dtype acc_borderline = baseline_acc - 0.012; // Requirement: top-1 acc loss <= 0.01
+    const Dtype loss_borderline = (acc_borderline - 0.81590473) / -0.0359494; // Get this by linear regression, to be improved
+    if (smoothed_loss_ > loss_borderline) { 
+      APP<Dtype>::IF_acc_far_from_borderline = false;
+    } else {
+      APP<Dtype>::IF_acc_far_from_borderline = true;
+    }
 
     if (display) {
       // -----------------------------------------------------------------------------------
@@ -374,7 +406,7 @@ void Solver<Dtype>::Step(int iters) {
       // -----------------------------------------------------------------------------------
       
       LOG_IF(INFO, Caffe::root_solver()) << "Iteration " << iter_
-          << ", smoothed loss = " << smoothed_loss_ << ", speed = " << train_speed; 
+          << ", smoothed loss = " << smoothed_loss_ << ", speed = " << train_speed << ", loss_borderline = " << loss_borderline; 
       const vector<Blob<Dtype>*>& result = net_->output_blobs();
       int score_index = 0;
       for (int j = 0; j < result.size(); ++j) {

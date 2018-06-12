@@ -28,9 +28,11 @@ public:
     static int clear_history_interval;
     static int prune_begin_iter;
     static int iter_size;
+    static Dtype learning_rate;
     static Dtype score_decay;
     static Dtype AA;
-    static Dtype prune_ratio_step;
+    static Dtype base_prune_ratio_step;
+    static vector<Dtype> prune_ratio_step;
     static Dtype kk;
     static Dtype kk2;
     static Dtype speedup;
@@ -40,6 +42,8 @@ public:
     static bool IF_compr_count_conv;
     static bool IF_eswpf;
     static bool IF_acc_recovered;
+    static bool IF_acc_far_from_borderline;
+    static vector<bool> IF_layer_far_from_borderline;
     static Dtype prune_threshold;
     static Dtype target_reg;
     static int reg_cushion_iter; // In the beginning of reg, improve the reg little-by-little to mitigate the side-effect. `reg_cushion_iter` is the iter of this mitigation perioid
@@ -104,9 +108,11 @@ public:
     template<typename Dtype>  int     APP<Dtype>::clear_history_interval;
     template<typename Dtype>  int     APP<Dtype>::prune_begin_iter;
     template<typename Dtype>  int     APP<Dtype>::iter_size;
+    template<typename Dtype>  Dtype   APP<Dtype>::learning_rate;
     template<typename Dtype>  Dtype   APP<Dtype>::score_decay = 0;
     template<typename Dtype>  Dtype   APP<Dtype>::AA;
-    template<typename Dtype>  Dtype   APP<Dtype>::prune_ratio_step = 0.02;
+    template<typename Dtype>  Dtype   APP<Dtype>::base_prune_ratio_step = 0.02;
+    template<typename Dtype>  vector<Dtype> APP<Dtype>::prune_ratio_step;
     template<typename Dtype>  Dtype   APP<Dtype>::kk;
     template<typename Dtype>  Dtype   APP<Dtype>::kk2;
     template<typename Dtype>  Dtype   APP<Dtype>::speedup;
@@ -116,6 +122,8 @@ public:
     template<typename Dtype>  bool    APP<Dtype>::IF_compr_count_conv;
     template<typename Dtype>  bool    APP<Dtype>::IF_eswpf;
     template<typename Dtype>  bool    APP<Dtype>::IF_acc_recovered = true;
+    template<typename Dtype>  bool    APP<Dtype>::IF_acc_far_from_borderline = true;
+    template<typename Dtype>  vector<bool> APP<Dtype>::IF_layer_far_from_borderline;
     template<typename Dtype>  Dtype   APP<Dtype>::prune_threshold;
     template<typename Dtype>  Dtype   APP<Dtype>::target_reg;
     template<typename Dtype>  int     APP<Dtype>::reg_cushion_iter;

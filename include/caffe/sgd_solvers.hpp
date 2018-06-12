@@ -24,6 +24,7 @@ class SGDSolver : public Solver<Dtype> {
   const vector<shared_ptr<Blob<Dtype> > >& history() { return history_; }
   void ClearHistory(const int& param_id);
   const int GetLayerIndex(const int& param_id);
+  const Dtype AdjustLearningRateForPrune(const Dtype& rate);
 
  protected:
   void PreSolve();

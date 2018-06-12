@@ -857,7 +857,8 @@ void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
     APP<Dtype>::prune_ratio.push_back(prune_param.prune_ratio());
-    APP<Dtype>::current_prune_ratio.push_back(APP<Dtype>::prune_ratio_step);
+    APP<Dtype>::prune_ratio_step.push_back(APP<Dtype>::base_prune_ratio_step); // TODO(mingsuntse-newprune)
+    APP<Dtype>::current_prune_ratio.push_back(0.2); // APP<Dtype>::prune_ratio_step.back()); // Start from 20%
     APP<Dtype>::pruned_ratio.push_back(0); // used in TEST
     this->IF_masks_updated = true;
     if (this->phase_ == TEST) { return; }
@@ -882,6 +883,7 @@ void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     // Note: These varibales will be called for every GPU, whereas since we use `layer_index` to index, so it doesn't matter.
     // Set up prune parameters of layer
     APP<Dtype>::IF_update_row_col_layer.push_back(prune_param.if_update_row_col());
+    APP<Dtype>::IF_layer_far_from_borderline.push_back(true);
     APP<Dtype>::rows_to_prune.push_back(vector<int>());
     APP<Dtype>::pruned_rows.push_back(vector<int>());
     APP<Dtype>::pruned_ratio_col.push_back(0);
@@ -1007,9 +1009,13 @@ void Layer<Dtype>::PruneForward() {
             cout << "  pruned_ratio_row: " << APP<Dtype>::num_pruned_row[L] * 1.0 / num_row << "(" << APP<Dtype>::num_pruned_row[L] << ")"
                  << "  pruned_ratio_col: " << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << "(" << APP<Dtype>::num_pruned_col[L] << ")";
             cout << "  current prune_ratio: "  << APP<Dtype>::current_prune_ratio[L];
-            cout << "  prune_ratio: "  << APP<Dtype>::prune_ratio[L];
+            cout << "  prune_ratio: "  << APP<Dtype>::prune_ratio[L] << endl;
             cout << "  iter_prune_finished: " << APP<Dtype>::iter_prune_finished[L];
+            cout << "  IF_acc_far_from_borderline: " << APP<Dtype>::IF_acc_far_from_borderline;
             cout << "  IF_acc_recovered: " << APP<Dtype>::IF_acc_recovered;
+            cout << "  lr: " << APP<Dtype>::learning_rate;
+            cout << "  iter_size: " << APP<Dtype>::iter_size;
+            cout << "  prune_ratio_step: " << APP<Dtype>::prune_ratio_step[L];
             cout << endl;
         }
         
