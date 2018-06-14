@@ -41,8 +41,8 @@ void Blob<Dtype>::Reshape(const vector<int>& shape) {
     capacity_ = count_;
     data_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
     diff_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
-    secdata_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
-    secdiff_.reset(new SyncedMemory(capacity_ * sizeof(Dtype))); /// @mingsuntse
+    // secdata_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
+    // secdiff_.reset(new SyncedMemory(capacity_ * sizeof(Dtype))); /// @mingsuntse
   }
 }
 
@@ -136,6 +136,7 @@ Dtype* Blob<Dtype>::mutable_gpu_diff() {
   return static_cast<Dtype*>(diff_->mutable_gpu_data());
 }
 
+
 /// ------------------------------------------------------
 /// Added by @mingsuntse to obtain second derivatives, more details in paper 'OBD 1990 LeCun'.
 // data
@@ -188,6 +189,7 @@ Dtype* Blob<Dtype>::mutable_gpu_secdiff() {
   return static_cast<Dtype*>(secdiff_->mutable_gpu_data());
 }
 /// ------------------------------------------------------
+
 
 template <typename Dtype>
 void Blob<Dtype>::ShareData(const Blob& other) {

@@ -1043,7 +1043,7 @@ void Layer<Dtype>::PruneBackward(const vector<Blob<Dtype>*>& top) {
     const int L = APP<Dtype>::layer_index[this->layer_param_.name()];
 
     // TaylorPrune
-    if (APP<Dtype>::prune_method == "TP_Row" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
+    if (APP<Dtype>::prune_method == "TP_Row" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0 && APP<Dtype>::inner_iter == 0) {
         const bool IF_want_prune  = APP<Dtype>::prune_method != "None" && APP<Dtype>::prune_ratio[L] > 0;
         const bool IF_been_pruned = APP<Dtype>::pruned_ratio[L] > 0;
         const bool IF_enough_iter = APP<Dtype>::step_ >= APP<Dtype>::prune_begin_iter+1;
