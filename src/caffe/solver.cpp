@@ -69,7 +69,7 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
       strcpy(coremthd, APP<Dtype>::prune_coremthd.c_str());
       APP<Dtype>::prune_coremthd_ = strtok(coremthd, "-");
   }
-  APP<Dtype>::num_once_prune = param_.num_once_prune();
+  APP<Dtype>::ratio_once_prune = param_.ratio_once_prune();
   APP<Dtype>::prune_interval = param_.prune_interval();
   APP<Dtype>::clear_history_interval = 1;
   APP<Dtype>::prune_begin_iter = param_.prune_begin_iter();

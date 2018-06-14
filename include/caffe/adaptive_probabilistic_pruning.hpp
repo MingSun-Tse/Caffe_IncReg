@@ -21,7 +21,7 @@ public:
     static string prune_unit;
     static string prune_coremthd;
     static string prune_coremthd_;  // if prune_method == "Reg-L1_Col", then prune_unit = "Col", prune_coremthd = "Reg-L1", prune_coremthd_ = "Reg"
-    static int num_once_prune;
+    static Dtype ratio_once_prune;
     static int prune_interval;
     static int clear_history_interval;
     static int prune_begin_iter;
@@ -92,7 +92,7 @@ public:
     template<typename Dtype>  string  APP<Dtype>::prune_unit     = "None";
     template<typename Dtype>  string  APP<Dtype>::prune_coremthd = "None";
     template<typename Dtype>  string  APP<Dtype>::prune_coremthd_ = "None";
-    template<typename Dtype>  int     APP<Dtype>::num_once_prune;
+    template<typename Dtype>  Dtype   APP<Dtype>::ratio_once_prune;
     template<typename Dtype>  int     APP<Dtype>::prune_interval;
     template<typename Dtype>  int     APP<Dtype>::clear_history_interval;
     template<typename Dtype>  int     APP<Dtype>::prune_begin_iter;

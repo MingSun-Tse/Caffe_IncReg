@@ -383,7 +383,8 @@ void Layer<Dtype>::TaylorPrune(const vector<Blob<Dtype>*>& top) {
             }
         }
         sort(fm_score.begin(), fm_score.end());
-        for (int i = 0; i < APP<Dtype>::num_once_prune; ++i) {
+        const int num_once_prune = ceil(num_row * APP<Dtype>::ratio_once_prune);
+        for (int i = 0; i < num_once_prune; ++i) {
             const int c = fm_score[i].second;
             for (int j = 0; j < num_col; ++j) {
                 mumasks[c * num_col + j] = 0;
@@ -418,7 +419,8 @@ void Layer<Dtype>::FilterPrune() {
         }
     }
     sort(row_score.begin(), row_score.end()); /// in ascending order
-    for (int i = 0; i < APP<Dtype>::num_once_prune; ++i) {
+    const int num_once_prune = ceil(num_row * APP<Dtype>::ratio_once_prune);
+    for (int i = 0; i < num_once_prune; ++i) {
         const int r = row_score[i].second;
         for (int j = 0; j < num_col; ++j) {
             mumasks[r * num_col + j] = 0;
