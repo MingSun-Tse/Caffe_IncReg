@@ -272,8 +272,20 @@ void Layer<Dtype>::Print(char mode) {
     cout.width(blob.size()); cout << blob << "   ";
     cout.width(4);  cout << "Mask" << "   ";
     // print additional info
-    const string info = APP<Dtype>::prune_coremthd.substr(0, 2) == "PP" ? "HistoryProb" : "HistoryReg";
-    const Dtype* info_data = this->history_punish_[0]->cpu_data();
+    string info = "";
+    if (APP<Dtype>::prune_coremthd.substr(0, 2) == "PP") {
+      info = "HistoryProb";
+    } else if (APP<Dtype>::prune_coremthd.substr(0, 2) == "Reg") {
+      info = "HistoryReg";
+    } else {
+      info = "WeightBeforeMasked";
+    }
+    Dtype* info_data = NULL;
+    if (APP<Dtype>::prune_method.substr(0, 2) == "PP" || APP<Dtype>::prune_method.substr(0, 3) == "Reg") {
+      info_data = this->history_punish_[0]->mutable_cpu_data();
+    } else {
+      info_data = this->blobs_[0]->mutable_cpu_data();
+    }
     cout.width(info.size()); cout << info << " - " << this->layer_param_.name() << endl;
 
     if (APP<Dtype>::prune_unit == "Row") {
@@ -340,9 +352,10 @@ void Layer<Dtype>::TaylorPrune(const vector<Blob<Dtype>*>& top) {
         const Dtype* top_data = top[i]->cpu_data();
         const Dtype* top_diff = top[i]->cpu_diff();
         Dtype* mumasks = this->masks_[0]->mutable_cpu_data();
+        const int num_  = top[i]->shape()[0];
         const int num_c = top[i]->shape()[1]; /// channel
-        const int num_h = top[i]->shape()[2]; /// height
-        const int num_w = top[i]->shape()[3]; /// width
+        const int num_h = strcmp(this->type(), "InnerProduct") == 0 ? 1 : top[i]->shape()[2]; /// height
+        const int num_w = strcmp(this->type(), "InnerProduct") == 0 ? 1 : top[i]->shape()[3]; /// width
         const int count = this->blobs_[0]->count();
         const int num_row = this->blobs_[0]->shape()[0];
         const int num_col = count / num_row;
@@ -354,11 +367,13 @@ void Layer<Dtype>::TaylorPrune(const vector<Blob<Dtype>*>& top) {
             fm_score[c].second = c;
             fm_score[c].first  = 0;
         }
-        for (int n = 0; n < APP<Dtype>::num_; ++n) {
+        for (int n = 0; n < num_; ++n) {
             for (int c = 0; c < num_c; ++c) {
-                for (int i = 0; i < num_h * num_w; ++i) {
-                    fm_score[c].first += fabs(top_diff[n * num_c * num_w * num_h + c * num_w * num_h + i]
-                                            * top_data[n * num_c * num_w * num_h + c * num_w * num_h + i]);
+                for (int h = 0; h < num_h; ++h) {
+                    for (int w = 0; w < num_w; ++w) {
+                        fm_score[c].first += fabs(top_diff[((n * num_c + c) * num_h + h) * num_w + w]
+                                                * top_data[((n * num_c + c) * num_h + h) * num_w + w]);
+                    }
                 }
             }
         }
@@ -368,15 +383,14 @@ void Layer<Dtype>::TaylorPrune(const vector<Blob<Dtype>*>& top) {
             }
         }
         sort(fm_score.begin(), fm_score.end());
-        int num_once_prune = 1;
-        if (APP<Dtype>::num_once_prune > 1) { num_once_prune = APP<Dtype>::num_once_prune; }
-        for (int i = 0; i < num_once_prune; ++i) {
+        for (int i = 0; i < APP<Dtype>::num_once_prune; ++i) {
             const int c = fm_score[i].second;
             for (int j = 0; j < num_col; ++j) {
                 mumasks[c * num_col + j] = 0;
             }
             APP<Dtype>::IF_row_pruned[L][c] = true;
             ++ APP<Dtype>::num_pruned_row[L];
+            APP<Dtype>::pruned_rows[L].push_back(c);
         }
     }
 }
@@ -783,7 +797,6 @@ void Layer<Dtype>::RestoreMasks() {
     const int count   = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
-    Dtype* muhistory_punish = this->history_punish_[0]->mutable_cpu_data();
     const Dtype *weight = this->blobs_[0]->cpu_data();
     const string layer_name = this->layer_param_.name();
     const int L = APP<Dtype>::layer_index[layer_name];
@@ -813,9 +826,6 @@ void Layer<Dtype>::RestoreMasks() {
                     for (int i = g * num_row_per_g; i < (g+1) * num_row_per_g; ++i) { 
                         this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
                     }
-                    if (mthd == "PP_Col") {
-                        muhistory_punish[j] = 0; /// TODO: count group;
-                    }
                 }
             }
         }
@@ -830,9 +840,6 @@ void Layer<Dtype>::RestoreMasks() {
                 APP<Dtype>::IF_row_pruned[L][i] = true;
                 for (int j = 0; j < num_col; ++j) { 
                     this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
-                }
-                if (mthd == "PP_Row") {
-                    muhistory_punish[i * num_col] = 0; /// TODO: count group;
                 }
             }
         }
@@ -941,7 +948,6 @@ void Layer<Dtype>::PruneForward() {
                 } else if (APP<Dtype>::prune_unit == "Row"
                       && L != 0
                       && L != APP<Dtype>::conv_layer_cnt // The first conv layer and first fc layer need not update column.
-                      && mthd != "TP_Row" // Don't update column for TP, because their method doesn't mention this.
                       && APP<Dtype>::pruned_rows[L-1].size()) {
                     this->UpdateNumPrunedCol();
                 }
@@ -973,9 +979,6 @@ void Layer<Dtype>::PruneForward() {
             }
             this->UpdatePrunedRatio();
             this->IF_prune_finished();
-            if (L == APP<Dtype>::conv_layer_cnt - 1) { // To avoid the first fc from updating col
-                APP<Dtype>::pruned_rows.clear();
-            }
         }
         #ifdef ShowTimingLog
         cout << "  after updating masks: " << (double)(clock() - t1) / CLOCKS_PER_SEC << endl;
