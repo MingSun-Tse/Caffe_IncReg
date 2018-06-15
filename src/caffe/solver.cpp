@@ -89,6 +89,9 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   APP<Dtype>::reg_cushion_iter = 2000;
   // APP<Dtype>::mask_generate_mechanism = param_.mask_generate_mechanism();
   // APP<Dtype>::score_decay = param_.score_decay();
+  
+  const Dtype index[] = {8,7,6,5,4,3,2};
+  APP<Dtype>::when_snapshot.insert(APP<Dtype>::when_snapshot.begin(), index, index + sizeof(index)/sizeof(index[0]));
   // ------------------------------------------
 
   CHECK_GE(param_.average_loss(), 1) << "average_loss should be non-negative.";
@@ -266,12 +269,6 @@ void Solver<Dtype>::Step(int iters) {
     Dtype loss = 0;
 
     /// ----------------------------------------------------------------------
-    // Before another forward, judge whether prune could be stopped
-    if (APP<Dtype>::IF_alpf && APP<Dtype>::IF_eswpf) {
-        cout << "all layer prune finished: iter = " << iter_ << " -- early stopped." << endl;
-        requested_early_exit_ = true;
-        break;
-    }
     // GFLOPs, since it measures the speedup of the whole net, so put it here rather than in layer.
     Dtype GFLOPs_left   = 0;
     Dtype GFLOPs_origin = 0;
@@ -303,6 +300,21 @@ void Solver<Dtype>::Step(int iters) {
          << "  Total GFLOPs_origin: " << GFLOPs_origin
          << " | conv counted: " << APP<Dtype>::IF_compr_count_conv
          << "  Total num_param_origin: " << num_param_origin << endl;
+    
+    if (num_param_origin / num_param_left > APP<Dtype>::when_snapshot.back()) {
+      cout << "step: " << APP<Dtype>::step_ 
+           << ", current compRatio = " << num_param_origin / num_param_left
+           << " > " << APP<Dtype>::when_snapshot.back() << ", snapshot!" << endl;
+      Snapshot();
+      APP<Dtype>::when_snapshot.pop_back();
+    }
+    
+    // Before another forward, judge whether prune could be stopped
+    if (APP<Dtype>::IF_alpf && APP<Dtype>::IF_eswpf) {
+        cout << "all layer prune finished: iter = " << iter_ << " -- early stopped." << endl;
+        requested_early_exit_ = true;
+        break;
+    }
     /// ----------------------------------------------------------------------
     
     // Speed check

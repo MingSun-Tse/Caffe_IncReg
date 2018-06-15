@@ -86,6 +86,7 @@ public:
     static string show_layer;
     static int show_num_layer;
     static int show_num_weight;
+    static vector<Dtype> when_snapshot;
 }; 
 
     template<typename Dtype>  string  APP<Dtype>::prune_method   = "None"; /// initialized for caffe test, which has no solver but this info is still needed in layer.
@@ -160,6 +161,7 @@ public:
     template<typename Dtype>  string APP<Dtype>::show_layer = "1001";
     template<typename Dtype>  int APP<Dtype>::show_num_layer = 100;
     template<typename Dtype>  int APP<Dtype>::show_num_weight = 20;
+    template<typename Dtype>  vector<Dtype> APP<Dtype>::when_snapshot;
 }
 
 #endif
