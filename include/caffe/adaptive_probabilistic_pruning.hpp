@@ -42,11 +42,17 @@ public:
     static bool IF_compr_count_conv;
     static bool IF_eswpf;
     static bool IF_acc_recovered;
+    static bool IF_has_retrained;
+    static int cnt_loss_cross_borderline;
     static bool IF_acc_far_from_borderline;
     static vector<bool> IF_layer_far_from_borderline;
     static Dtype prune_threshold;
     static Dtype target_reg;
     static int reg_cushion_iter; // In the beginning of reg, improve the reg little-by-little to mitigate the side-effect. `reg_cushion_iter` is the iter of this mitigation perioid
+    static vector<Dtype> last_feasible_prune_ratio;
+    static int           last_feasible_prune_iter;
+    static vector<Dtype> last_infeasible_prune_ratio;
+    static vector<Dtype> val_accuracy;
     
     static int inner_iter;
     static int step_;
@@ -122,11 +128,18 @@ public:
     template<typename Dtype>  bool    APP<Dtype>::IF_compr_count_conv;
     template<typename Dtype>  bool    APP<Dtype>::IF_eswpf;
     template<typename Dtype>  bool    APP<Dtype>::IF_acc_recovered = true;
+    template<typename Dtype>  bool    APP<Dtype>::IF_has_retrained = false;
+    template<typename Dtype>  int     APP<Dtype>::cnt_loss_cross_borderline = 0;
     template<typename Dtype>  bool    APP<Dtype>::IF_acc_far_from_borderline = true;
     template<typename Dtype>  vector<bool> APP<Dtype>::IF_layer_far_from_borderline;
     template<typename Dtype>  Dtype   APP<Dtype>::prune_threshold;
     template<typename Dtype>  Dtype   APP<Dtype>::target_reg;
     template<typename Dtype>  int     APP<Dtype>::reg_cushion_iter;
+    template<typename Dtype>  vector<Dtype> APP<Dtype>::last_feasible_prune_ratio;
+    template<typename Dtype>  int           APP<Dtype>::last_feasible_prune_iter = -1;
+    template<typename Dtype>  vector<Dtype> APP<Dtype>::last_infeasible_prune_ratio;
+    template<typename Dtype>  vector<Dtype> APP<Dtype>::val_accuracy;
+    
 
     // 1.2 Info shared between solver and layer, initailized here
     template<typename Dtype>  int   APP<Dtype>::inner_iter = 0;

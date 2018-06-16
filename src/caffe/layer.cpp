@@ -127,6 +127,7 @@ void Layer<Dtype>::IF_layer_prune_finished() {
                       break;
                   }
                 }
+                cout << APP<Dtype>::IF_current_target_achieved << endl;
             }
         }
     }
@@ -198,6 +199,7 @@ void Layer<Dtype>::UpdatePrunedRatio() {
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
     const int group = APP<Dtype>::group[L];
+    const Dtype* weight = this->blobs_[0]->cpu_data();
     
     if (APP<Dtype>::prune_unit == "Weight") {
         // Row
@@ -205,7 +207,7 @@ void Layer<Dtype>::UpdatePrunedRatio() {
             if (APP<Dtype>::IF_row_pruned[L][i]) { continue; }
             bool IF_whole_row_pruned = true;
             for (int j = 0; j < num_col; ++j) {
-                if (!APP<Dtype>::IF_weight_pruned[L][i * num_col + j]) {
+                if (!weight[i * num_col + j]) {
                     IF_whole_row_pruned = false;
                     break;
                 }
@@ -220,7 +222,7 @@ void Layer<Dtype>::UpdatePrunedRatio() {
             if (APP<Dtype>::IF_col_pruned[L][j][0]) { continue; }
             bool IF_whole_col_pruned = true;
             for (int i = 0; i < num_row; ++i) {
-                if (!APP<Dtype>::IF_weight_pruned[L][i * num_col + j]) {
+                if (!weight[i * num_col + j]) {
                     IF_whole_col_pruned = false;
                     break;
                 }
@@ -237,18 +239,10 @@ void Layer<Dtype>::UpdatePrunedRatio() {
     APP<Dtype>::pruned_ratio_row[L] = APP<Dtype>::num_pruned_row[L] * 1.0 / num_row;
     
     if (APP<Dtype>::prune_unit == "Weight") {
-        const Dtype new_pruned_ratio = APP<Dtype>::num_pruned_weight[L] * 1.0 / count;
-        if (new_pruned_ratio > APP<Dtype>::pruned_ratio[L]) {
-            this->IF_masks_updated = true;
-            APP<Dtype>::pruned_ratio[L] = new_pruned_ratio;
-        }
+        APP<Dtype>::pruned_ratio[L] = APP<Dtype>::num_pruned_weight[L] * 1.0 / count;
     } else {
-        const Dtype new_pruned_ratio = (APP<Dtype>::pruned_ratio_col[L] + APP<Dtype>::pruned_ratio_row[L]) 
-                                      - APP<Dtype>::pruned_ratio_col[L] * APP<Dtype>::pruned_ratio_row[L];
-        if (new_pruned_ratio > APP<Dtype>::pruned_ratio[L]) {
-            this->IF_masks_updated = true;
-            APP<Dtype>::pruned_ratio[L] = new_pruned_ratio;
-        }
+        APP<Dtype>::pruned_ratio[L] = (APP<Dtype>::pruned_ratio_col[L] + APP<Dtype>::pruned_ratio_row[L]) 
+                                     - APP<Dtype>::pruned_ratio_col[L] * APP<Dtype>::pruned_ratio_row[L];
     }
 }
 
@@ -777,7 +771,6 @@ void Layer<Dtype>::RestoreMasks() {
     const int count   = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
-    Dtype* muhistory_punish = this->history_punish_[0]->mutable_cpu_data();
     const Dtype *weight = this->blobs_[0]->cpu_data();
     const string layer_name = this->layer_param_.name();
     const int L = APP<Dtype>::layer_index[layer_name];
@@ -785,7 +778,19 @@ void Layer<Dtype>::RestoreMasks() {
     const int num_row_per_g = num_row / group;
     const string mthd = APP<Dtype>::prune_method;
     Dtype num_pruned_col = 0;
-    int num_pruned_row = 0;
+    int   num_pruned_row = 0;
+    
+    // Clear existing pruning state
+    caffe_gpu_set(this->masks_[0]->count(),
+                  Dtype(1),
+                  this->masks_[0]->mutable_gpu_data());
+    APP<Dtype>::num_pruned_weight[L] = 0;
+    APP<Dtype>::num_pruned_col[L]    = 0;
+    APP<Dtype>::num_pruned_row[L]    = 0;
+    vector<bool> vec_tmp(APP<Dtype>::group[L], false);
+    APP<Dtype>::IF_col_pruned[L] = vector<vector<bool> >(num_col, vec_tmp);
+    APP<Dtype>::IF_row_pruned[L] = vector<bool>(num_row, false);
+    
     if (APP<Dtype>::prune_unit == "Weight") {
         for (int i = 0; i < count; ++i) {
             if (!weight[i]) {
@@ -807,9 +812,6 @@ void Layer<Dtype>::RestoreMasks() {
                     for (int i = g * num_row_per_g; i < (g+1) * num_row_per_g; ++i) { 
                         this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
                     }
-                    if (mthd == "PP_Col") {
-                        muhistory_punish[j] = 0; /// TODO: count group;
-                    }
                 }
             }
         }
@@ -825,9 +827,6 @@ void Layer<Dtype>::RestoreMasks() {
                 for (int j = 0; j < num_col; ++j) { 
                     this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
                 }
-                if (mthd == "PP_Row") {
-                    muhistory_punish[i * num_col] = 0; /// TODO: count group;
-                }
             }
         }
         APP<Dtype>::num_pruned_col[L] = num_pruned_col;
@@ -840,8 +839,6 @@ void Layer<Dtype>::RestoreMasks() {
     if (pruned_ratio >= APP<Dtype>::prune_ratio[L]) {
         APP<Dtype>::iter_prune_finished[L] = -1; // TODO(mingsuntse): check multi-GPU
         cout << L << ": " << layer_name << " prune finished." << endl;
-    } else {
-        APP<Dtype>::current_prune_ratio[L] += pruned_ratio;
     }
     
     LOG(INFO) << "  Masks restored,"
@@ -857,7 +854,7 @@ void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
     APP<Dtype>::prune_ratio.push_back(prune_param.prune_ratio());
-    APP<Dtype>::prune_ratio_step.push_back(APP<Dtype>::base_prune_ratio_step); // TODO(mingsuntse-newprune)
+    APP<Dtype>::prune_ratio_step.push_back(0.1); // TODO(mingsuntse-newprune)
     APP<Dtype>::current_prune_ratio.push_back(0.2); // APP<Dtype>::prune_ratio_step.back()); // Start from 20%
     APP<Dtype>::pruned_ratio.push_back(0); // used in TEST
     this->IF_masks_updated = true;
@@ -888,6 +885,8 @@ void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     APP<Dtype>::pruned_rows.push_back(vector<int>());
     APP<Dtype>::pruned_ratio_col.push_back(0);
     APP<Dtype>::pruned_ratio_row.push_back(0);
+    APP<Dtype>::last_feasible_prune_ratio.push_back(0);
+    APP<Dtype>::last_infeasible_prune_ratio.push_back(0);
     APP<Dtype>::GFLOPs.push_back(this->blobs_[0]->count()); // further calculated in `net.cpp`, after layer SetUp
     APP<Dtype>::num_param.push_back(count);
     // Pruning state
@@ -895,7 +894,7 @@ void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     APP<Dtype>::num_pruned_row.push_back(0);
     APP<Dtype>::num_pruned_weight.push_back(0);
     APP<Dtype>::IF_row_pruned.push_back(vector<bool>(num_row, false));
-    vector<bool> vec_tmp(APP<Dtype>::group[L], false); // initialization
+    vector<bool> vec_tmp(APP<Dtype>::group[L], false);
     APP<Dtype>::IF_col_pruned.push_back(vector<vector<bool> >(num_col, vec_tmp));
     APP<Dtype>::IF_weight_pruned.push_back(vector<bool>(count, false));
     // Info shared among layers
@@ -935,7 +934,7 @@ void Layer<Dtype>::PruneForward() {
                 if (APP<Dtype>::prune_unit == "Col" 
                       && L != APP<Dtype>::conv_layer_cnt - 1 
                       && L != APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt - 1 // The last conv layer and last fc layer need not update row.
-                      && APP<Dtype>::step_-1 - APP<Dtype>::iter_prune_finished[L+1] <= 1) {
+                      && APP<Dtype>::rows_to_prune[L].size()) {
                   this->UpdateNumPrunedRow();
                 } else if (APP<Dtype>::prune_unit == "Row"
                       && L != 0
@@ -1015,12 +1014,11 @@ void Layer<Dtype>::PruneForward() {
             cout << "  IF_acc_recovered: " << APP<Dtype>::IF_acc_recovered;
             cout << "  lr: " << APP<Dtype>::learning_rate;
             cout << "  iter_size: " << APP<Dtype>::iter_size;
-            cout << "  prune_ratio_step: " << APP<Dtype>::prune_ratio_step[L];
             cout << endl;
         }
         
         // Apply masks
-        if (this->IF_masks_updated) {
+        if (1) {
             caffe_gpu_mul(this->blobs_[0]->count(), 
                           this->blobs_[0]->gpu_data(),
                           this->masks_[0]->gpu_data(),

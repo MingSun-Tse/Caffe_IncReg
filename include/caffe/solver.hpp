@@ -67,10 +67,11 @@ class Solver {
   // function that produces a SolverState protocol buffer that needs to be
   // written to disk together with the learned net.
   void Snapshot();
-  void Logshot(); /// APP
+  void Logshot();
   void UpdateMasks();
-  void PruneStateShot(); /// APP
+  void PruneStateShot();
   void PrintFinalPrunedRatio();
+  void RollBackWeights();
   virtual ~Solver() {}
   inline const SolverParameter& param() const { return param_; }
   inline shared_ptr<Net<Dtype> > net() { return net_; }

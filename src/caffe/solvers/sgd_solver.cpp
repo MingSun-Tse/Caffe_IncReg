@@ -119,8 +119,10 @@ void SGDSolver<Dtype>::ApplyUpdate() {
   #endif
   CHECK(Caffe::root_solver()); // 更新梯度是由主solver来做的
   Dtype rate = GetLearningRate();
-  rate = AdjustLearningRateForPrune(rate);
-  APP<Dtype>::learning_rate = rate; // log the learning rate of the last iteration
+  if (APP<Dtype>::prune_method != "None") {
+    rate = AdjustLearningRateForPrune(rate);
+  }
+  APP<Dtype>::learning_rate = rate;
   if (this->param_.display() && this->iter_ % this->param_.display() == 0) {
     LOG(INFO) << "Iteration " << this->iter_ << ", lr = " << rate;
   }
@@ -147,7 +149,7 @@ void SGDSolver<Dtype>::ApplyUpdate() {
 
 template <typename Dtype>
 const Dtype SGDSolver<Dtype>::AdjustLearningRateForPrune(const Dtype& rate) {
-  if (APP<Dtype>::IF_acc_far_from_borderline) {
+  if (APP<Dtype>::IF_acc_recovered) {
     return rate * 5;
   } else {
     return rate;
@@ -295,8 +297,9 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         const int num_row = net_params[param_id]->shape()[0];
         const int num_col = count / num_row;
         const int num_pruned_col = APP<Dtype>::num_pruned_col[L];
-        int num_col_to_prune_    = ceil(num_col * APP<Dtype>::prune_ratio_step[L]) * 2; // set the target higher
-        const int num_col_       = num_col - num_pruned_col;
+        const int real_num_col_to_prune_ = ceil(num_col * (APP<Dtype>::current_prune_ratio[L] - APP<Dtype>::last_feasible_prune_ratio[L]));
+        int num_col_to_prune_ = real_num_col_to_prune_; // ceil(num_col * (APP<Dtype>::current_prune_ratio[L] - APP<Dtype>::last_feasible_prune_ratio[L] + 0.02));
+        const int num_col_    = num_col - num_pruned_col;
         if (num_col_to_prune_ <= 0) {
             LOG(FATAL) << "num_col_to_prune_ <= 0";
             exit(1);
@@ -388,16 +391,20 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                 }
                 ave_magnitude_others /= (num_col_ - num_col_to_prune_);
                 bool IF_competition_barely_done = true;
-                for (int rk = 0; rk < num_col_to_prune_ / 2; ++rk) {
+                for (int rk = 0; rk < real_num_col_to_prune_; ++rk) {
                   const int col_of_rank_rk = col_hrank[rk + num_pruned_col].second;
-                  if (ave_magnitude_others / col_magnitude[col_of_rank_rk] < 4.0) {
+                  if (ave_magnitude_others / col_magnitude[col_of_rank_rk] < 5.0) {
                     IF_competition_barely_done = false;
                     break;
                   }
                 }
-                if (IF_competition_barely_done) {
-                  cout << "weight group competition barely done, now reduce the unnecessary regularization." << endl;
-                  num_col_to_prune_ /= 2; // return to normal target ratio
+                if (IF_competition_barely_done && real_num_col_to_prune_ < num_col_to_prune_) {
+                  cout << layer_name << ": weight group competition barely done, reduce the unnecessary regularization." << endl;
+                  num_col_to_prune_ = real_num_col_to_prune_; // return to real target ratio
+                  for (int rk = real_num_col_to_prune_; rk < num_col_to_prune_; ++rk) {
+                    const int col_of_rank_rk = col_hrank[rk + num_pruned_col].second;
+                    muhistory_punish[col_of_rank_rk] /= 2;
+                  }
                 }
                 
                 // scheme 1, the exponential center-symmetrical function
@@ -411,7 +418,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                 for (int j = 0; j < num_col_; ++j) { // j: rank 
                     const int col_of_rank_j = col_hrank[j + num_pruned_col].second; // Note the real rank is j + num_pruned_col
                     const Dtype Delta = APP<Dtype>::IF_scheme1_when_Reg_rank
-                                          ? (j < num_col_to_prune_ ? AA : -AA) // (j < N1                ? AA * exp(-alpha  * j) : 2*kk*AA - AA * exp(-alpha  * (2 * N1     - j)))
+                                          ? (j < N1                ? AA * exp(-alpha  * j) : 2*kk*AA - AA * exp(-alpha  * (2 * N1     - j))) // (j < num_col_to_prune_ ? AA : -AA)
                                           : (j < num_col_to_prune_ ? AA * exp(-alpha1 * j) :         - AA * exp(-alpha2 * (num_col_-1 - j)));
                     const Dtype old_reg = muhistory_punish[col_of_rank_j];
                     const Dtype new_reg = std::max(old_reg + Delta, Dtype(0));
