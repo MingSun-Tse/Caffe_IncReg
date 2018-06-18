@@ -71,7 +71,8 @@ class Solver {
   void UpdateMasks();
   void PruneStateShot();
   void PrintFinalPrunedRatio();
-  void RollBackWeights();
+  void CheckCurrentPruneStage();
+  void SetNewCurrentPruneRatio(const bool& IF_roll_back);
   virtual ~Solver() {}
   inline const SolverParameter& param() const { return param_; }
   inline shared_ptr<Net<Dtype> > net() { return net_; }

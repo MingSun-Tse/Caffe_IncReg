@@ -100,9 +100,9 @@ void Layer<Dtype>::IF_layer_prune_finished() {
             Dtype pruned_ratio = APP<Dtype>::pruned_ratio_col[L];;
             if (APP<Dtype>::prune_unit == "Weight")   { pruned_ratio = APP<Dtype>::pruned_ratio[L];     }
             else if (APP<Dtype>::prune_unit == "Row") { pruned_ratio = APP<Dtype>::pruned_ratio_row[L]; }
-            const bool layer_finish     = pruned_ratio >= APP<Dtype>::current_prune_ratio[L]; /// layer pruning target achieved
-            const bool net_finish_speed = APP<Dtype>::IF_speedup_achieved;   /// net pruning target of speed achieved
-            const bool net_finish_param = APP<Dtype>::IF_compRatio_achieved; /// net pruning target of compression achieved
+            const bool layer_finish     = pruned_ratio >= APP<Dtype>::current_prune_ratio[L]; // layer pruning target achieved
+            const bool net_finish_speed = APP<Dtype>::IF_speedup_achieved;   // net pruning target of speed achieved
+            const bool net_finish_param = APP<Dtype>::IF_compRatio_achieved; // net pruning target of compression achieved
             
             if (layer_finish || net_finish_speed || net_finish_param) {
                 APP<Dtype>::iter_prune_finished[L] = APP<Dtype>::step_ - 1;
@@ -120,14 +120,15 @@ void Layer<Dtype>::IF_layer_prune_finished() {
                      << "  pruned_ratio_col: " << rcol
                      << "  current prune_ratio: " << APP<Dtype>::current_prune_ratio[L] << std::endl;
                 
-                APP<Dtype>::IF_current_target_achieved = true;
-                for (int i = 0; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
-                  if (APP<Dtype>::iter_prune_finished[i] == INT_MAX) {
-                      APP<Dtype>::IF_current_target_achieved = false;
-                      break;
+                if (pruned_ratio < APP<Dtype>::prune_ratio[L] && !net_finish_speed && !net_finish_param) {
+                  APP<Dtype>::IF_current_target_achieved = true;
+                  for (int i = 0; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
+                    if (APP<Dtype>::iter_prune_finished[i] == INT_MAX) {
+                        APP<Dtype>::IF_current_target_achieved = false;
+                        break;
+                    }
                   }
                 }
-                cout << APP<Dtype>::IF_current_target_achieved << endl;
             }
         }
     }
@@ -855,7 +856,7 @@ void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     const int num_col = count / num_row;
     APP<Dtype>::prune_ratio.push_back(prune_param.prune_ratio());
     APP<Dtype>::prune_ratio_step.push_back(0.1); // TODO(mingsuntse-newprune)
-    APP<Dtype>::current_prune_ratio.push_back(0.2); // APP<Dtype>::prune_ratio_step.back()); // Start from 20%
+    APP<Dtype>::current_prune_ratio.push_back(0.3); // APP<Dtype>::prune_ratio_step.back()); // Start from 20%
     APP<Dtype>::pruned_ratio.push_back(0); // used in TEST
     this->IF_masks_updated = true;
     if (this->phase_ == TEST) { return; }

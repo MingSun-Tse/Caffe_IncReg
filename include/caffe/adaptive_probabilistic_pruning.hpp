@@ -42,8 +42,9 @@ public:
     static bool IF_compr_count_conv;
     static bool IF_eswpf;
     static bool IF_acc_recovered;
-    static bool IF_has_retrained;
     static int cnt_loss_cross_borderline;
+    static int cnt_acc_hit;
+    static int cnt_acc_bad;
     static bool IF_acc_far_from_borderline;
     static vector<bool> IF_layer_far_from_borderline;
     static Dtype prune_threshold;
@@ -110,7 +111,7 @@ public:
     template<typename Dtype>  string  APP<Dtype>::prune_coremthd_ = "None";
     template<typename Dtype>  int     APP<Dtype>::num_once_prune;
     template<typename Dtype>  int     APP<Dtype>::prune_interval;
-    template<typename Dtype>  int     APP<Dtype>::recover_interval = 5000;
+    template<typename Dtype>  int     APP<Dtype>::recover_interval = 10000;
     template<typename Dtype>  int     APP<Dtype>::clear_history_interval;
     template<typename Dtype>  int     APP<Dtype>::prune_begin_iter;
     template<typename Dtype>  int     APP<Dtype>::iter_size;
@@ -128,8 +129,9 @@ public:
     template<typename Dtype>  bool    APP<Dtype>::IF_compr_count_conv;
     template<typename Dtype>  bool    APP<Dtype>::IF_eswpf;
     template<typename Dtype>  bool    APP<Dtype>::IF_acc_recovered = true;
-    template<typename Dtype>  bool    APP<Dtype>::IF_has_retrained = false;
     template<typename Dtype>  int     APP<Dtype>::cnt_loss_cross_borderline = 0;
+    template<typename Dtype>  int     APP<Dtype>::cnt_acc_hit = 0;
+    template<typename Dtype>  int     APP<Dtype>::cnt_acc_bad = 0;
     template<typename Dtype>  bool    APP<Dtype>::IF_acc_far_from_borderline = true;
     template<typename Dtype>  vector<bool> APP<Dtype>::IF_layer_far_from_borderline;
     template<typename Dtype>  Dtype   APP<Dtype>::prune_threshold;
