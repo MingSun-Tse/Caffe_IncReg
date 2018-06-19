@@ -42,7 +42,7 @@ public:
     static bool IF_compr_count_conv;
     static bool IF_eswpf;
     static bool IF_acc_recovered;
-    static vector<int> cnt_loss_cross_borderline;
+    static vector<bool> cnt_loss_cross_borderline;
     static int cnt_acc_hit;
     static int cnt_acc_bad;
     static bool IF_acc_far_from_borderline;
@@ -130,7 +130,7 @@ public:
     template<typename Dtype>  bool    APP<Dtype>::IF_compr_count_conv;
     template<typename Dtype>  bool    APP<Dtype>::IF_eswpf;
     template<typename Dtype>  bool    APP<Dtype>::IF_acc_recovered = true;
-    template<typename Dtype>  vector<int> APP<Dtype>::cnt_loss_cross_borderline(5000, 0);
+    template<typename Dtype>  vector<bool> APP<Dtype>::cnt_loss_cross_borderline(10000, 0);
     template<typename Dtype>  int     APP<Dtype>::cnt_acc_hit = 0;
     template<typename Dtype>  int     APP<Dtype>::cnt_acc_bad = 0;
     template<typename Dtype>  bool    APP<Dtype>::IF_acc_far_from_borderline = true;
@@ -192,10 +192,10 @@ public:
     template<typename Dtype>  bool    APP<Dtype>::simulate_5d = false;
     template<typename Dtype>  int     APP<Dtype>::h_off = 0; // used in data transformation
     template<typename Dtype>  int     APP<Dtype>::w_off = 0;
-    template<typename Dtype>  int APP<Dtype>::show_interval = 1; 
-    template<typename Dtype>  string APP<Dtype>::show_layer = "1001";
-    template<typename Dtype>  int APP<Dtype>::show_num_layer = 100;
-    template<typename Dtype>  int APP<Dtype>::show_num_weight = 20;
+    template<typename Dtype>  int APP<Dtype>::show_interval = 10; // the interval to print pruning progress log
+    template<typename Dtype>  string APP<Dtype>::show_layer = "1000"; // '1' means to print the weights of the layer with the index
+    template<typename Dtype>  int APP<Dtype>::show_num_layer = 100; // work with show_interval, how many layers get printed
+    template<typename Dtype>  int APP<Dtype>::show_num_weight = 20; // work with show_layer, how many weights get printed
 }
 
 #endif
