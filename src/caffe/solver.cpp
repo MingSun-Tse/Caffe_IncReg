@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <numeric>
 
 namespace caffe {
 
@@ -57,7 +58,7 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   param_ = param;
   
   // ------------------------------------------
-  // WANGHUAN, copy prune params
+  // copy prune params
   APP<Dtype>::prune_method = param_.prune_method();
   if (APP<Dtype>::prune_method != "None") {
       char* mthd = new char[strlen(APP<Dtype>::prune_method.c_str()) + 1];
@@ -266,119 +267,6 @@ void Solver<Dtype>::Step(int iters) {
     // accumulate the loss and gradient
     Dtype loss = 0;
 
-    /// ----------------------------------------------------------------------
-    // Before another forward, verify whether prune could be stopped
-    // GFLOPs and num_params
-    Dtype GFLOPs_left   = 0;
-    Dtype GFLOPs_origin = 0;
-    const int num_layer_count = APP<Dtype>::IF_speedup_count_fc ? APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt : APP<Dtype>::conv_layer_cnt;
-    for (int i = 0; i < num_layer_count; ++i) {
-        const Dtype pr = APP<Dtype>::pruned_ratio_row[i];
-        const Dtype pc = APP<Dtype>::pruned_ratio_col[i];
-        GFLOPs_left   += APP<Dtype>::GFLOPs[i] * (1 - (pr + pc - pr * pc));
-        GFLOPs_origin += APP<Dtype>::GFLOPs[i];
-    }
-    if (APP<Dtype>::prune_unit == "Col" || APP<Dtype>::prune_unit == "Row") {
-        APP<Dtype>::IF_speedup_achieved = GFLOPs_origin/GFLOPs_left >= APP<Dtype>::speedup;
-    }
-    Dtype num_param_left   = 0;
-    Dtype num_param_origin = 0;
-    const int num_layer_begin = APP<Dtype>::IF_compr_count_conv ? 0 : APP<Dtype>::conv_layer_cnt;
-    for (int i = num_layer_begin; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
-        num_param_left   += APP<Dtype>::num_param[i] * (1 - APP<Dtype>::pruned_ratio[i]);
-        num_param_origin += APP<Dtype>::num_param[i];
-    }
-    if (APP<Dtype>::prune_unit == "Weight") {
-        APP<Dtype>::IF_compRatio_achieved = num_param_origin/num_param_left >= APP<Dtype>::compRatio;
-    }
-    cout << "\n**** Step " << APP<Dtype>::step_ << ": " 
-         << GFLOPs_origin / GFLOPs_left << "/" << APP<Dtype>::speedup << " "
-         << num_param_origin / num_param_left << "/" << APP<Dtype>::compRatio
-         << " ****" << endl;
-    cout << "fc counted: " << APP<Dtype>::IF_speedup_count_fc
-         << "  Total GFLOPs_origin: " << GFLOPs_origin
-         << " | conv counted: " << APP<Dtype>::IF_compr_count_conv
-         << "  Total num_param_origin: " << num_param_origin << endl;
-
-    // Check if all layer prune finished permanently
-    bool all_layer_prune_finished = true;
-    for (int i = 0; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
-        Dtype pruned_ratio = APP<Dtype>::pruned_ratio_col[i];
-        if      (APP<Dtype>::prune_unit == "Weight") { pruned_ratio = APP<Dtype>::pruned_ratio[i];     }
-        else if (APP<Dtype>::prune_unit == "Row"   ) { pruned_ratio = APP<Dtype>::pruned_ratio_row[i]; }
-        if (pruned_ratio < APP<Dtype>::prune_ratio[i]) {
-          all_layer_prune_finished = false;
-          break;
-        }
-    }
-    const bool IF_final_target_achieved = all_layer_prune_finished || APP<Dtype>::IF_speedup_achieved || APP<Dtype>::IF_compRatio_achieved;
-    if (IF_final_target_achieved) {
-      APP<Dtype>::iter_size = param_.iter_size();
-      APP<Dtype>::IF_acc_recovered = false;
-      if (APP<Dtype>::IF_eswpf) {
-        cout << "[app] all layer prune finished: iter = " << iter_ << " -- early stopped." << endl;
-        requested_early_exit_ = true;
-        break;
-      }
-    } else {
-      // Prune finished
-      if(APP<Dtype>::IF_current_target_achieved) {
-        CheckCurrentPruneStage();
-        APP<Dtype>::IF_current_target_achieved = false; // Got in here ONLY once.
-      }
-      
-      // Retrain finished
-      if (APP<Dtype>::IF_acc_recovered == false 
-              && APP<Dtype>::step_ - 1 - APP<Dtype>::stage_iter_prune_finished == APP<Dtype>::recover_interval * pow(1.2, APP<Dtype>::cnt_acc_bad)) {
-        APP<Dtype>::IF_acc_recovered = true;
-        APP<Dtype>::iter_size = param_.iter_size() / 4;
-        
-        // Check accuracy
-        APP<Dtype>::val_accuracy.clear();
-        TestAll();
-        const Dtype top1_val_acc = *min_element(APP<Dtype>::val_accuracy.begin(), APP<Dtype>::val_accuracy.end());
-        cout << "[app] after retrain, top1_val_acc = " << top1_val_acc << ", step = " << APP<Dtype>::step_ << endl;
-        const Dtype acc_borderline = 0.800;
-        
-        if (acc_borderline - top1_val_acc > 0.0005) { // Accuracy bad
-          ++ APP<Dtype>::cnt_acc_bad;
-          cout << "[app]    #" << APP<Dtype>::cnt_acc_bad << " - top1_val_acc bad: < " << acc_borderline << endl;
-          if (APP<Dtype>::cnt_acc_bad == 3) { // 3 times bad, then be sure that we should roll back.
-            cout << "[app]    3 times bad continuously, roll back weights to iter = " << APP<Dtype>::last_feasible_prune_iter << endl;
-            if (APP<Dtype>::last_feasible_prune_iter == -1) {
-              cout << "[app]    The first pruning stage failed, decrease the prune_ratio." << endl;
-              exit(1);
-            }
-            const string resume_file = param_.snapshot_prefix() + "_iter_" + caffe::format_int(APP<Dtype>::last_feasible_prune_iter) + ".solverstate";
-            cout << "[app]    ===== resuming from: " << resume_file << endl;
-            SetNewCurrentPruneRatio(true);
-            Restore(resume_file.c_str()); // Restore weights after 'current_prune_ratio' update, because restoring will change the 'pruned_ratio'.
-            APP<Dtype>::cnt_acc_bad = 0;
-          } else { // retrain again then check again
-            cout << "[app]    retrain and check again" << endl;
-            APP<Dtype>::IF_acc_recovered = false;
-            APP<Dtype>::iter_size = param_.iter_size();
-          }
-        } else { // Accuracy good
-          APP<Dtype>::cnt_acc_bad = 0;
-          if (fabs(top1_val_acc - acc_borderline) < 0.0005) {
-            ++ APP<Dtype>::cnt_acc_hit;
-            cout << "[app]    #" << APP<Dtype>::cnt_acc_hit << " - top1_val_acc hit" << endl;
-            if (APP<Dtype>::cnt_acc_hit == 3) {
-              cout << "[app]    All pruning done." << endl;
-              Snapshot();
-              exit(0);
-            }
-          }
-          cout << "[app]    top1_val_acc **still good**, start a new pruning stage." << endl;
-          Snapshot();
-          APP<Dtype>::last_feasible_prune_iter = iter_;
-          SetNewCurrentPruneRatio(false);
-        }
-      }
-    }
-    /// ----------------------------------------------------------------------
-    
     // Speed check
     cout << "--- Solver begins timing" << endl;
     clock_t t1 = clock();
@@ -394,18 +282,6 @@ void Solver<Dtype>::Step(int iters) {
     // average the loss across iterations for smoothed reporting
     UpdateSmoothedLoss(loss, start_iter, average_loss);
     
-    // Estimate accuracy based on loss
-    const Dtype baseline_acc = 0.8108;
-    const Dtype acc_borderline1 = baseline_acc - 0.015;  // Requirement: top-1 acc loss <= 0.01
-    const Dtype acc_borderline2 = baseline_acc - 0.012; // Requirement: top-1 acc loss <= 0.01
-    const Dtype loss_borderline1 = (acc_borderline1 - 0.81590473) / -0.0359494; // Get this by linear regression, to be improved
-    const Dtype loss_borderline2 = (acc_borderline2 - 0.81590473) / -0.0359494; // Get this by linear regression, to be improved
-    if (smoothed_loss_ > loss_borderline1) {
-      ++ APP<Dtype>::cnt_loss_cross_borderline;
-    } else {
-      -- APP<Dtype>::cnt_loss_cross_borderline;
-    }
-    
     if (display) {
       // -----------------------------------------------------------------------------------
       // calculate training speed
@@ -419,11 +295,9 @@ void Solver<Dtype>::Step(int iters) {
                                                (current_time - APP<Dtype>::first_time) * 1.0 / (iter_ - APP<Dtype>::first_iter));
       APP<Dtype>::last_time = current_time;
       // -----------------------------------------------------------------------------------
-      
       LOG_IF(INFO, Caffe::root_solver()) << "Iteration " << iter_
-          << ", smoothed loss = " << smoothed_loss_ 
-          << ", speed = " << train_speed
-          << ", loss_borderline = " << loss_borderline2 << " -> " << loss_borderline1;
+          << ", smoothed loss = " << smoothed_loss_
+          << ", speed = " << train_speed;
       const vector<Blob<Dtype>*>& result = net_->output_blobs();
       int score_index = 0;
       for (int j = 0; j < result.size(); ++j) {
@@ -452,8 +326,60 @@ void Solver<Dtype>::Step(int iters) {
     
     ApplyUpdate();
     cout << "--- after ApplyUpdate: " << (double)(clock() - t1) / CLOCKS_PER_SEC << endl;
-    
 
+    // -----------------------------------------------------------------
+    // Prune finished
+    if(APP<Dtype>::IF_current_target_achieved) {
+      cout << "[app]\n[app] Current pruning stage finished. step: " << APP<Dtype>::stage_iter_prune_finished + 1 << endl;
+      for (int L = 0; L < APP<Dtype>::layer_index.size(); ++L) {
+        if (APP<Dtype>::prune_ratio[L] == 0) { continue; }
+        cout << "[app]    layer " << L << " - pruned_ratio: " << APP<Dtype>::pruned_ratio_col[L] << endl;
+      }
+      APP<Dtype>::IF_current_target_achieved = false; // Got in here ONLY once.
+    }
+
+    // Estimate accuracy based on loss
+    if (APP<Dtype>::IF_acc_recovered == true) {
+      const Dtype baseline_acc = 0.8108;
+      const Dtype acc_borderline1 = baseline_acc - 0.015;  // Requirement: top-1 acc loss <= 0.01
+      const Dtype loss_borderline1 = (0.81590473 - acc_borderline1) / 0.0359494; // Get this by linear regression, to be improved
+      const int vec_size = APP<Dtype>::cnt_loss_cross_borderline.size();
+      APP<Dtype>::cnt_loss_cross_borderline[iter_ % vec_size] = (smoothed_loss_ < loss_borderline1) ? -1 : 1;
+    }
+
+    // Check acc based on loss
+    int recover_interval_prune = 10000; // the short recovery period right after pruning, before checking loss
+    if (iter_ - APP<Dtype>::stage_iter_prune_finished == recover_interval_prune) {
+      const int cnt_loss_cross_borderline = accumulate(APP<Dtype>::cnt_loss_cross_borderline.begin(), APP<Dtype>::cnt_loss_cross_borderline.end(), 0);
+      CheckPruneState(cnt_loss_cross_borderline < 0);
+    }
+
+    // Check acc based on true acc
+    if (APP<Dtype>::IF_acc_recovered == false 
+            && iter_ - APP<Dtype>::stage_iter_prune_finished == recover_interval_prune + APP<Dtype>::recover_interval * pow(1.2, APP<Dtype>::cnt_acc_bad)) {
+      TestAll();
+      const Dtype true_val_acc = *min_element(APP<Dtype>::val_accuracy.begin(), APP<Dtype>::val_accuracy.end());
+      cout << "[app] Retrain finished, true_val_acc = " << true_val_acc << ", step = " << APP<Dtype>::step_ << endl;
+      CheckPruneState(0, true_val_acc);
+    }
+
+    // Print speedup & compression ratio each iter
+    Dtype current_speedup, current_compRatio, GFLOPs_origin, num_param_origin;
+    GetPruneProgress(&current_speedup,
+                     &current_compRatio,
+                     &GFLOPs_origin,
+                     &num_param_origin);
+    if (start_iter == iter_) {
+      cout << "IF_speedup_count_fc: " << APP<Dtype>::IF_speedup_count_fc
+           << "  Total GFLOPs_origin: " << GFLOPs_origin
+           << " | IF_compr_count_conv: " << APP<Dtype>::IF_compr_count_conv
+           << "  Total num_param_origin: " << num_param_origin << endl;
+    }
+    cout << "**** Step " << APP<Dtype>::step_ << " (after update): " 
+         << current_speedup   << "/" << APP<Dtype>::speedup << " "
+         << current_compRatio << "/" << APP<Dtype>::compRatio
+         << " ****" << "\n" << endl;
+    // -----------------------------------------------------------------
     
     // Increment the internal iter_ counter -- its value should always indicate
     // the number of times the weights have been updated.
@@ -477,68 +403,163 @@ void Solver<Dtype>::Step(int iters) {
 }
 
 template <typename Dtype>
-void Solver<Dtype>::CheckCurrentPruneStage() {
-  APP<Dtype>::stage_iter_prune_finished = *max_element(APP<Dtype>::iter_prune_finished.begin(), APP<Dtype>::iter_prune_finished.end());
-  cout << "[app]\n[app] current pruning stage finished. step: " << APP<Dtype>::stage_iter_prune_finished + 1 << endl;
-  for (int L = 0; L < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++L) {
-    if (APP<Dtype>::prune_ratio[L] == 0) { continue; }
-    cout << "[app]    layer " << L << " - pruned_ratio: " << APP<Dtype>::pruned_ratio_col[L] << endl;
+void Solver<Dtype>::GetPruneProgress(Dtype* speedup, Dtype* compRatio, Dtype* GFLOPs_origin_, Dtype* num_param_origin_) {
+  // speedup
+  Dtype GFLOPs_left   = 0;
+  Dtype GFLOPs_origin = 0;
+  const int num_layer_count = APP<Dtype>::IF_speedup_count_fc ? APP<Dtype>::layer_index.size() : APP<Dtype>::conv_layer_cnt;
+  for (int i = 0; i < num_layer_count; ++i) {
+      const Dtype pr = APP<Dtype>::pruned_ratio_row[i];
+      const Dtype pc = APP<Dtype>::pruned_ratio_col[i];
+      GFLOPs_left   += APP<Dtype>::GFLOPs[i] * (1 - (pr + pc - pr * pc));
+      GFLOPs_origin += APP<Dtype>::GFLOPs[i];
   }
+  if (APP<Dtype>::prune_unit == "Col" || APP<Dtype>::prune_unit == "Row") {
+      APP<Dtype>::IF_speedup_achieved = GFLOPs_origin / GFLOPs_left >= APP<Dtype>::speedup;
+  }
+  *speedup = GFLOPs_origin / GFLOPs_left;
+  *GFLOPs_origin_ = GFLOPs_origin;
   
-  // Check if necessary to retrain based on loss
-  APP<Dtype>::IF_acc_far_from_borderline = APP<Dtype>::cnt_loss_cross_borderline < 0;
-  APP<Dtype>::cnt_loss_cross_borderline = 0; // clear this counter for another pruning stage
-  
-  if (APP<Dtype>::IF_acc_far_from_borderline) { // No need for retrain
-    cout << "[app]    estimated accuracy **significantly good**, directly start a new pruning stage without retraining. step: " << APP<Dtype>::step_ << endl;
-    Snapshot();
-    APP<Dtype>::last_feasible_prune_iter = iter_;
+  // compression ratio
+  Dtype num_param_left   = 0;
+  Dtype num_param_origin = 0;
+  const int num_layer_begin = APP<Dtype>::IF_compr_count_conv ? 0 : APP<Dtype>::conv_layer_cnt;
+  for (int i = num_layer_begin; i < APP<Dtype>::layer_index.size(); ++i) {
+      num_param_left   += APP<Dtype>::num_param[i] * (1 - APP<Dtype>::pruned_ratio[i]);
+      num_param_origin += APP<Dtype>::num_param[i];
+  }
+  if (APP<Dtype>::prune_unit == "Weight") {
+      APP<Dtype>::IF_compRatio_achieved = num_param_origin / num_param_left >= APP<Dtype>::compRatio;
+  }
+  *compRatio = num_param_origin / num_param_left;
+  *num_param_origin_ = num_param_origin;
+}
+
+template <typename Dtype>
+void Solver<Dtype>::SetTrainSetting(const string& train_state) {
+  if (train_state == "prune") {
     APP<Dtype>::IF_acc_recovered = true;
     APP<Dtype>::iter_size = param_.iter_size() / 4;
-    SetNewCurrentPruneRatio(false);
-  } else { // Need retrain to determine if accuracy meet the demand
-    cout << "[app]    estimated accuracy **NOT significantly good**, retrain to check accuracy before starting a new pruning stage." << endl;
+    for (int i = 0; i < APP<Dtype>::cnt_loss_cross_borderline.size(); ++i) {
+      APP<Dtype>::cnt_loss_cross_borderline[i] = 0;
+    }
+  } else if(train_state == "retrain") {
     APP<Dtype>::IF_acc_recovered = false;
     APP<Dtype>::iter_size = param_.iter_size();
+  } else {
+    cout << "Wrong: unknown train_state, please check." << endl;
+    exit(1);
+  }
+}
+
+template <typename Dtype>
+void Solver<Dtype>::CheckIfAllPruneDone() {
+  bool all_layer_prune_finished = true;
+  for (int L = 0; L < APP<Dtype>::layer_index.size(); ++L) {
+      if (APP<Dtype>::pruned_ratio_for_comparison[L] < APP<Dtype>::prune_ratio[L]) {
+        all_layer_prune_finished = false;
+        break;
+      }
+  }
+  const bool IF_final_target_achieved = all_layer_prune_finished || APP<Dtype>::IF_speedup_achieved || APP<Dtype>::IF_compRatio_achieved;
+  if (IF_final_target_achieved) {
+    SetTrainSetting("retrain");
+    if (APP<Dtype>::IF_eswpf) {
+      cout << "[app]\n[app] All layer prune finished: iter = " << iter_ << " -- early stopped." << endl;
+      requested_early_exit_ = true;
+    }
+  }
+}
+
+template <typename Dtype>
+void Solver<Dtype>::CheckPruneState(const bool& IF_acc_far_from_borderline, const Dtype& true_val_acc) {
+  if (true_val_acc != -1) {
+    const Dtype acc_borderline = 0.800;
+    if (acc_borderline - true_val_acc > 0.0005) { // accuracy bad
+      ++ APP<Dtype>::cnt_acc_bad;
+      cout << "[app]    #" << APP<Dtype>::cnt_acc_bad << " - true_val_acc bad: < " << acc_borderline << endl;
+      if (APP<Dtype>::cnt_acc_bad == 3) {
+        cout << "[app]    3 times bad continuously, roll back weights to iter = " << APP<Dtype>::last_feasible_prune_iter << endl;
+        if (APP<Dtype>::last_feasible_prune_iter == -1) {
+          cout << "[app]    The first pruning stage failed, decrease the prune_ratio." << endl;
+          exit(1);
+        }
+        const string resume_file = param_.snapshot_prefix() + "_iter_" + caffe::format_int(APP<Dtype>::last_feasible_prune_iter) + ".solverstate";
+        cout << "[app]    ===== resuming from: " << resume_file << endl;
+        SetNewCurrentPruneRatio(true);
+        SetTrainSetting("prune");
+        Restore(resume_file.c_str()); // Restore weights after 'current_prune_ratio' update, because restoring will change the 'pruned_ratio'.
+        APP<Dtype>::cnt_acc_bad = 0;
+      } else {
+        cout << "[app]    retrain and check again" << endl;
+        SetTrainSetting("retrain");
+      }
+    } else { // accuracy good
+      APP<Dtype>::cnt_acc_bad = 0;
+      if (fabs(true_val_acc - acc_borderline) < 0.0005) {
+        ++ APP<Dtype>::cnt_acc_hit;
+        cout << "[app]    #" << APP<Dtype>::cnt_acc_hit << " - true_val_acc hit" << endl;
+        if (APP<Dtype>::cnt_acc_hit == 3) {
+          cout << "[app]    All pruning done." << endl;
+          Snapshot();
+          exit(0);
+        }
+      }
+      cout << "[app]    true_val_acc **still good**, start a new pruning stage." << endl;
+      APP<Dtype>::last_feasible_prune_iter = iter_;
+      Snapshot();
+      SetNewCurrentPruneRatio(false);
+      SetTrainSetting("prune");
+      CheckIfAllPruneDone();
+    }
+  } else {
+    // Check if necessary to retrain based on loss
+    if (IF_acc_far_from_borderline) {
+      cout << "[app]    estimated accuracy **significantly good**, directly start a new pruning stage without retraining. step: " << APP<Dtype>::step_ << endl;
+      APP<Dtype>::last_feasible_prune_iter = iter_;
+      Snapshot();
+      SetNewCurrentPruneRatio(false);
+      SetTrainSetting("prune");
+      CheckIfAllPruneDone();
+    } else {
+      cout << "[app]    estimated accuracy **NOT significantly good**, retrain to check accuracy before starting a new pruning stage." << endl;
+      SetTrainSetting("retrain");
+    }
   }
 }
 
 template <typename Dtype>
 void Solver<Dtype>::SetNewCurrentPruneRatio(const bool& IF_roll_back) {
-    for (int L = 0; L < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++L) {
-      if (APP<Dtype>::prune_ratio[L] == 0) { continue; }
-      Dtype pruned_ratio = APP<Dtype>::pruned_ratio_col[L];
-      if      (APP<Dtype>::prune_unit == "Weight") { pruned_ratio = APP<Dtype>::pruned_ratio[L];     }
-      else if (APP<Dtype>::prune_unit == "Row"   ) { pruned_ratio = APP<Dtype>::pruned_ratio_row[L]; }
-      
-      if (IF_roll_back) {
-        APP<Dtype>::last_infeasible_prune_ratio[L] = pruned_ratio;
-        APP<Dtype>::current_prune_ratio[L] = (APP<Dtype>::last_feasible_prune_ratio[L] 
-                + APP<Dtype>::last_infeasible_prune_ratio[L]) / 2; // new prune ratio could be improved
+  for (int L = 0; L < APP<Dtype>::layer_index.size(); ++L) {
+    if (APP<Dtype>::prune_ratio[L] == 0) { continue; }
+    if (IF_roll_back) {
+      APP<Dtype>::last_infeasible_prune_ratio[L] = APP<Dtype>::pruned_ratio_for_comparison[L];
+      APP<Dtype>::current_prune_ratio[L] = (APP<Dtype>::last_feasible_prune_ratio[L] 
+              + APP<Dtype>::last_infeasible_prune_ratio[L]) / 2; // new prune ratio could be improved
+    } else {
+      APP<Dtype>::last_feasible_prune_ratio[L] = APP<Dtype>::pruned_ratio_for_comparison[L];
+      if (APP<Dtype>::last_infeasible_prune_ratio[L] == 0) {
+        APP<Dtype>::current_prune_ratio[L] = APP<Dtype>::pruned_ratio_for_comparison[L] + APP<Dtype>::prune_ratio_step[L];
       } else {
-        APP<Dtype>::last_feasible_prune_ratio[L] = pruned_ratio;
-        if (APP<Dtype>::last_infeasible_prune_ratio[L] == 0) {
-          APP<Dtype>::current_prune_ratio[L] = pruned_ratio + APP<Dtype>::prune_ratio_step[L];
+        if (APP<Dtype>::last_feasible_prune_ratio[L] >= APP<Dtype>::last_infeasible_prune_ratio[L]) {
+          APP<Dtype>::prune_ratio_step[L] *= 0.8; // each time surpassing the infeasible, half the prune_ratio_step
+          APP<Dtype>::current_prune_ratio[L] = APP<Dtype>::pruned_ratio_for_comparison[L] + APP<Dtype>::prune_ratio_step[L];
+          cout << "[app]    " << L << " - surpassed the last_infeasible_prune_ratio" << endl;
+        } else if (APP<Dtype>::last_infeasible_prune_ratio[L] - APP<Dtype>::last_feasible_prune_ratio[L] < 0.01) {
+          APP<Dtype>::current_prune_ratio[L] = APP<Dtype>::last_infeasible_prune_ratio[L];
+          cout << "[app]    " << L << " - try to surpass the last_infeasible_prune_ratio" << endl;
         } else {
-          if (APP<Dtype>::last_feasible_prune_ratio[L] >= APP<Dtype>::last_infeasible_prune_ratio[L]) {
-            APP<Dtype>::prune_ratio_step[L] *= 0.8; // each time surpassing the infeasible, half the prune_ratio_step
-            APP<Dtype>::current_prune_ratio[L] = pruned_ratio + APP<Dtype>::prune_ratio_step[L];
-            cout << "[app]    " << L << " - surpassed the last_infeasible_prune_ratio" << endl;
-          } else if (APP<Dtype>::last_infeasible_prune_ratio[L] - APP<Dtype>::last_feasible_prune_ratio[L] < 0.01) {
-            APP<Dtype>::current_prune_ratio[L] = APP<Dtype>::last_infeasible_prune_ratio[L];
-            cout << "[app]    " << L << " - try to surpass the last_infeasible_prune_ratio" << endl;
-          } else {
-            APP<Dtype>::current_prune_ratio[L] = (APP<Dtype>::last_feasible_prune_ratio[L] 
-                  + APP<Dtype>::last_infeasible_prune_ratio[L]) / 2;
-          }
+          APP<Dtype>::current_prune_ratio[L] = (APP<Dtype>::last_feasible_prune_ratio[L] 
+                + APP<Dtype>::last_infeasible_prune_ratio[L]) / 2;
         }
       }
-      
-      APP<Dtype>::current_prune_ratio[L] = min(APP<Dtype>::current_prune_ratio[L], APP<Dtype>::prune_ratio[L]);
-      APP<Dtype>::iter_prune_finished[L] = INT_MAX;
-      cout << "[app]    " << L << " - current_prune_ratio: " 
-           << APP<Dtype>::last_feasible_prune_ratio[L] << " -> " << APP<Dtype>::current_prune_ratio[L] << endl;
     }
+    
+    APP<Dtype>::current_prune_ratio[L] = min(APP<Dtype>::current_prune_ratio[L], APP<Dtype>::prune_ratio[L]);
+    APP<Dtype>::iter_prune_finished[L] = INT_MAX;
+    cout << "[app]    " << L << " - current_prune_ratio: " 
+         << APP<Dtype>::last_feasible_prune_ratio[L] << " -> " << APP<Dtype>::current_prune_ratio[L] << endl;
+  }
 }
 
 template <typename Dtype>
@@ -555,35 +576,18 @@ void Solver<Dtype>::Solve(const char* resume_file) {
     Restore(resume_file);
   }
   
-    // After restore, calculate GFLOPs and determine whether the prune finished
-    // TODO(mingsuntse)
-    Dtype GFLOPs_left   = 0;
-    Dtype GFLOPs_origin = 0;
-    for (int i = 0; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
-        const Dtype pr = APP<Dtype>::pruned_ratio_row[i];
-        const Dtype pc = APP<Dtype>::pruned_ratio_col[i];
-        GFLOPs_left   += APP<Dtype>::GFLOPs[i] * (1 - (pr + pc - pr * pc));
-        GFLOPs_origin += APP<Dtype>::GFLOPs[i];
+  // After restoring, calculate GFLOPs and determine whether the prune finished
+  // Note that, layer target has been check when restoring solverstate.
+  Dtype current_speedup, current_compRatio, GFLOPs_origin, num_param_origin;
+  GetPruneProgress(&current_speedup,
+                   &current_compRatio,
+                   &GFLOPs_origin,
+                   &num_param_origin);
+  if (APP<Dtype>::IF_speedup_achieved || APP<Dtype>::IF_compRatio_achieved) {
+    for (int i = 0; i < APP<Dtype>::layer_index.size(); ++i) {
+      APP<Dtype>::iter_prune_finished[i] = -1; 
     }
-    if (APP<Dtype>::prune_unit == "Col" || APP<Dtype>::prune_unit == "Row") {
-      APP<Dtype>::IF_speedup_achieved = GFLOPs_origin/GFLOPs_left >= APP<Dtype>::speedup;
-    }
-    
-    Dtype num_param_left   = 0;
-    Dtype num_param_origin = 0;
-    for (int i = 0; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
-        num_param_left   += APP<Dtype>::num_param[i] * (1 - APP<Dtype>::pruned_ratio[i]);
-        num_param_origin += APP<Dtype>::num_param[i];
-    }
-    if (APP<Dtype>::prune_unit == "Weight") {
-      APP<Dtype>::IF_compRatio_achieved = num_param_origin/num_param_left >= APP<Dtype>::compRatio;
-    }
-
-    if (APP<Dtype>::IF_speedup_achieved || APP<Dtype>::IF_compRatio_achieved) {
-        for (int i = 0; i < APP<Dtype>::layer_index.size(); ++i) {
-            APP<Dtype>::iter_prune_finished[i] = -1; 
-        }
-    }
+  }
 
   // For a network that is trained by the solver, no bottom or top vecs
   // should be given, and we will just provide dummy vecs.
@@ -611,9 +615,7 @@ void Solver<Dtype>::Solve(const char* resume_file) {
     int average_loss = this->param_.average_loss();
     Dtype loss;
     net_->Forward(&loss);
-
     UpdateSmoothedLoss(loss, start_iter, average_loss);
-
     LOG(INFO) << "Iteration " << iter_ << ", loss = " << smoothed_loss_;
   }
   if (param_.test_interval() && iter_ % param_.test_interval() == 0) {
@@ -625,20 +627,21 @@ void Solver<Dtype>::Solve(const char* resume_file) {
 
 template <typename Dtype>
 void Solver<Dtype>::PrintFinalPrunedRatio() {
-    cout << "Print final pruned ratio of all layers:" << endl;
-    map<string, int>::iterator it_m;
-    for (it_m = APP<Dtype>::layer_index.begin(); it_m != APP<Dtype>::layer_index.end(); ++it_m) {
-        const int L = it_m->second;
-        cout << it_m->first
-             << "  pruned_ratio = " << APP<Dtype>::pruned_ratio[L]
-             << "  pruned_ratio_row = " << APP<Dtype>::pruned_ratio_row[L]
-             << "  pruned_ratio_col = " << APP<Dtype>::pruned_ratio_col[L] 
-             << "  prune_ratio = " << APP<Dtype>::prune_ratio[L] << endl;
-    }
+  cout << "Print final pruned ratio of all layers:" << endl;
+  map<string, int>::iterator it_m;
+  for (it_m = APP<Dtype>::layer_index.begin(); it_m != APP<Dtype>::layer_index.end(); ++it_m) {
+    const int L = it_m->second;
+    cout << it_m->first
+         << "  pruned_ratio = " << APP<Dtype>::pruned_ratio[L]
+         << "  pruned_ratio_row = " << APP<Dtype>::pruned_ratio_row[L]
+         << "  pruned_ratio_col = " << APP<Dtype>::pruned_ratio_col[L] 
+         << "  prune_ratio = " << APP<Dtype>::prune_ratio[L] << endl;
+  }
 }
 
 template <typename Dtype>
 void Solver<Dtype>::TestAll() {
+  APP<Dtype>::val_accuracy.clear();
   for (int test_net_id = 0;
        test_net_id < test_nets_.size() && !requested_early_exit_;
        ++test_net_id) {
@@ -649,7 +652,6 @@ void Solver<Dtype>::TestAll() {
 template <typename Dtype>
 void Solver<Dtype>::Test(const int test_net_id) {
   CHECK(Caffe::root_solver());  
-  
   LOG(INFO) << "Iteration " << iter_
             << ", Testing net (#" << test_net_id << ")";
   CHECK_NOTNULL(test_nets_[test_net_id].get())->
@@ -719,7 +721,7 @@ void Solver<Dtype>::Test(const int test_net_id) {
     }
     LOG(INFO) << "    Test net output #" << i << ": " << output_name << " = "
               << mean_score << loss_msg_stream.str();
-    if (output_name.substr(1, 3) == "ccu") { // TODO(mingsuntse): improve this
+    if (output_name.substr(1, 3) == "ccu") { // "Accuracy" or "accuracy", TODO(mingsuntse): improve this
       APP<Dtype>::val_accuracy.push_back(mean_score);
     }
   }
@@ -739,7 +741,6 @@ void Solver<Dtype>::Snapshot() {
   default:
     LOG(FATAL) << "Unsupported snapshot format.";
   }
-
   SnapshotSolverState(model_filename);
 }
 

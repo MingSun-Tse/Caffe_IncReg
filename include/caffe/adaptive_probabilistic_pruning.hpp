@@ -5,7 +5,7 @@
 #include <vector>
 #include <map>
 #include <climits>
-//#define ShowTimingLog 1
+// #define ShowTimingLog 1
 
 namespace caffe {
 using namespace std;
@@ -42,7 +42,7 @@ public:
     static bool IF_compr_count_conv;
     static bool IF_eswpf;
     static bool IF_acc_recovered;
-    static int cnt_loss_cross_borderline;
+    static vector<int> cnt_loss_cross_borderline;
     static int cnt_acc_hit;
     static int cnt_acc_bad;
     static bool IF_acc_far_from_borderline;
@@ -89,6 +89,7 @@ public:
     static vector<Dtype> pruned_ratio;
     static vector<Dtype> pruned_ratio_col;
     static vector<Dtype> pruned_ratio_row;
+    static vector<Dtype> pruned_ratio_for_comparison;
     static vector<Dtype> GFLOPs;
     static vector<Dtype> num_param;
     
@@ -111,7 +112,7 @@ public:
     template<typename Dtype>  string  APP<Dtype>::prune_coremthd_ = "None";
     template<typename Dtype>  int     APP<Dtype>::num_once_prune;
     template<typename Dtype>  int     APP<Dtype>::prune_interval;
-    template<typename Dtype>  int     APP<Dtype>::recover_interval = 10000;
+    template<typename Dtype>  int     APP<Dtype>::recover_interval = 30000;
     template<typename Dtype>  int     APP<Dtype>::clear_history_interval;
     template<typename Dtype>  int     APP<Dtype>::prune_begin_iter;
     template<typename Dtype>  int     APP<Dtype>::iter_size;
@@ -129,7 +130,7 @@ public:
     template<typename Dtype>  bool    APP<Dtype>::IF_compr_count_conv;
     template<typename Dtype>  bool    APP<Dtype>::IF_eswpf;
     template<typename Dtype>  bool    APP<Dtype>::IF_acc_recovered = true;
-    template<typename Dtype>  int     APP<Dtype>::cnt_loss_cross_borderline = 0;
+    template<typename Dtype>  vector<int> APP<Dtype>::cnt_loss_cross_borderline(5000, 0);
     template<typename Dtype>  int     APP<Dtype>::cnt_acc_hit = 0;
     template<typename Dtype>  int     APP<Dtype>::cnt_acc_bad = 0;
     template<typename Dtype>  bool    APP<Dtype>::IF_acc_far_from_borderline = true;
@@ -180,6 +181,7 @@ public:
     template<typename Dtype>  vector<Dtype>  APP<Dtype>::pruned_ratio;
     template<typename Dtype>  vector<Dtype>  APP<Dtype>::pruned_ratio_col;
     template<typename Dtype>  vector<Dtype>  APP<Dtype>::pruned_ratio_row;
+    template<typename Dtype>  vector<Dtype>  APP<Dtype>::pruned_ratio_for_comparison;
     template<typename Dtype>  vector<Dtype>  APP<Dtype>::GFLOPs;
     template<typename Dtype>  vector<Dtype>  APP<Dtype>::num_param;
     

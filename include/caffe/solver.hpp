@@ -67,12 +67,12 @@ class Solver {
   // function that produces a SolverState protocol buffer that needs to be
   // written to disk together with the learned net.
   void Snapshot();
-  void Logshot();
-  void UpdateMasks();
-  void PruneStateShot();
   void PrintFinalPrunedRatio();
-  void CheckCurrentPruneStage();
+  void GetPruneProgress(Dtype* speedup, Dtype* compRatio, Dtype* GFLOPs_origin_, Dtype* num_param_origin_);
+  void CheckPruneState(const bool& IF_acc_far_from_borderline, const Dtype& true_val_acc = -1);
+  void CheckIfAllPruneDone();
   void SetNewCurrentPruneRatio(const bool& IF_roll_back);
+  void SetTrainSetting(const string& train_state);
   virtual ~Solver() {}
   inline const SolverParameter& param() const { return param_; }
   inline shared_ptr<Net<Dtype> > net() { return net_; }
