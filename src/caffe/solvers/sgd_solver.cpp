@@ -298,14 +298,14 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         Dtype* muhistory_score  = this->net_->layer_by_name(layer_name)->history_score()[0]->mutable_cpu_data();
         Dtype* muhistory_punish = this->net_->layer_by_name(layer_name)->history_punish()[0]->mutable_cpu_data();
         Dtype* mumasks          = this->net_->layer_by_name(layer_name)->masks()[0]->mutable_cpu_data();
-        Dtype* muweight = net_params[param_id]->mutable_cpu_data();
+        Dtype* muweight   = net_params[param_id]->mutable_cpu_data();
         const int count   = net_params[param_id]->count();
         const int num_row = net_params[param_id]->shape()[0];
         const int num_col = count / num_row;
         const int num_pruned_col = APP<Dtype>::num_pruned_col[L];
-        const int real_num_col_to_prune_ = ceil(num_col * (APP<Dtype>::current_prune_ratio[L] - APP<Dtype>::last_feasible_prune_ratio[L]));
+        const int real_num_col_to_prune_ = ceil(num_col * APP<Dtype>::current_prune_ratio[L]) - num_pruned_col;
         int num_col_to_prune_ = real_num_col_to_prune_; // ceil(num_col * (APP<Dtype>::current_prune_ratio[L] - APP<Dtype>::last_feasible_prune_ratio[L] + 0.02));
-        const int num_col_    = num_col - num_pruned_col;
+        const int num_col_ = num_col - num_pruned_col;
         if (num_col_to_prune_ <= 0) {
           LOG(FATAL) << "num_col_to_prune_ <= 0";
           exit(1);
@@ -361,36 +361,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
 #ifdef ShowTimingLog
             cout  << "  after 2nd sort: " << (double)(clock() - t1)/CLOCKS_PER_SEC << "s" << endl;
 #endif
-
-            // Print: Check rank, j is column number
-            if (this->iter_ % 1 == 0) {
-              char iter[10];
-              sprintf(iter, "%6d", this->iter_ + 1); // max_iter should be in [0, 999999]
-              cout << iter << "-" << layer_name << "hrank:";
-              for (int j = 0; j < num_col; ++j) {
-                cout << "  ";
-                char s[50];
-                if (APP<Dtype>::IF_col_pruned[L][j][0]) {
-                  sprintf(s, "%7.0f", muhistory_score[j]);
-                } else {
-                  sprintf(s, "%7.2f", muhistory_score[j]);
-                }
-                cout << s;
-              }
-              cout << endl;
-
-              cout << iter << "-" << layer_name << "rank(by_hrank):";
-              for (int rk = 0; rk < num_col; ++rk) {
-                cout << "  ";
-                char s[50];
-                const int prune_mark = APP<Dtype>::IF_col_pruned[L][col_hrank[rk].second][0] ? 0 : 1;
-                sprintf(s, "%4d-%d", col_hrank[rk].second, prune_mark);
-                cout << s;
-              }
-              cout << endl;
-            }
-
-            // Check if it's right time to return to normal target ratio to avoid unnecessary regularization onto extra columns.
+            /*// Check if it's right time to return to normal target ratio to avoid unnecessary regularization onto extra columns.
             Dtype ave_magnitude_others = 0;
             for (int rk = num_col_to_prune_; rk < num_col_; ++rk) {
               const int col_of_rank_rk = col_hrank[rk + num_pruned_col].second;
@@ -405,14 +376,14 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                 break;
               }
             }
-            if (IF_competition_barely_done && real_num_col_to_prune_ < num_col_to_prune_) {
+            if (IF_competition_barely_done) {
               cout << layer_name << ": weight group competition barely done, reduce the unnecessary regularization." << endl;
-              num_col_to_prune_ = real_num_col_to_prune_; // return to real target ratio
-              for (int rk = real_num_col_to_prune_; rk < num_col_to_prune_; ++rk) {
+              // num_col_to_prune_ = real_num_col_to_prune_; // return to real target ratio
+              for (int rk = num_col_to_prune_; rk < num_col_; ++rk) {
                 const int col_of_rank_rk = col_hrank[rk + num_pruned_col].second;
                 muhistory_punish[col_of_rank_rk] /= 2;
               }
-            }
+            }*/
 
             // scheme 1, the exponential center-symmetrical function
             const Dtype kk = APP<Dtype>::kk; // u in the paper
@@ -421,12 +392,15 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             // scheme 2, the dis-continual function
             const Dtype kk2 = APP<Dtype>::kk2;
             const Dtype alpha1 = (num_col_to_prune_ == 1)          ? 0 : log(1/kk2) / (num_col_to_prune_ - 1);
-            const Dtype alpha2 = (num_col_to_prune_ == num_col_-1) ? 0 : log(1/kk2) / (num_col_ - 1 - num_col_to_prune_);
+            const Dtype alpha2 = (num_col_to_prune_ == num_col_-1) ? 0 : log(1/kk2) / (num_col_-1 - num_col_to_prune_);
+            
             for (int j = 0; j < num_col_; ++j) { // j: rank
               const int col_of_rank_j = col_hrank[j + num_pruned_col].second; // Note the real rank is j + num_pruned_col
               const Dtype Delta = APP<Dtype>::IF_scheme1_when_Reg_rank
                                   ? (j < N1                ? AA * exp(-alpha  * j) : 2*kk*AA - AA * exp(-alpha  * (2 * N1     - j))) // (j < num_col_to_prune_ ? AA : -AA)
                                   : (j < num_col_to_prune_ ? AA * exp(-alpha1 * j) :         - AA * exp(-alpha2 * (num_col_-1 - j)));
+
+              // cout << "[app]    " << Delta << endl;
               const Dtype old_reg = muhistory_punish[col_of_rank_j];
               const Dtype new_reg = std::max(old_reg + Delta, Dtype(0));
               for (int i = 0; i < num_row; ++i) {
@@ -467,6 +441,46 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                      << "   old reg: "  << old_reg
                      << "   new reg: "  << new_reg << endl;
               }
+            }
+            
+            // Print: Check rank, j is column number
+            if (this->iter_ % 1 == 0) {
+              char iter[10];
+              sprintf(iter, "%6d", this->iter_ + 1); // max_iter should be in [0, 999999]
+              /*
+              // print hrank
+              cout << iter << "-" << layer_name << "hrank:";
+              for (int j = 0; j < num_col; ++j) {
+                char s[50];
+                if (APP<Dtype>::IF_col_pruned[L][j][0]) {
+                  sprintf(s, "  %7.0f", muhistory_score[j]);
+                } else {
+                  sprintf(s, "  %7.2f", muhistory_score[j]);
+                }
+                cout << s;
+              }
+              cout << endl;
+              */
+
+              // print rank
+              if (this->iter_ == 0) {
+                cout << iter << "-" << layer_name << "rank(by_hrank):";
+                for (int rk = 0; rk < num_col; ++rk) {
+                  char s[50];
+                  sprintf(s, "%13d", rk);
+                  cout << s;
+                }
+                cout << endl;
+              }
+              cout << iter << "-" << layer_name << "rank(by_hrank):";
+              for (int rk = 0; rk < num_col; ++rk) {
+                const int col_of_rank_rk = col_hrank[rk].second;
+                char s[50];
+                const int prune_mark = APP<Dtype>::IF_col_pruned[L][col_of_rank_rk][0] ? 0 : 1;
+                sprintf(s, " %4d-%d-%5.3f", col_of_rank_rk, prune_mark, muhistory_punish[col_of_rank_rk]); // at most 9999 columns
+                cout << s;
+              }
+              cout << endl;
             }
           } else if (APP<Dtype>::prune_coremthd == "Reg-L1") {
             typedef std::pair<Dtype, int> mypair;
@@ -681,10 +695,10 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
           return;
         }
 
-        Dtype* muhistory_score  = this->net_->layer_by_name(layer_name)->history_score()[0]->mutable_cpu_data();
-        Dtype* muhistory_punish = this->net_->layer_by_name(layer_name)->history_punish()[0]->mutable_cpu_data();
+        Dtype* muhistory_score      = this->net_->layer_by_name(layer_name)->history_score()[0]->mutable_cpu_data();
+        Dtype* muhistory_punish     = this->net_->layer_by_name(layer_name)->history_punish()[0]->mutable_cpu_data();
         Dtype* gpu_muhistory_punish = this->net_->layer_by_name(layer_name)->history_punish()[0]->mutable_gpu_data();
-        Dtype* mumasks          = this->net_->layer_by_name(layer_name)->masks()[0]->mutable_cpu_data();
+        Dtype* mumasks              = this->net_->layer_by_name(layer_name)->masks()[0]->mutable_cpu_data();
         const Dtype* weight = net_params[param_id]->cpu_data();
         const int count     = net_params[param_id]->count();
         const int num_row   = net_params[param_id]->shape()[0];

@@ -336,6 +336,37 @@ void Solver<Dtype>::Step(int iters) {
         cout << "[app]    layer " << L << " - pruned_ratio: " << APP<Dtype>::pruned_ratio_col[L] << endl;
       }
       APP<Dtype>::IF_current_target_achieved = false; // Got in here ONLY once.
+      
+      // Check reg
+      map<string, int>::iterator map_it;
+      for (int L = 0; L < APP<Dtype>::layer_index.size(); ++L) {
+        if (APP<Dtype>::prune_ratio[L] == 0) { continue; }
+        string layer_name = "";
+        for (map_it = APP<Dtype>::layer_index.begin(); map_it != APP<Dtype>::layer_index.end(); ++map_it) {
+          if (map_it->second == L) {
+            layer_name = map_it->first;
+            break;
+          }
+        }
+        Dtype* muhistory_punish = this->net_->layer_by_name(layer_name)->history_punish()[0]->mutable_cpu_data();
+        const int num_col = this->net_->layer_by_name(layer_name)->blobs()[0]->count(1);
+        const int num_row = this->net_->layer_by_name(layer_name)->blobs()[0]->shape()[0];
+        vector<Dtype> left_reg;
+        cout << "[app]    ";
+        for (int j = 0; j < num_col; ++j) {
+          if (0 < muhistory_punish[j] && muhistory_punish[j] < APP<Dtype>::target_reg) {
+            left_reg.push_back(muhistory_punish[j]);
+            for (int i = 0; i < num_row; ++i) {
+              muhistory_punish[i * num_col + j] = 0;
+            }
+          }
+        }
+        cout << "layer " << L << " - " << left_reg.size() << " columns' left reg not cleared, now cleared:";
+        for (int i = 0; i < left_reg.size(); ++i) {
+          cout << " " << left_reg[i];
+        }
+        cout << endl;
+      }
     }
 
     // Estimate accuracy based on loss
@@ -359,7 +390,7 @@ void Solver<Dtype>::Step(int iters) {
             && iter_ - APP<Dtype>::stage_iter_prune_finished == recover_interval_prune + APP<Dtype>::recover_interval * pow(1.2, APP<Dtype>::cnt_acc_bad)) {
       TestAll();
       const Dtype true_val_acc = *min_element(APP<Dtype>::val_accuracy.begin(), APP<Dtype>::val_accuracy.end());
-      cout << "[app] Retrain finished, true_val_acc = " << true_val_acc << ", step = " << APP<Dtype>::step_ << endl;
+      cout << "[app] Retrain finished, true_val_acc = " << true_val_acc << ", step: " << APP<Dtype>::step_ << endl;
       CheckPruneState(0, true_val_acc);
     }
 
@@ -456,12 +487,12 @@ template <typename Dtype>
 void Solver<Dtype>::CheckPruneState(const bool& IF_acc_far_from_borderline, const Dtype& true_val_acc) {
   if (true_val_acc == -1) { // check accuracy based on loss
     if (IF_acc_far_from_borderline) {
-      cout << "[app]    estimated accuracy **significantly good**, directly start a new pruning stage without retraining. step: " << APP<Dtype>::step_ << endl;
+      cout << "[app] Estimated accuracy **significantly good**, directly start a new pruning stage without retraining. step: " << APP<Dtype>::step_ << endl;
       APP<Dtype>::last_feasible_prune_iter = iter_;
       Snapshot();
       SetNewCurrentPruneRatio(false);
     } else {
-      cout << "[app]    estimated accuracy **NOT significantly good**, retrain to check accuracy before starting a new pruning stage." << endl;
+      cout << "[app] Estimated accuracy **NOT significantly good**, retrain to check accuracy before starting a new pruning stage. step: " << APP<Dtype>::step_ << endl;
       SetTrainSetting("retrain");
     }
   } else { // check accuracy based on true accuracy
