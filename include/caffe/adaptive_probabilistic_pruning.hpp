@@ -22,7 +22,7 @@ public:
     static string prune_unit;
     static string prune_coremthd;
     static string prune_coremthd_;  // if prune_method == "Reg-L1_Col", then prune_unit = "Col", prune_coremthd = "Reg-L1", prune_coremthd_ = "Reg"
-    static int num_once_prune;
+    static Dtype ratio_once_prune;
     static int prune_interval;
     static int recover_interval;
     static int clear_history_interval;
@@ -107,13 +107,14 @@ public:
     static string show_layer;
     static int show_num_layer;
     static int show_num_weight;
+    static vector<Dtype> when_snapshot;
 }; 
 
     template<typename Dtype>  string  APP<Dtype>::prune_method   = "None"; /// initialized for caffe test, which has no solver but this info is still needed in layer.
     template<typename Dtype>  string  APP<Dtype>::prune_unit     = "None";
     template<typename Dtype>  string  APP<Dtype>::prune_coremthd = "None";
     template<typename Dtype>  string  APP<Dtype>::prune_coremthd_ = "None";
-    template<typename Dtype>  int     APP<Dtype>::num_once_prune;
+    template<typename Dtype>  Dtype   APP<Dtype>::ratio_once_prune;
     template<typename Dtype>  int     APP<Dtype>::prune_interval;
     template<typename Dtype>  int     APP<Dtype>::recover_interval = 30000;
     template<typename Dtype>  int     APP<Dtype>::clear_history_interval;
@@ -202,6 +203,7 @@ public:
     template<typename Dtype>  string APP<Dtype>::show_layer = "1000"; // '1' means to print the weights of the layer with the index
     template<typename Dtype>  int APP<Dtype>::show_num_layer = 100; // work with show_interval, how many layers get printed
     template<typename Dtype>  int APP<Dtype>::show_num_weight = 20; // work with show_layer, how many weights get printed
+    template<typename Dtype>  vector<Dtype> APP<Dtype>::when_snapshot;
 }
 
 #endif

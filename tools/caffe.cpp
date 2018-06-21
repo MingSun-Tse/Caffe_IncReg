@@ -14,6 +14,7 @@ namespace bp = boost::python;
 #include "boost/algorithm/string.hpp"
 #include "caffe/caffe.hpp"
 #include "caffe/util/signal_handler.h"
+#include "caffe/adaptive_probabilistic_pruning.hpp"
 
 using caffe::Blob;
 using caffe::Caffe;
@@ -225,7 +226,8 @@ int train() {
     solver_param.set_device_id(gpus[0]);
     Caffe::SetDevice(gpus[0]);
     Caffe::set_mode(Caffe::GPU);
-    Caffe::set_solver_count(gpus.size()); 
+    Caffe::set_solver_count(gpus.size());
+    // APP<Dtype>::original_gpu_id = gpus[0];
   }
 
   caffe::SignalHandler signal_handler(
@@ -243,7 +245,7 @@ int train() {
   } else if (FLAGS_weights.size()) {
     CopyLayers(solver.get(), FLAGS_weights);
   }
-
+  
   if (gpus.size() > 1) {
     caffe::P2PSync<float> sync(solver, NULL, solver->param());
     sync.Run(gpus);
@@ -259,8 +261,6 @@ RegisterBrewFunction(train);
 
 // Test: score a model.
 int test() {
-  /// DeepCompression::IN_TEST = true; /// WANGHUAN
-  
   CHECK_GT(FLAGS_model.size(), 0) << "Need a model definition to score.";
   CHECK_GT(FLAGS_weights.size(), 0) << "Need model weights to score.";
   vector<string> stages = get_stages_from_flags();
@@ -268,14 +268,15 @@ int test() {
   // Set device id and mode
   vector<int> gpus;
   get_gpus(&gpus);
+  const int test_gpu = 0;
   if (gpus.size() != 0) {
-    LOG(INFO) << "Use GPU with device ID " << gpus[0];
+    LOG(INFO) << "Use GPU with device ID " << gpus[test_gpu];
 #ifndef CPU_ONLY
     cudaDeviceProp device_prop;
-    cudaGetDeviceProperties(&device_prop, gpus[0]);
+    cudaGetDeviceProperties(&device_prop, gpus[test_gpu]);
     LOG(INFO) << "GPU device name: " << device_prop.name;
 #endif
-    Caffe::SetDevice(gpus[0]);
+    Caffe::SetDevice(gpus[test_gpu]);
     Caffe::set_mode(Caffe::GPU);
   } else {
     LOG(INFO) << "Use CPU.";
@@ -326,8 +327,6 @@ int test() {
     }
     LOG(INFO) << output_name << " = " << mean_score << loss_msg_stream.str();
   }
-  
-  /// DeepCompression::IN_TEST = false; /// WANGHUAN
   return 0;
 }
 RegisterBrewFunction(test);
@@ -335,8 +334,6 @@ RegisterBrewFunction(test);
 
 // Time: benchmark the execution time of a model.
 int time() {
-  /// DeepCompression::IN_TEST = true; /// WANGHUAN
-    
   CHECK_GT(FLAGS_model.size(), 0) << "Need a model definition to time.";
   caffe::Phase phase = get_phase_from_flags(caffe::TRAIN);
   vector<string> stages = get_stages_from_flags();
@@ -422,8 +419,6 @@ int time() {
     FLAGS_iterations << " ms.";
   LOG(INFO) << "Total Time: " << total_timer.MilliSeconds() << " ms.";
   LOG(INFO) << "*** Benchmark ends ***";
-  
-  /// DeepCompression::IN_TEST = false; /// WANGHUAN
   return 0;
 }
 RegisterBrewFunction(time);

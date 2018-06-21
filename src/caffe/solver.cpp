@@ -73,7 +73,7 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
       strcpy(coremthd, APP<Dtype>::prune_coremthd.c_str());
       APP<Dtype>::prune_coremthd_ = strtok(coremthd, "-");
   }
-  APP<Dtype>::num_once_prune = param_.num_once_prune();
+  APP<Dtype>::ratio_once_prune = param_.ratio_once_prune();
   APP<Dtype>::prune_interval = param_.prune_interval();
   APP<Dtype>::clear_history_interval = 1;
   APP<Dtype>::prune_begin_iter = param_.prune_begin_iter();
@@ -97,6 +97,9 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   APP<Dtype>::learning_rate = APP<Dtype>::prune_method == "None" ? param_.base_lr() : param_.base_lr() * 5;
   APP<Dtype>::num_test_iter = 50;
   APP<Dtype>::original_gpu_id = 0;
+
+  const Dtype index[] = {8,7,6,5,4,3,2};
+  APP<Dtype>::when_snapshot.insert(APP<Dtype>::when_snapshot.begin(), index, index + sizeof(index)/sizeof(index[0]));
   // ------------------------------------------
 
   CHECK_GE(param_.average_loss(), 1) << "average_loss should be non-negative.";
