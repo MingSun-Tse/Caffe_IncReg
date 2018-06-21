@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 
+#include "caffe/caffe.hpp"
 #include "caffe/solver.hpp"
 #include "caffe/util/format.hpp"
 #include "caffe/util/hdf5.hpp"
@@ -14,6 +15,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <numeric>
+
+#include "boost/algorithm/string.hpp"
 
 namespace caffe {
 
@@ -92,6 +95,8 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   
   APP<Dtype>::iter_size = APP<Dtype>::prune_method == "None" ? param_.iter_size() : param_.iter_size() / 4;
   APP<Dtype>::learning_rate = APP<Dtype>::prune_method == "None" ? param_.base_lr() : param_.base_lr() * 5;
+  APP<Dtype>::num_test_iter = 50;
+  APP<Dtype>::original_gpu_id = 0;
   // ------------------------------------------
 
   CHECK_GE(param_.average_loss(), 1) << "average_loss should be non-negative.";
@@ -138,7 +143,9 @@ void Solver<Dtype>::InitTrainNet() {
     LOG_IF(INFO, Caffe::root_solver())
         << "Creating training net from net file: " << param_.net();
     ReadNetParamsFromTextFileOrDie(param_.net(), &net_param);
+    APP<Dtype>::model_prototxt = param_.net();
   }
+  
   // Set the correct NetState.  We start with the solver defaults (lowest
   // precedence); then, merge in any NetState specified by the net_param itself;
   // finally, merge in any NetState specified by the train_state (highest
@@ -375,20 +382,24 @@ void Solver<Dtype>::Step(int iters) {
       const Dtype acc_borderline1 = baseline_acc - 0.015;  // Requirement: top-1 acc loss <= 0.01
       const Dtype loss_borderline1 = (0.81590473 - acc_borderline1) / 0.0359494; // Get this by linear regression, to be improved
       const int vec_size = APP<Dtype>::cnt_loss_cross_borderline.size();
-      APP<Dtype>::cnt_loss_cross_borderline[iter_ % vec_size] = (smoothed_loss_ < loss_borderline1) ? 0 : 1;
+      APP<Dtype>::cnt_loss_cross_borderline[iter_ % vec_size] = (smoothed_loss_ < loss_borderline1) ? 1 : 0;
     }
 
     // Check acc based on loss
     const int recover_interval_prune = 10000; // the short recovery period right after pruning, before checking loss
     if (iter_ - APP<Dtype>::stage_iter_prune_finished == recover_interval_prune) {
       const int cnt_loss_cross_borderline = accumulate(APP<Dtype>::cnt_loss_cross_borderline.begin(), APP<Dtype>::cnt_loss_cross_borderline.end(), 0);
-      CheckPruneState(cnt_loss_cross_borderline < APP<Dtype>::cnt_loss_cross_borderline.size() / 2);
+      CheckPruneState(cnt_loss_cross_borderline > APP<Dtype>::cnt_loss_cross_borderline.size() / 2);
     }
 
     // Check acc based on true acc
     if (APP<Dtype>::IF_acc_recovered == false 
             && iter_ - APP<Dtype>::stage_iter_prune_finished == recover_interval_prune + APP<Dtype>::recover_interval * pow(1.2, APP<Dtype>::cnt_acc_bad)) {
-      TestAll();
+      // TestAll();
+      Snapshot();
+      const string test_weights = param_.snapshot_prefix() + "_iter_" + caffe::format_int(iter_) + ".caffemodel";
+      const int test_gpu_id = 1;
+      OfflineTest(APP<Dtype>::model_prototxt, test_weights, test_gpu_id, APP<Dtype>::num_test_iter);
       const Dtype true_val_acc = *min_element(APP<Dtype>::val_accuracy.begin(), APP<Dtype>::val_accuracy.end());
       cout << "[app] Retrain finished, true_val_acc = " << true_val_acc << ", step: " << APP<Dtype>::step_ << endl;
       CheckPruneState(0, true_val_acc);
@@ -496,7 +507,7 @@ void Solver<Dtype>::CheckPruneState(const bool& IF_acc_far_from_borderline, cons
       SetTrainSetting("retrain");
     }
   } else { // check accuracy based on true accuracy
-    const Dtype acc_borderline = 0.800;
+    const Dtype acc_borderline = 0.79;
     if (acc_borderline - true_val_acc > 0.0005) { // accuracy bad
       ++ APP<Dtype>::cnt_acc_bad;
       cout << "[app]    #" << APP<Dtype>::cnt_acc_bad << " - true_val_acc bad: < " << acc_borderline << endl;
@@ -673,6 +684,72 @@ void Solver<Dtype>::TestAll() {
     Test(test_net_id);
   }
 }
+
+// ----------------------------------------------------------------------------------
+template <typename Dtype>
+void Solver<Dtype>::OfflineTest(const string& model, const string& weights, const int& gpu_id, const int& num_iter) {
+  APP<Dtype>::val_accuracy.clear();
+  // Set device id and mode
+  LOG(INFO) << "Use GPU with device ID " << gpu_id;
+#ifndef CPU_ONLY
+  cudaDeviceProp device_prop;
+  cudaGetDeviceProperties(&device_prop, gpu_id);
+  LOG(INFO) << "GPU device name: " << device_prop.name;
+#endif
+  Caffe::SetDevice(gpu_id);
+  Caffe::set_mode(Caffe::GPU);
+  
+  // Instantiate the caffe net.
+  Net<float> caffe_net(model, caffe::TEST);
+  caffe_net.CopyTrainedLayersFrom(weights);
+  LOG(INFO) << "Running for " << num_iter << " iterations.";
+
+  vector<int> test_score_output_id;
+  vector<float> test_score;
+  float loss = 0;
+  for (int i = 0; i < num_iter; ++i) {
+    float iter_loss;
+    const vector<Blob<float>*>& result =
+        caffe_net.Forward(&iter_loss);
+    loss += iter_loss;
+    int idx = 0;
+    for (int j = 0; j < result.size(); ++j) {
+      const float* result_vec = result[j]->cpu_data();
+      for (int k = 0; k < result[j]->count(); ++k, ++idx) {
+        const float score = result_vec[k];
+        if (i == 0) {
+          test_score.push_back(score);
+          test_score_output_id.push_back(j);
+        } else {
+          test_score[idx] += score;
+        }
+        // const std::string& output_name = caffe_net.blob_names()[
+            // caffe_net.output_blob_indices()[j]];
+        // LOG(INFO) << "Batch " << i << ", " << output_name << " = " << score;
+      }
+    }
+  }
+  loss /= num_iter;
+  LOG(INFO) << "Loss: " << loss;
+  for (int i = 0; i < test_score.size(); ++i) {
+    const std::string& output_name = caffe_net.blob_names()[
+        caffe_net.output_blob_indices()[test_score_output_id[i]]];
+    const float loss_weight = caffe_net.blob_loss_weights()[
+        caffe_net.output_blob_indices()[test_score_output_id[i]]];
+    std::ostringstream loss_msg_stream;
+    const float mean_score = test_score[i] / num_iter;
+    if (loss_weight) {
+      loss_msg_stream << " (* " << loss_weight
+                      << " = " << loss_weight * mean_score << " loss)";
+    }
+    LOG(INFO) << output_name << " = " << mean_score << loss_msg_stream.str();
+    if (output_name.substr(1, 3) == "ccu") { // TODO(mingsuntse): improve this
+      APP<Dtype>::val_accuracy.push_back(mean_score);
+    }
+  }
+  Caffe::SetDevice(APP<Dtype>::original_gpu_id);
+}
+// --------------------------------------------------------------------------------
 
 template <typename Dtype>
 void Solver<Dtype>::Test(const int test_net_id) {

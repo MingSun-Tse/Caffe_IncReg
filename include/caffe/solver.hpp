@@ -72,6 +72,8 @@ class Solver {
   void CheckPruneState(const bool& IF_acc_far_from_borderline, const Dtype& true_val_acc = -1);
   void SetNewCurrentPruneRatio(const bool& IF_roll_back);
   void SetTrainSetting(const string& train_state);
+  void OfflineTest(const string& model, const string& weights, const int& gpu_id, const int& num_iter);
+  
   virtual ~Solver() {}
   inline const SolverParameter& param() const { return param_; }
   inline shared_ptr<Net<Dtype> > net() { return net_; }

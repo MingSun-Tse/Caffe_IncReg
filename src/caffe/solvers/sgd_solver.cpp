@@ -444,7 +444,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             }
             
             // Print: Check rank, j is column number
-            if (this->iter_ % 1 == 0) {
+            if (this->iter_ % 10000000000 == 0) {
               char iter[10];
               sprintf(iter, "%6d", this->iter_ + 1); // max_iter should be in [0, 999999]
               /*
@@ -574,10 +574,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         const int num_col   = count / num_row;
         const int num_pruned_col    = APP<Dtype>::num_pruned_col[L];
         const int num_col_to_prune_ = ceil(num_col * APP<Dtype>::prune_ratio[L]) - num_pruned_col;
-        if (num_col_to_prune_ <= 0) {
-          LOG(FATAL) << "num_col_to_prune_ <= 0";
-          exit(1);
-        }
+        CHECK_LE(num_col_to_prune_, 0);
         const Dtype AA = APP<Dtype>::AA; // The fixed reg multiplier
 
         cout << layer_name << endl;

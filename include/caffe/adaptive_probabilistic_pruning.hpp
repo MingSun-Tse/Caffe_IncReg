@@ -54,6 +54,9 @@ public:
     static int           last_feasible_prune_iter;
     static vector<Dtype> last_infeasible_prune_ratio;
     static vector<Dtype> val_accuracy;
+    static int num_test_iter;
+    static string model_prototxt;
+    static int original_gpu_id;
     
     static int inner_iter;
     static int step_;
@@ -142,6 +145,9 @@ public:
     template<typename Dtype>  int           APP<Dtype>::last_feasible_prune_iter = -1;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::last_infeasible_prune_ratio;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::val_accuracy;
+    template<typename Dtype>  int APP<Dtype>::num_test_iter;
+    template<typename Dtype>  string APP<Dtype>::model_prototxt;
+    template<typename Dtype>  int APP<Dtype>::original_gpu_id;
     
 
     // 1.2 Info shared between solver and layer, initailized here
