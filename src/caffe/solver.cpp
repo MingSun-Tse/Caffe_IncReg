@@ -89,16 +89,18 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   APP<Dtype>::IF_scheme1_when_Reg_rank = param.if_scheme1_when_reg_rank();
   APP<Dtype>::IF_eswpf = param_.if_eswpf(); /// if early stop when prune finished
   APP<Dtype>::prune_threshold = param_.prune_threshold();
-  APP<Dtype>::reg_cushion_iter = 2000;
   // APP<Dtype>::mask_generate_mechanism = param_.mask_generate_mechanism();
   // APP<Dtype>::score_decay = param_.score_decay();
   
-  APP<Dtype>::iter_size = APP<Dtype>::prune_method == "None" ? param_.iter_size() : param_.iter_size() / 4;
-  APP<Dtype>::learning_rate = APP<Dtype>::prune_method == "None" ? param_.base_lr() : param_.base_lr() * 5;
-  APP<Dtype>::num_test_iter = 50;
-  APP<Dtype>::original_gpu_id = 0;
+  APP<Dtype>::iter_size          = APP<Dtype>::prune_method == "None" ? param_.iter_size() : param_.iter_size() / 4;
+  APP<Dtype>::learning_rate      = APP<Dtype>::prune_method == "None" ? param_.base_lr()   : param_.base_lr() * 5;
+  APP<Dtype>::acc_borderline     = 0.79;
+  APP<Dtype>::loss_borderline    = 0.55;
+  APP<Dtype>::recover_interval   = 3000;
+  APP<Dtype>::loss_eval_interval = 5000;
+  APP<Dtype>::cnt_loss_cross_borderline.resize(APP<Dtype>::loss_eval_interval, 1);
 
-  const Dtype index[] = {8,7,6,5,4,3,2};
+  const Dtype index[] = {8,7,6,5,4,3,2}; // When speedup or compRatio = 8~2, snapshot.
   APP<Dtype>::when_snapshot.insert(APP<Dtype>::when_snapshot.begin(), index, index + sizeof(index)/sizeof(index[0]));
   // ------------------------------------------
 
@@ -195,6 +197,9 @@ void Solver<Dtype>::InitTestNets() {
         << "test_state must be unspecified or specified once per test net.";
   }
   if (num_test_net_instances) {
+    if (APP<Dtype>::prune_method != "None" && APP<Dtype>::test_gpu_id != -1) {
+      return;
+    }
     CHECK_GT(param_.test_interval(), 0);
   }
   int test_net_id = 0;
@@ -343,7 +348,7 @@ void Solver<Dtype>::Step(int iters) {
       cout << "[app]\n[app] Current pruning stage finished. step: " << APP<Dtype>::stage_iter_prune_finished + 1 << endl;
       for (int L = 0; L < APP<Dtype>::layer_index.size(); ++L) {
         if (APP<Dtype>::prune_ratio[L] == 0) { continue; }
-        cout << "[app]    layer " << L << " - pruned_ratio: " << APP<Dtype>::pruned_ratio_col[L] << endl;
+        cout << "[app]    " << L << " - pruned_ratio: " << APP<Dtype>::pruned_ratio_col[L] << endl;
       }
       APP<Dtype>::IF_current_target_achieved = false; // Got in here ONLY once.
       
@@ -371,7 +376,7 @@ void Solver<Dtype>::Step(int iters) {
             }
           }
         }
-        cout << "layer " << L << " - " << left_reg.size() << " columns' left reg not cleared, now cleared:";
+        cout << L << " - " << left_reg.size() << " columns' left reg not cleared, now cleared:";
         for (int i = 0; i < left_reg.size(); ++i) {
           cout << " " << left_reg[i];
         }
@@ -381,28 +386,26 @@ void Solver<Dtype>::Step(int iters) {
 
     // Estimate accuracy based on loss
     if (APP<Dtype>::IF_acc_recovered == true) {
-      const Dtype baseline_acc = 0.8108;
-      const Dtype acc_borderline1 = baseline_acc - 0.015;  // Requirement: top-1 acc loss <= 0.01
-      const Dtype loss_borderline1 = (0.81590473 - acc_borderline1) / 0.0359494; // Get this by linear regression, to be improved
       const int vec_size = APP<Dtype>::cnt_loss_cross_borderline.size();
-      APP<Dtype>::cnt_loss_cross_borderline[iter_ % vec_size] = (smoothed_loss_ < loss_borderline1) ? 1 : 0;
+      APP<Dtype>::cnt_loss_cross_borderline[iter_ % vec_size] = (smoothed_loss_ < APP<Dtype>::loss_borderline) ? 0 : 1;
     }
 
     // Check acc based on loss
-    const int recover_interval_prune = 10000; // the short recovery period right after pruning, before checking loss
-    if (iter_ - APP<Dtype>::stage_iter_prune_finished == recover_interval_prune) {
+    if (iter_ - APP<Dtype>::stage_iter_prune_finished == APP<Dtype>::loss_eval_interval) {
       const int cnt_loss_cross_borderline = accumulate(APP<Dtype>::cnt_loss_cross_borderline.begin(), APP<Dtype>::cnt_loss_cross_borderline.end(), 0);
-      CheckPruneState(cnt_loss_cross_borderline > APP<Dtype>::cnt_loss_cross_borderline.size() / 2);
+      CheckPruneState(cnt_loss_cross_borderline < APP<Dtype>::cnt_loss_cross_borderline.size() / 2);
     }
 
     // Check acc based on true acc
     if (APP<Dtype>::IF_acc_recovered == false 
-            && iter_ - APP<Dtype>::stage_iter_prune_finished == recover_interval_prune + APP<Dtype>::recover_interval * pow(1.2, APP<Dtype>::cnt_acc_bad)) {
+            && iter_ - APP<Dtype>::stage_iter_prune_finished == APP<Dtype>::loss_eval_interval + APP<Dtype>::recover_interval * pow(1.2, APP<Dtype>::cnt_acc_bad)) {
       // TestAll();
       Snapshot();
       const string test_weights = param_.snapshot_prefix() + "_iter_" + caffe::format_int(iter_) + ".caffemodel";
-      const int test_gpu_id = 1;
-      OfflineTest(APP<Dtype>::model_prototxt, test_weights, test_gpu_id, APP<Dtype>::num_test_iter);
+      if (APP<Dtype>::test_gpu_id == -1) { 
+        APP<Dtype>::test_gpu_id = APP<Dtype>::original_gpu_id;
+      }
+      OfflineTest(APP<Dtype>::model_prototxt, test_weights, APP<Dtype>::test_gpu_id, param_.test_iter(0));
       const Dtype true_val_acc = *min_element(APP<Dtype>::val_accuracy.begin(), APP<Dtype>::val_accuracy.end());
       cout << "[app] Retrain finished, true_val_acc = " << true_val_acc << ", step: " << APP<Dtype>::step_ << endl;
       CheckPruneState(0, true_val_acc);
@@ -510,10 +513,9 @@ void Solver<Dtype>::CheckPruneState(const bool& IF_acc_far_from_borderline, cons
       SetTrainSetting("retrain");
     }
   } else { // check accuracy based on true accuracy
-    const Dtype acc_borderline = 0.79;
-    if (acc_borderline - true_val_acc > 0.0005) { // accuracy bad
+    if (APP<Dtype>::acc_borderline - true_val_acc > 0.0005) { // accuracy bad
       ++ APP<Dtype>::cnt_acc_bad;
-      cout << "[app]    #" << APP<Dtype>::cnt_acc_bad << " - true_val_acc bad: < " << acc_borderline << endl;
+      cout << "[app]    #" << APP<Dtype>::cnt_acc_bad << " - true_val_acc bad: < " << APP<Dtype>::acc_borderline << endl;
       if (APP<Dtype>::cnt_acc_bad == 3) {
         cout << "[app]    3 times bad continuously, roll back weights to iter = " << APP<Dtype>::last_feasible_prune_iter << endl;
         if (APP<Dtype>::last_feasible_prune_iter == -1) {
@@ -533,7 +535,7 @@ void Solver<Dtype>::CheckPruneState(const bool& IF_acc_far_from_borderline, cons
       APP<Dtype>::cnt_acc_bad = 0;
       Snapshot();
       APP<Dtype>::last_feasible_prune_iter = iter_;
-      if (fabs(true_val_acc - acc_borderline) < 0.0005 && (++ APP<Dtype>::cnt_acc_hit) == 3) {
+      if (fabs(true_val_acc - APP<Dtype>::acc_borderline) < 0.0005 && (++ APP<Dtype>::cnt_acc_hit) == 3) {
         cout << "[app]    #" << APP<Dtype>::cnt_acc_hit << " - true_val_acc hit" << endl;
         cout << "[app]    All pruning done, stop exploring new current_prune_ratio. Next is all retraining." << endl;
         SetTrainSetting("retrain");

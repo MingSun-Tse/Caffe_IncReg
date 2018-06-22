@@ -48,7 +48,7 @@
 namespace caffe {
 
 template <typename Dtype>
-class Solver; // Solver是一个空类
+class Solver;
 
 template <typename Dtype>
 class SolverRegistry {

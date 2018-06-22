@@ -25,6 +25,7 @@ public:
     static Dtype ratio_once_prune;
     static int prune_interval;
     static int recover_interval;
+    static int loss_eval_interval;
     static int clear_history_interval;
     static int prune_begin_iter;
     static int iter_size;
@@ -49,14 +50,15 @@ public:
     static vector<bool> IF_layer_far_from_borderline;
     static Dtype prune_threshold;
     static Dtype target_reg;
-    static int reg_cushion_iter; // In the beginning of reg, improve the reg little-by-little to mitigate the side-effect. `reg_cushion_iter` is the iter of this mitigation perioid
     static vector<Dtype> last_feasible_prune_ratio;
     static int           last_feasible_prune_iter;
     static vector<Dtype> last_infeasible_prune_ratio;
     static vector<Dtype> val_accuracy;
-    static int num_test_iter;
     static string model_prototxt;
     static int original_gpu_id;
+    static int test_gpu_id;
+    static Dtype acc_borderline;
+    static Dtype loss_borderline;
     
     static int inner_iter;
     static int step_;
@@ -116,7 +118,8 @@ public:
     template<typename Dtype>  string  APP<Dtype>::prune_coremthd_ = "None";
     template<typename Dtype>  Dtype   APP<Dtype>::ratio_once_prune;
     template<typename Dtype>  int     APP<Dtype>::prune_interval;
-    template<typename Dtype>  int     APP<Dtype>::recover_interval = 30000;
+    template<typename Dtype>  int     APP<Dtype>::recover_interval;
+    template<typename Dtype>  int     APP<Dtype>::loss_eval_interval;
     template<typename Dtype>  int     APP<Dtype>::clear_history_interval;
     template<typename Dtype>  int     APP<Dtype>::prune_begin_iter;
     template<typename Dtype>  int     APP<Dtype>::iter_size;
@@ -134,21 +137,22 @@ public:
     template<typename Dtype>  bool    APP<Dtype>::IF_compr_count_conv;
     template<typename Dtype>  bool    APP<Dtype>::IF_eswpf;
     template<typename Dtype>  bool    APP<Dtype>::IF_acc_recovered = true;
-    template<typename Dtype>  vector<bool> APP<Dtype>::cnt_loss_cross_borderline(10000, 0);
+    template<typename Dtype>  vector<bool> APP<Dtype>::cnt_loss_cross_borderline;
     template<typename Dtype>  int     APP<Dtype>::cnt_acc_hit = 0;
     template<typename Dtype>  int     APP<Dtype>::cnt_acc_bad = 0;
     template<typename Dtype>  bool    APP<Dtype>::IF_acc_far_from_borderline = true;
     template<typename Dtype>  vector<bool> APP<Dtype>::IF_layer_far_from_borderline;
     template<typename Dtype>  Dtype   APP<Dtype>::prune_threshold;
     template<typename Dtype>  Dtype   APP<Dtype>::target_reg;
-    template<typename Dtype>  int     APP<Dtype>::reg_cushion_iter;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::last_feasible_prune_ratio;
     template<typename Dtype>  int           APP<Dtype>::last_feasible_prune_iter = -1;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::last_infeasible_prune_ratio;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::val_accuracy;
-    template<typename Dtype>  int APP<Dtype>::num_test_iter;
     template<typename Dtype>  string APP<Dtype>::model_prototxt;
     template<typename Dtype>  int APP<Dtype>::original_gpu_id;
+    template<typename Dtype>  int APP<Dtype>::test_gpu_id = -1;
+    template<typename Dtype>  Dtype APP<Dtype>::acc_borderline;
+    template<typename Dtype>  Dtype APP<Dtype>::loss_borderline;
     
 
     // 1.2 Info shared between solver and layer, initailized here

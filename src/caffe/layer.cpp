@@ -894,7 +894,7 @@ void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
   const int num_col = count / num_row;
   APP<Dtype>::prune_ratio.push_back(prune_param.prune_ratio());
   APP<Dtype>::prune_ratio_step.push_back(0.1); // TODO(mingsuntse-newprune)
-  APP<Dtype>::current_prune_ratio.push_back(0.3); // APP<Dtype>::prune_ratio_step.back()); // Start from 20%
+  APP<Dtype>::current_prune_ratio.push_back(0.2); // APP<Dtype>::prune_ratio_step.back()); // Start from 20%
   APP<Dtype>::pruned_ratio.push_back(0); // used in TEST
   this->IF_masks_updated = true;
   if (this->phase_ == TEST) {
