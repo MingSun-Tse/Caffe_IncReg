@@ -243,46 +243,39 @@ message SolverParameter {
   // DEPRECATED: use type instead of solver_type
   optional SolverType solver_type = 30 [default = SGD];
   
-  
   // -----------------------------------------
-  // WANGHUAN: hyper-parameters of APP (max index = 61)
-  // pruning
+  /// @mingsuntse: hyper-parameters of APP (max index = 69)
   optional string prune_method = 41 [default = "None"];
-  optional int32 prune_begin_iter = 43 [default = -1];
   optional float ratio_once_prune = 52 [default = 0]; // how many columns/rows to prune per time
   optional int32 prune_interval = 53 [default = 1]; // how often to prune
   
-  // optional float rgamma = 48; // recover
-  // optional float rpower = 49; 
-  // optional float cgamma = 50; // compression
-  // optional float cpower = 51; // legacies
-  
-  optional float AA = 55 [default = 0.05]; // AA of PP
-  // optional float kk = 58 [default = 0.25]; // kk of PP when using fixed interval to prune
-  
+  optional float AA = 55 [default = 0]; // unit punishment
+  optional float target_reg = 61 [default = 0]; // ceiling punishment
   optional float speedup = 56 [default = 0];
+  optional float compRatio = 62 [default = 0];
+  optional float prune_threshold = 60 [default = 0];
+ 
+  optional float accu_borderline = 66;
+  optional float loss_borderline = 67;
+  optional int32 recovery_interval = 68;
+  optional int32 losseval_interval = 69;
+  
   optional bool IF_update_row_col = 57 [default = true];
   optional bool IF_eswpf = 59 [default = true];
-  optional float prune_threshold = 60 [default = 0];
-  optional float target_reg = 61 [default = 0];
-  optional float compRatio = 62 [default = 0];
   optional bool IF_speedup_count_fc = 63 [default = true];
   optional bool IF_compr_count_conv = 64 [default = true];
   optional bool IF_scheme1_when_Reg_rank = 65 [default = true];
-  //optional string mask_generate_mechanism = 66 [default = "group-wise"];
  
   // decrease weight decay
-  optional string dwd_mode = 44 [default = "None"];
-  optional int32 dwd_begin_iter = 45;
-  optional int32 dwd_end_iter = 46;
-  optional float wd_end = 47; 
-  optional int32 dwd_step = 54;
-  
+  // optional string dwd_mode = 44 [default = "None"];
+  // optional int32 dwd_begin_iter = 45;
+  // optional int32 dwd_end_iter = 46;
+  // optional float wd_end = 47; 
+  // optional int32 dwd_step = 54;
   // -----------------------------------------
-  
 }
 
-// WANGHUAN
+/// @mingsuntse
 message PruneParameter{
   optional float prune_ratio = 1 [default = 0];
   optional float delta = 2 [default = 0];

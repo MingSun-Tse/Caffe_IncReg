@@ -193,9 +193,9 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
     this->net_->params_weight_decay();
   Dtype weight_decay = this->param_.weight_decay();
   string regularization_type = this->param_.regularization_type();
-  // ------------------------------------------------
+  Dtype current_wd = weight_decay;
+  /*// ------------------------------------------------
   /// Decrease-Weight-Decay Mode, @mingsuntse
-  Dtype current_wd = weight_decay; // default
   if (this->param_.dwd_mode() != "None") {
     CHECK_GE(this->param_.wd_end(), 0) << "Error: wd_end must be in [0, 1]";
     // CHECK_LE(this->param_.wd_end(), 1) << "Error: wd_end must be in [0, 1]"; // weight decay can go up, when wd_end > 1
@@ -212,11 +212,10 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         CHECK_GT(end, begin) << "Error: dwd_end_iter must be larger than dwd_begin_iter.";
         const int tmp_iter = (std::min(this->iter_, end) - begin) / this->param_.dwd_step() * this->param_.dwd_step();
         current_wd = weight_decay * (1 - (1 - this->param_.wd_end()) / (end - begin) * tmp_iter);
-
       }
     }
   }
-  // ------------------------------------------------
+  // ------------------------------------------------*/
   Dtype local_decay = current_wd * net_params_weight_decay[param_id];
   switch (Caffe::mode()) {
   case Caffe::CPU: {

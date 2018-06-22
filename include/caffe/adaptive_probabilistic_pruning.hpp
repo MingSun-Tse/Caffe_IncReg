@@ -24,8 +24,8 @@ public:
     static string prune_coremthd_;  // if prune_method == "Reg-L1_Col", then prune_unit = "Col", prune_coremthd = "Reg-L1", prune_coremthd_ = "Reg"
     static Dtype ratio_once_prune;
     static int prune_interval;
-    static int recover_interval;
-    static int loss_eval_interval;
+    static int recovery_interval;
+    static int losseval_interval;
     static int clear_history_interval;
     static int prune_begin_iter;
     static int iter_size;
@@ -57,7 +57,7 @@ public:
     static string model_prototxt;
     static int original_gpu_id;
     static int test_gpu_id;
-    static Dtype acc_borderline;
+    static Dtype accu_borderline;
     static Dtype loss_borderline;
     
     static int inner_iter;
@@ -118,8 +118,8 @@ public:
     template<typename Dtype>  string  APP<Dtype>::prune_coremthd_ = "None";
     template<typename Dtype>  Dtype   APP<Dtype>::ratio_once_prune;
     template<typename Dtype>  int     APP<Dtype>::prune_interval;
-    template<typename Dtype>  int     APP<Dtype>::recover_interval;
-    template<typename Dtype>  int     APP<Dtype>::loss_eval_interval;
+    template<typename Dtype>  int     APP<Dtype>::recovery_interval;
+    template<typename Dtype>  int     APP<Dtype>::losseval_interval;
     template<typename Dtype>  int     APP<Dtype>::clear_history_interval;
     template<typename Dtype>  int     APP<Dtype>::prune_begin_iter;
     template<typename Dtype>  int     APP<Dtype>::iter_size;
@@ -151,7 +151,7 @@ public:
     template<typename Dtype>  string APP<Dtype>::model_prototxt;
     template<typename Dtype>  int APP<Dtype>::original_gpu_id;
     template<typename Dtype>  int APP<Dtype>::test_gpu_id = -1;
-    template<typename Dtype>  Dtype APP<Dtype>::acc_borderline;
+    template<typename Dtype>  Dtype APP<Dtype>::accu_borderline;
     template<typename Dtype>  Dtype APP<Dtype>::loss_borderline;
     
 
