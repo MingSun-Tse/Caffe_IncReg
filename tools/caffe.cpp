@@ -102,7 +102,7 @@ static void get_gpus(vector<int>* gpus) {
   } else if (FLAGS_gpu.size()) {
     vector<string> strings;
     vector<string> strings2;
-    boost::split(strings, FLAGS_gpu, boost::is_any_of(",-"));
+    boost::split(strings, FLAGS_gpu, boost::is_any_of(",-")); // for example, --gpu 0,1-2
     boost::split(strings2, FLAGS_gpu, boost::is_any_of("-"));
     for (int i = 0; i < strings.size(); ++i) {
       gpus->push_back(boost::lexical_cast<int>(strings[i]));

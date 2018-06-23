@@ -402,10 +402,8 @@ void Solver<Dtype>::Step(int iters) {
       // TestAll();
       Snapshot();
       const string test_weights = param_.snapshot_prefix() + "_iter_" + caffe::format_int(iter_) + ".caffemodel";
-      if (APP<Dtype>::test_gpu_id == -1) { 
-        APP<Dtype>::test_gpu_id = APP<Dtype>::original_gpu_id;
-      }
-      OfflineTest(APP<Dtype>::model_prototxt, test_weights, APP<Dtype>::test_gpu_id, param_.test_iter(0));
+      const int test_gpu_id = APP<Dtype>::test_gpu_id == -1 ? APP<Dtype>::original_gpu_id : APP<Dtype>::test_gpu_id;
+      OfflineTest(APP<Dtype>::model_prototxt, test_weights, test_gpu_id, param_.test_iter(0));
       const Dtype true_val_acc = *min_element(APP<Dtype>::val_accuracy.begin(), APP<Dtype>::val_accuracy.end());
       cout << "[app] Retrain finished, true_val_acc = " << true_val_acc << ", step: " << APP<Dtype>::step_ << endl;
       CheckPruneState(0, true_val_acc);
