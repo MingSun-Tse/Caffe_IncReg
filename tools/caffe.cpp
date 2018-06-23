@@ -107,7 +107,7 @@ static void get_gpus(vector<int>* gpus) {
     for (int i = 0; i < strings.size(); ++i) {
       gpus->push_back(boost::lexical_cast<int>(strings[i]));
     }
-    if (strings2.size()) {
+    if (strings2.size() > 1) {
       APP<float>::test_gpu_id = gpus->back();
       gpus->pop_back();
     }
