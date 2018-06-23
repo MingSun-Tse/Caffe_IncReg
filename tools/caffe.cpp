@@ -25,6 +25,7 @@ using caffe::shared_ptr;
 using caffe::string;
 using caffe::Timer;
 using caffe::vector;
+using caffe::APP;
 using std::ostringstream;
 
 DEFINE_string(gpu, "",
@@ -100,9 +101,15 @@ static void get_gpus(vector<int>* gpus) {
     }
   } else if (FLAGS_gpu.size()) {
     vector<string> strings;
-    boost::split(strings, FLAGS_gpu, boost::is_any_of(","));
+    vector<string> strings2;
+    boost::split(strings, FLAGS_gpu, boost::is_any_of(",-"));
+    boost::split(strings2, FLAGS_gpu, boost::is_any_of("-"));
     for (int i = 0; i < strings.size(); ++i) {
       gpus->push_back(boost::lexical_cast<int>(strings[i]));
+    }
+    if (strings2.size()) {
+      APP<float>::test_gpu_id = gpus->back();
+      gpus->pop_back();
     }
   } else {
     CHECK_EQ(gpus->size(), 0);
@@ -227,7 +234,7 @@ int train() {
     Caffe::SetDevice(gpus[0]);
     Caffe::set_mode(Caffe::GPU);
     Caffe::set_solver_count(gpus.size());
-    // APP<Dtype>::original_gpu_id = gpus[0];
+    APP<float>::original_gpu_id = gpus[0];
   }
 
   caffe::SignalHandler signal_handler(
