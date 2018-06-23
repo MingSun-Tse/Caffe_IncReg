@@ -199,7 +199,7 @@ void LRNLayer<Dtype>::CrossChannelBackward_gpu(
       n_threads, bottom[0]->gpu_data(), top[0]->gpu_data(),
       scale_.gpu_data(), top[0]->gpu_diff(), /*top[0]->gpu_secdiff()*/top[0]->gpu_diff(),  num_, channels_, height_, width_,
       size_, -beta_, Dtype(2. * alpha_ * beta_ / size_),
-      bottom[0]->mutable_gpu_diff(), /*bottom[0]->mutable_gpu_secdiff())*/bottom[0]->mutable_gpu_diff();
+      bottom[0]->mutable_gpu_diff(), /*bottom[0]->mutable_gpu_secdiff()*/bottom[0]->mutable_gpu_diff());
 }
 template void LRNLayer<float>::CrossChannelBackward_gpu(
     const vector<Blob<float>*>& top, const vector<bool>& propagate_down,
