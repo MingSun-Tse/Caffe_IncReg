@@ -398,7 +398,7 @@ void Solver<Dtype>::Step(int iters) {
 
     // Check acc based on true acc
     if (APP<Dtype>::IF_acc_recovered == false 
-            && iter_ - APP<Dtype>::stage_iter_prune_finished == APP<Dtype>::losseval_interval + APP<Dtype>::recovery_interval * pow(1.2, APP<Dtype>::cnt_acc_bad)) {
+            && iter_ - APP<Dtype>::stage_iter_prune_finished == APP<Dtype>::losseval_interval + ceil(APP<Dtype>::recovery_interval * pow(1.2, APP<Dtype>::cnt_acc_bad))) {
       // TestAll();
       Snapshot();
       const string test_weights = param_.snapshot_prefix() + "_iter_" + caffe::format_int(iter_) + ".caffemodel";
@@ -514,10 +514,10 @@ void Solver<Dtype>::CheckPruneState(const bool& IF_acc_far_from_borderline, cons
     if (APP<Dtype>::accu_borderline - true_val_acc > 0.0005) { // accuracy bad
       ++ APP<Dtype>::cnt_acc_bad;
       cout << "[app]    #" << APP<Dtype>::cnt_acc_bad << " - true_val_acc bad: < " << APP<Dtype>::accu_borderline << endl;
-      if (APP<Dtype>::cnt_acc_bad == 3) {
-        cout << "[app]    3 times bad continuously, roll back weights to iter = " << APP<Dtype>::last_feasible_prune_iter << endl;
+      if (APP<Dtype>::cnt_acc_bad == 4) {
+        cout << "[app]    3 times accuracy bad continuously, roll back weights to iter = " << APP<Dtype>::last_feasible_prune_iter << endl;
         if (APP<Dtype>::last_feasible_prune_iter == -1) {
-          cout << "[app]    The first pruning stage failed, decrease the prune_ratio." << endl;
+          cout << "[app]    The first pruning stage failed, please decrease the initial prune_ratio." << endl;
           exit(1);
         }
         const string resume_file = param_.snapshot_prefix() + "_iter_" + caffe::format_int(APP<Dtype>::last_feasible_prune_iter) + ".solverstate";
@@ -533,7 +533,7 @@ void Solver<Dtype>::CheckPruneState(const bool& IF_acc_far_from_borderline, cons
       APP<Dtype>::cnt_acc_bad = 0;
       Snapshot();
       APP<Dtype>::last_feasible_prune_iter = iter_;
-      if (fabs(true_val_acc - APP<Dtype>::accu_borderline) < 0.0005 && (++ APP<Dtype>::cnt_acc_hit) == 3) {
+      if (fabs(true_val_acc - APP<Dtype>::accu_borderline) < 0.0005 && (++ APP<Dtype>::cnt_acc_hit) == 6) {
         cout << "[app]    #" << APP<Dtype>::cnt_acc_hit << " - true_val_acc hit" << endl;
         cout << "[app]    All pruning done, stop exploring new current_prune_ratio. Next is all retraining." << endl;
         SetTrainSetting("retrain");
