@@ -818,7 +818,7 @@ void Net<Dtype>::CopyTrainedLayersFrom(const NetParameter& param) {
     }
     
     // ---------------------------------------------------------------------------------------------
-    // WANGHUAN, restore masks
+    /// @mingsuntse, restore masks
     if (APP<Dtype>::prune_method != "None" && phase_ == TRAIN && target_blobs.size() && APP<Dtype>::layer_index.count(source_layer_name)) {
         LOG(INFO) << "Going to restore masks from binproto file, current layer: " << source_layer_name;
         layers_[target_layer_id]->RestoreMasks();

@@ -278,7 +278,7 @@ message SolverParameter {
 /// @mingsuntse
 message PruneParameter{
   optional float prune_ratio = 1 [default = 0];
-  optional float prune_ratio_begin = 5 [default = 0];
+  optional float prune_ratio_begin = 5 [default = 0.2];
   optional float delta = 2 [default = 0];
   optional int32 priority = 3 [default = 0];
   optional bool IF_update_row_col = 4 [default = true];
