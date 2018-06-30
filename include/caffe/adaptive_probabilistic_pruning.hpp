@@ -26,6 +26,7 @@ public:
     static int prune_interval;
     static int recovery_interval;
     static int losseval_interval;
+    static int retrain_test_interval;
     static int clear_history_interval;
     static int prune_begin_iter;
     static int iter_size;
@@ -59,6 +60,8 @@ public:
     static int test_gpu_id;
     static Dtype accu_borderline;
     static Dtype loss_borderline;
+    static vector<Dtype> retrain_test_acc1;
+    static vector<Dtype> retrain_test_acc5;
     
     static int inner_iter;
     static int step_;
@@ -120,6 +123,7 @@ public:
     template<typename Dtype>  int     APP<Dtype>::prune_interval;
     template<typename Dtype>  int     APP<Dtype>::recovery_interval;
     template<typename Dtype>  int     APP<Dtype>::losseval_interval;
+    template<typename Dtype>  int     APP<Dtype>::retrain_test_interval = 1000;
     template<typename Dtype>  int     APP<Dtype>::clear_history_interval;
     template<typename Dtype>  int     APP<Dtype>::prune_begin_iter;
     template<typename Dtype>  int     APP<Dtype>::iter_size;
@@ -153,7 +157,8 @@ public:
     template<typename Dtype>  int APP<Dtype>::test_gpu_id = -1;
     template<typename Dtype>  Dtype APP<Dtype>::accu_borderline;
     template<typename Dtype>  Dtype APP<Dtype>::loss_borderline;
-    
+    template<typename Dtype>  vector<Dtype> APP<Dtype>::retrain_test_acc1;
+    template<typename Dtype>  vector<Dtype> APP<Dtype>::retrain_test_acc5;
 
     // 1.2 Info shared between solver and layer, initailized here
     template<typename Dtype>  int   APP<Dtype>::inner_iter = 0;

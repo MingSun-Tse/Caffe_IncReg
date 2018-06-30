@@ -72,8 +72,8 @@ class Solver {
   void CheckPruneState(const bool& IF_acc_far_from_borderline, const Dtype& true_val_acc = -1);
   void SetNewCurrentPruneRatio(const bool& IF_roll_back);
   void SetTrainSetting(const string& train_state);
-  void OfflineTest(const int& num_iter);
-  void OfflineTest(int gpu_id, const int& num_iter);
+  void OfflineTest();
+  void OfflineTest(int gpu_id, const int& num_iter); // TODO(mingsuntse): to be fixed
   
   virtual ~Solver() {}
   inline const SolverParameter& param() const { return param_; }

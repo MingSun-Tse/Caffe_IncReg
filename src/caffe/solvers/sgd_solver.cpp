@@ -151,11 +151,12 @@ void SGDSolver<Dtype>::ApplyUpdate() {
 
 template <typename Dtype>
 const Dtype SGDSolver<Dtype>::AdjustLearningRateForPrune(const Dtype& rate) {
-  if (APP<Dtype>::IF_acc_recovered) {
-    return rate * 5;
-  } else {
-    return rate;
-  }
+  return rate * 5;
+  // if (APP<Dtype>::IF_acc_recovered) {
+    // return rate * 5;
+  // } else {
+    // return rate * 5;
+  // }
 }
 
 template <typename Dtype>
