@@ -257,8 +257,8 @@ message SolverParameter {
  
   optional float accu_borderline = 66;
   optional float loss_borderline = 67;
-  optional int32 recovery_interval = 68;
-  optional int32 losseval_interval = 69;
+  optional int32 retrain_test_interval = 68 [default = 100];
+  optional int32 losseval_interval = 69 [default = 100];
   
   optional bool IF_update_row_col = 57 [default = true];
   optional bool IF_eswpf = 59 [default = true];

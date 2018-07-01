@@ -70,8 +70,8 @@ class Solver {
   void PrintFinalPrunedRatio();
   void GetPruneProgress(Dtype* speedup, Dtype* compRatio, Dtype* GFLOPs_origin_, Dtype* num_param_origin_);
   void CheckPruneState(const bool& IF_acc_far_from_borderline, const Dtype& true_val_acc = -1);
-  void SetNewCurrentPruneRatio(const bool& IF_roll_back);
-  void SetTrainSetting(const string& train_state);
+  void SetNewCurrentPruneRatio(const bool& IF_roll_back, const Dtype& val_acc);
+  void SetTrainSetting(const string& prune_state);
   void OfflineTest();
   void OfflineTest(int gpu_id, const int& num_iter); // TODO(mingsuntse): to be fixed
   

@@ -96,7 +96,7 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   APP<Dtype>::learning_rate = APP<Dtype>::prune_method == "None" ? param_.base_lr()   : param_.base_lr() * 5;
   APP<Dtype>::accu_borderline = param_.accu_borderline();
   APP<Dtype>::loss_borderline = param_.loss_borderline();
-  APP<Dtype>::recovery_interval = param_.recovery_interval();
+  APP<Dtype>::retrain_test_interval = param_.retrain_test_interval();
   APP<Dtype>::losseval_interval = param_.losseval_interval();
   APP<Dtype>::cnt_loss_cross_borderline.resize(min(APP<Dtype>::losseval_interval, 10000), 1);
 
@@ -348,7 +348,15 @@ void Solver<Dtype>::Step(int iters) {
     // -----------------------------------------------------------------
     // Prune finished
     if(APP<Dtype>::IF_current_target_achieved) {
-      cout << "[app]\n[app] Current pruning stage finished. Go on training for a little while before checking accuracy. step: " << APP<Dtype>::stage_iter_prune_finished + 1 << endl;
+    Dtype current_speedup, current_compRatio, GFLOPs_origin, num_param_origin;
+    GetPruneProgress(&current_speedup,
+                     &current_compRatio,
+                     &GFLOPs_origin,
+                     &num_param_origin);
+      cout << "[app]\n[app] Current pruning stage finished. Go on training for a little while before checking accuracy."
+           << " speedup: " << current_speedup
+           << " step: " << APP<Dtype>::stage_iter_prune_finished + 1 << endl;
+           
       for (int L = 0; L < APP<Dtype>::layer_index.size(); ++L) {
         if (APP<Dtype>::prune_ratio[L] == 0) { continue; }
         cout << "[app]    " << L << " - pruned_ratio: " << APP<Dtype>::pruned_ratio_col[L] << endl;
@@ -408,8 +416,8 @@ void Solver<Dtype>::Step(int iters) {
       CheckPruneState(0, true_val_acc);
     }*/
     
-    if (APP<Dtype>::IF_acc_recovered == false 
-      && iter_ % APP<Dtype>::retrain_test_interval == 0) {
+    if (APP<Dtype>::prune_state == "retrain"
+          && iter_ % APP<Dtype>::retrain_test_interval == 0) {
       OfflineTest();
       const Dtype acc1 = *min_element(APP<Dtype>::val_accuracy.begin(), APP<Dtype>::val_accuracy.end());
       const Dtype acc5 = *max_element(APP<Dtype>::val_accuracy.begin(), APP<Dtype>::val_accuracy.end());
@@ -424,8 +432,7 @@ void Solver<Dtype>::Step(int iters) {
       // const Dtype ave_acc = accumulate(APP<Dtype>::retrain_test_acc1.end() - window_size, APP<Dtype>::retrain_test_acc1.end(), 0) / window_size;
       cout << "[app] Retrain going on, current acc1 = " << acc1 << ", step: " << APP<Dtype>::step_ << endl;
       if (APP<Dtype>::retrain_test_acc1.size() - max_acc_index > 4) {
-        cout << "[app] Retrain finished, final acc1 = " << max_acc
-             << " (step: " << max_acc_iter + 1 << "), step: " << iter_ + 1 << endl;
+        cout << "[app] Retrain finished, final acc1 = " << max_acc << " step: " << max_acc_iter + 1 << endl;
         const string resume_file = param_.snapshot_prefix() + "_iter_" + caffe::format_int(max_acc_iter) + ".solverstate";
         Restore(resume_file.c_str());
         CheckPruneState(0, max_acc);
@@ -435,6 +442,16 @@ void Solver<Dtype>::Step(int iters) {
         max_acc_index = 0;
         max_acc_iter = 0;
       }
+    }
+    
+    if (APP<Dtype>::prune_state == "final_retrain" 
+          && param_.test_interval() && iter_ % param_.test_interval() == 0) {
+      OfflineTest();
+      const Dtype acc1 = *min_element(APP<Dtype>::val_accuracy.begin(), APP<Dtype>::val_accuracy.end());
+      const Dtype acc5 = *max_element(APP<Dtype>::val_accuracy.begin(), APP<Dtype>::val_accuracy.end());
+      APP<Dtype>::retrain_test_acc1.push_back(acc1);
+      APP<Dtype>::retrain_test_acc5.push_back(acc5);
+      cout << "[app] Final retrain going on, current acc1 = " << acc1 << ", step: " << APP<Dtype>::step_ << endl;
     }
 
     // Print speedup & compression ratio each iter
@@ -510,18 +527,19 @@ void Solver<Dtype>::GetPruneProgress(Dtype* speedup, Dtype* compRatio, Dtype* GF
 }
 
 template <typename Dtype>
-void Solver<Dtype>::SetTrainSetting(const string& train_state) {
-  if (train_state == "prune") {
+void Solver<Dtype>::SetTrainSetting(const string& prune_state) {
+  APP<Dtype>::prune_state = prune_state;
+  if (prune_state == "prune") {
     APP<Dtype>::IF_acc_recovered = true;
     APP<Dtype>::iter_size = param_.iter_size() / 4;
     for (int i = 0; i < APP<Dtype>::cnt_loss_cross_borderline.size(); ++i) {
       APP<Dtype>::cnt_loss_cross_borderline[i] = 0;
     }
-  } else if(train_state == "retrain") {
+  } else if(prune_state == "retrain" || prune_state == "final_retrain") {
     APP<Dtype>::IF_acc_recovered = false;
     APP<Dtype>::iter_size = param_.iter_size();
   } else {
-    cout << "Wrong: unknown train_state, please check." << endl;
+    cout << "Wrong: unknown prune_state, please check." << endl;
     exit(1);
   }
 }
@@ -532,7 +550,7 @@ void Solver<Dtype>::CheckPruneState(const bool& IF_acc_far_from_borderline, cons
     if (IF_acc_far_from_borderline) {
       cout << "[app] Estimated accuracy **significantly good**, directly start a new pruning stage without retraining. step: " << APP<Dtype>::step_ << endl;
       APP<Dtype>::last_feasible_prune_iter = iter_;
-      SetNewCurrentPruneRatio(false);
+      SetNewCurrentPruneRatio(false, 1.0);
     } else {
       cout << "[app] Estimated accuracy **NOT significantly good**, retrain to check accuracy before starting a new pruning stage. step: " << APP<Dtype>::step_ << endl;
       SetTrainSetting("retrain");
@@ -546,27 +564,20 @@ void Solver<Dtype>::CheckPruneState(const bool& IF_acc_far_from_borderline, cons
       }
       const string resume_file = param_.snapshot_prefix() + "_iter_" + caffe::format_int(APP<Dtype>::last_feasible_prune_iter) + ".solverstate";
       cout << "[app]    ===== resuming from: " << resume_file << endl;
-      SetNewCurrentPruneRatio(true);
+      SetNewCurrentPruneRatio(true, true_val_acc);
       Restore(resume_file.c_str()); // Restore weights after 'current_prune_ratio' update, because restoring will change the 'pruned_ratio'.
     } else { // accuracy good
       Snapshot();
       APP<Dtype>::last_feasible_prune_iter = iter_;
-      if (fabs(true_val_acc - APP<Dtype>::accu_borderline) < 0.0005 && (++ APP<Dtype>::cnt_acc_hit) == 6) {
-        cout << "[app]    #" << APP<Dtype>::cnt_acc_hit << " - true_val_acc hit" << endl;
-        cout << "[app]    All pruning done, stop exploring new current_prune_ratio. Next is all retraining." << endl;
-        SetTrainSetting("retrain");
-      } else {
-        if (APP<Dtype>::cnt_acc_hit) { cout << "[app]    #" << APP<Dtype>::cnt_acc_hit << " - true_val_acc hit" << endl; }
-        cout << "[app]    true_val_acc **still good**, start a new pruning stage." << endl;
-        SetNewCurrentPruneRatio(false);
-      }
+      cout << "[app]    true_val_acc **still good**, start a new pruning stage." << endl;
+      SetNewCurrentPruneRatio(false, true_val_acc);
     }
   }
 }
 
 template <typename Dtype>
-void Solver<Dtype>::SetNewCurrentPruneRatio(const bool& IF_roll_back) {
-  // Check if all pruning done
+void Solver<Dtype>::SetNewCurrentPruneRatio(const bool& IF_roll_back, const Dtype& val_acc) {
+  // Check if all pruning done, case 1: final pruning target achieved
   bool all_layer_prune_finished = true;
   for (int L = 0; L < APP<Dtype>::layer_index.size(); ++L) {
     if (APP<Dtype>::pruned_ratio_for_comparison[L] < APP<Dtype>::prune_ratio[L]) {
@@ -579,44 +590,57 @@ void Solver<Dtype>::SetNewCurrentPruneRatio(const bool& IF_roll_back) {
     cout << "[app]\n[app] All layer prune finished: step = " << APP<Dtype>::step_;
     if (APP<Dtype>::IF_eswpf) {
       cout << " -- early stopped." << endl;
-      requested_early_exit_ = true;
+      exit(0);
     } else {
       cout << " -- go on to retrain." << endl;
-      SetTrainSetting("retrain");
-      APP<Dtype>::recovery_interval = INT_MAX; // The last retraining will go on and on.
+      SetTrainSetting("final_retrain");
+      return;
     }
-  } else {
-    for (int L = 0; L < APP<Dtype>::layer_index.size(); ++L) {
-      if (APP<Dtype>::prune_ratio[L] == 0) { continue; }
-      if (IF_roll_back) {
-        APP<Dtype>::last_infeasible_prune_ratio[L] = APP<Dtype>::pruned_ratio_for_comparison[L];
-        APP<Dtype>::current_prune_ratio[L] = (APP<Dtype>::last_feasible_prune_ratio[L] 
-                + APP<Dtype>::last_infeasible_prune_ratio[L]) / 2; // new prune ratio could be improved
+  }
+  
+  // Check if all pruning done, case 2: accuracy target achieved
+  if (fabs(val_acc - APP<Dtype>::accu_borderline) < 0.0005 && (++ APP<Dtype>::cnt_acc_hit) == 6) {
+    cout << "[app]    #" << APP<Dtype>::cnt_acc_hit << " - true_val_acc hit" << endl;
+    cout << "[app]    All pruning done, stop exploring new current_prune_ratio. Next is all retraining." << endl;
+    SetTrainSetting("final_retrain");
+    return;
+  }
+  if (APP<Dtype>::cnt_acc_hit) { 
+    cout << "[app]    #" << APP<Dtype>::cnt_acc_hit << " - true_val_acc hit" << endl; 
+  }
+  
+  // Go on pruning
+  for (int L = 0; L < APP<Dtype>::layer_index.size(); ++L) {
+    if (APP<Dtype>::prune_ratio[L] == 0) { continue; }
+    if (IF_roll_back) {
+      APP<Dtype>::last_infeasible_prune_ratio[L] = APP<Dtype>::pruned_ratio_for_comparison[L];
+      APP<Dtype>::current_prune_ratio[L] = (APP<Dtype>::last_feasible_prune_ratio[L] 
+              + APP<Dtype>::last_infeasible_prune_ratio[L]) / 2; // new prune ratio could be improved
+    } else {
+      APP<Dtype>::last_feasible_prune_ratio[L] = APP<Dtype>::pruned_ratio_for_comparison[L];
+      if (APP<Dtype>::last_infeasible_prune_ratio[L] == 0) {
+        APP<Dtype>::current_prune_ratio[L] = APP<Dtype>::pruned_ratio_for_comparison[L] + APP<Dtype>::prune_ratio_step[L];
       } else {
-        APP<Dtype>::last_feasible_prune_ratio[L] = APP<Dtype>::pruned_ratio_for_comparison[L];
-        if (APP<Dtype>::last_infeasible_prune_ratio[L] == 0) {
+        if (APP<Dtype>::last_feasible_prune_ratio[L] >= APP<Dtype>::last_infeasible_prune_ratio[L]) {
+          APP<Dtype>::prune_ratio_step[L] *= 0.8; // each time surpassing the infeasible, half the prune_ratio_step
           APP<Dtype>::current_prune_ratio[L] = APP<Dtype>::pruned_ratio_for_comparison[L] + APP<Dtype>::prune_ratio_step[L];
+          cout << "[app]    " << L << " - surpassed the last_infeasible_prune_ratio" << endl;
+        } else if (APP<Dtype>::last_infeasible_prune_ratio[L] - APP<Dtype>::last_feasible_prune_ratio[L] < 0.01) {
+          APP<Dtype>::current_prune_ratio[L] = APP<Dtype>::last_infeasible_prune_ratio[L];
+          cout << "[app]    " << L << " - try to surpass the last_infeasible_prune_ratio" << endl;
         } else {
-          if (APP<Dtype>::last_feasible_prune_ratio[L] >= APP<Dtype>::last_infeasible_prune_ratio[L]) {
-            APP<Dtype>::prune_ratio_step[L] *= 0.8; // each time surpassing the infeasible, half the prune_ratio_step
-            APP<Dtype>::current_prune_ratio[L] = APP<Dtype>::pruned_ratio_for_comparison[L] + APP<Dtype>::prune_ratio_step[L];
-            cout << "[app]    " << L << " - surpassed the last_infeasible_prune_ratio" << endl;
-          } else if (APP<Dtype>::last_infeasible_prune_ratio[L] - APP<Dtype>::last_feasible_prune_ratio[L] < 0.01) {
-            APP<Dtype>::current_prune_ratio[L] = APP<Dtype>::last_infeasible_prune_ratio[L];
-            cout << "[app]    " << L << " - try to surpass the last_infeasible_prune_ratio" << endl;
-          } else {
-            APP<Dtype>::current_prune_ratio[L] = (APP<Dtype>::last_feasible_prune_ratio[L] 
-                  + APP<Dtype>::last_infeasible_prune_ratio[L]) / 2;
-          }
+          APP<Dtype>::current_prune_ratio[L] = (APP<Dtype>::last_feasible_prune_ratio[L] 
+                + APP<Dtype>::last_infeasible_prune_ratio[L]) / 2;
         }
       }
-      APP<Dtype>::current_prune_ratio[L] = min(APP<Dtype>::current_prune_ratio[L], APP<Dtype>::prune_ratio[L]);
-      APP<Dtype>::iter_prune_finished[L] = INT_MAX;
-      cout << "[app]    " << L << " - current_prune_ratio: " 
-           << APP<Dtype>::last_feasible_prune_ratio[L] << " -> " << APP<Dtype>::current_prune_ratio[L] << endl;
     }
-    SetTrainSetting("prune");
+    APP<Dtype>::current_prune_ratio[L] = min(APP<Dtype>::current_prune_ratio[L], APP<Dtype>::prune_ratio[L]);
+    APP<Dtype>::iter_prune_finished[L] = INT_MAX;
+    cout << "[app]    " << L << " - current_prune_ratio: " 
+         << APP<Dtype>::last_feasible_prune_ratio[L] << " -> " << APP<Dtype>::current_prune_ratio[L] << endl;
   }
+  SetTrainSetting("prune");
+  
 }
 
 template <typename Dtype>

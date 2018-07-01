@@ -24,7 +24,6 @@ public:
     static string prune_coremthd_;  // if prune_method == "Reg-L1_Col", then prune_unit = "Col", prune_coremthd = "Reg-L1", prune_coremthd_ = "Reg"
     static Dtype ratio_once_prune;
     static int prune_interval;
-    static int recovery_interval;
     static int losseval_interval;
     static int retrain_test_interval;
     static int clear_history_interval;
@@ -62,6 +61,7 @@ public:
     static Dtype loss_borderline;
     static vector<Dtype> retrain_test_acc1;
     static vector<Dtype> retrain_test_acc5;
+    static string prune_state;
     
     static int inner_iter;
     static int step_;
@@ -121,9 +121,8 @@ public:
     template<typename Dtype>  string  APP<Dtype>::prune_coremthd_ = "None";
     template<typename Dtype>  Dtype   APP<Dtype>::ratio_once_prune;
     template<typename Dtype>  int     APP<Dtype>::prune_interval;
-    template<typename Dtype>  int     APP<Dtype>::recovery_interval;
     template<typename Dtype>  int     APP<Dtype>::losseval_interval;
-    template<typename Dtype>  int     APP<Dtype>::retrain_test_interval = 1000;
+    template<typename Dtype>  int     APP<Dtype>::retrain_test_interval;
     template<typename Dtype>  int     APP<Dtype>::clear_history_interval;
     template<typename Dtype>  int     APP<Dtype>::prune_begin_iter;
     template<typename Dtype>  int     APP<Dtype>::iter_size;
@@ -159,6 +158,7 @@ public:
     template<typename Dtype>  Dtype APP<Dtype>::loss_borderline;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::retrain_test_acc1;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::retrain_test_acc5;
+    template<typename Dtype>  string APP<Dtype>::prune_state;
 
     // 1.2 Info shared between solver and layer, initailized here
     template<typename Dtype>  int   APP<Dtype>::inner_iter = 0;
