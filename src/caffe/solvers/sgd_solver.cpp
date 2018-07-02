@@ -385,19 +385,20 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             // scheme 1, the exponential center-symmetrical function
             const Dtype kk = APP<Dtype>::kk; // u in the paper
             const Dtype alpha = log(2/kk) / (num_col_to_prune_);
-            const Dtype N1 = -log(kk)/alpha; // symmetry point
+            const Dtype N1 = -log(kk)/alpha; // the symmetry point
+            
             // scheme 2, the dis-continual function
-            const Dtype kk2 = APP<Dtype>::kk2;
-            const Dtype alpha1 = (num_col_to_prune_ == 1)          ? 0 : log(1/kk2) / (num_col_to_prune_ - 1);
-            const Dtype alpha2 = (num_col_to_prune_ == num_col_-1) ? 0 : log(1/kk2) / (num_col_-1 - num_col_to_prune_);
+            const Dtype kk2 = max((APP<Dtype>::pruned_ratio_for_comparison[L] - APP<Dtype>::last_feasible_prune_ratio[L]) 
+                  / (APP<Dtype>::current_prune_ratio[L] - APP<Dtype>::last_feasible_prune_ratio[L]) * (Dtype)0.75, (Dtype)0.05) ; // feasible range: (0, 1)
+            const Dtype alpha21 = (num_col_to_prune_ == 1)          ? 0 : log(1/kk2) / (num_col_to_prune_-1);
+            const Dtype alpha22 = (num_col_to_prune_ == num_col_-1) ? 0 : log(1/kk2) / (num_col_-1 - num_col_to_prune_);
             
             for (int j = 0; j < num_col_; ++j) { // j: rank
               const int col_of_rank_j = col_hrank[j + num_pruned_col].second; // Note the real rank is j + num_pruned_col
               const Dtype Delta = APP<Dtype>::IF_scheme1_when_Reg_rank
-                                  ? (j < N1                ? AA * exp(-alpha  * j) : 2*kk*AA - AA * exp(-alpha  * (2 * N1     - j))) // (j < num_col_to_prune_ ? AA : -AA)
-                                  : (j < num_col_to_prune_ ? AA * exp(-alpha1 * j) :         - AA * exp(-alpha2 * (num_col_-1 - j)));
+                                  ? (j < N1                ? AA * exp(-alpha   * j) : 2*kk*AA - AA * exp(-alpha   * (2 * N1     - j)))
+                                  : (j < num_col_to_prune_ ? AA * exp(-alpha21 * j) :         - AA * exp(-alpha22 * (num_col_-1 - j)));
 
-              // cout << "[app]    " << Delta << endl;
               const Dtype old_reg = muhistory_punish[col_of_rank_j];
               const Dtype new_reg = std::max(old_reg + Delta, Dtype(0));
               for (int i = 0; i < num_row; ++i) {
