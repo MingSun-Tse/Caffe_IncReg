@@ -764,9 +764,10 @@ void Solver<Dtype>::OfflineTest() {
         } else {
           test_score[idx] += score;
         }
-        // const std::string& output_name = test_net.blob_names()[
-            // test_net.output_blob_indices()[j]];
-        // LOG(INFO) << "Batch " << i << ", " << output_name << " = " << score;
+        const std::string& output_name = test_net.blob_names()[test_net.output_blob_indices()[j]];
+        if (i % 20 == 0) {
+          LOG(INFO) << "Batch " << i << ", " << output_name << " = " << score;
+        }
       }
     }
   }
@@ -784,7 +785,7 @@ void Solver<Dtype>::OfflineTest() {
                       << " = " << loss_weight * mean_score << " loss)";
     }
     LOG(INFO) << output_name << " = " << mean_score << loss_msg_stream.str();
-    if (output_name.substr(1, 3) == "ccu") { // TODO(mingsuntse): improve this
+    if (output_name.find("ccuracy") != std::string::npos) { // TODO(mingsuntse): improve this
       APP<Dtype>::val_accuracy.push_back(mean_score);
     }
   }
