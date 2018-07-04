@@ -723,25 +723,26 @@ void Solver<Dtype>::PrintFinalPrunedRatio() {
 // ----------------------------------------------------------------------------------
 template <typename Dtype>
 void Solver<Dtype>::OfflineTest() {
+  // Switch GPU
+  int gpu_id = APP<Dtype>::test_gpu_id;
+  if (gpu_id == -1) {
+    gpu_id = APP<Dtype>::original_gpu_id;
+  }
+  Caffe::SetDevice(gpu_id);
+  Caffe::set_mode(Caffe::GPU);
+  
   // Create test net
   Snapshot();
   const string& weights = param_.snapshot_prefix() + "_iter_" + caffe::format_int(iter_) + ".caffemodel";
   Net<Dtype> test_net(APP<Dtype>::model_prototxt, caffe::TEST);
   test_net.CopyTrainedLayersFrom(weights);
   
-  // Switch GPU
-  int gpu_id = APP<Dtype>::test_gpu_id;
-  if (gpu_id == -1) {
-    gpu_id = APP<Dtype>::original_gpu_id;
-  }
   LOG(INFO) << "-------------------------- retrain test begins --------------------------";
   LOG(INFO) << "Use GPU with device ID " << gpu_id;
   cudaDeviceProp device_prop;
   cudaGetDeviceProperties(&device_prop, gpu_id);
   LOG(INFO) << "GPU device name: " << device_prop.name;
-  Caffe::SetDevice(gpu_id);
-  Caffe::set_mode(Caffe::GPU);
-  
+ 
   const int num_iter = param_.test_iter(0);
   LOG(INFO) << "Running for " << num_iter << " iterations.";
   APP<Dtype>::val_accuracy.clear();

@@ -89,6 +89,7 @@ class Layer {
   void UpdateNumPrunedCol();
   void UpdatePrunedRatio();
   void Print(char mode);
+  void GetAPoZ(const vector<Blob<Dtype>*>& top);
   // Pruning methods
   void FilterPrune();
   void TaylorPrune(const vector<Blob<Dtype>*>& top);

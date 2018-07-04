@@ -343,18 +343,24 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
 
             // Sort 02: sort by history_rank
             vector<mypair> col_hrank(num_col); // the history_rank of each column, history_rank is like the new score
-            // cout << "ave-magnitude_col " << this->iter_ << " " << layer_name << ":";
+            if (APP<Dtype>::num_log) { 
+              cout << "ave-magnitude_col " << this->iter_ << " " << layer_name << ":";
+            }
             for (int j = 0; j < num_col; ++j) {
-              // Dtype sum = 0; // for print ave magnitude
-              // for (int i = 0; i < num_row; ++i) {
-              // sum += fabs(muweight[i * num_col + j]);
-              // }
-              // cout << " " << sum/num_row;
+              Dtype sum = 0; // for print ave magnitude
+              for (int i = 0; i < num_row; ++i) {
+                sum += fabs(muweight[i * num_col + j]);
+              }
+              if (APP<Dtype>::num_log) {
+                cout << " " << sum/num_row;
+              }
               col_hrank[j].first  = muhistory_score[j];
               col_hrank[j].second = j;
             }
             sort(col_hrank.begin(), col_hrank.end());
-            // cout << endl;
+            if (APP<Dtype>::num_log) {
+              cout << endl;
+            }
 #ifdef ShowTimingLog
             cout  << "  after 2nd sort: " << (double)(clock() - t1)/CLOCKS_PER_SEC << "s" << endl;
 #endif

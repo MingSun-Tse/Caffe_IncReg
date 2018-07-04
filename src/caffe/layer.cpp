@@ -1,5 +1,6 @@
 #include <boost/thread.hpp>
 #include <boost/thread.hpp>
+#include <numeric>
 #include "caffe/layer.hpp"
 #include "caffe/adaptive_probabilistic_pruning.hpp"
 
@@ -366,16 +367,16 @@ void Layer<Dtype>::TaylorPrune(const vector<Blob<Dtype>*>& top) {
     const Dtype* top_diff = top[i]->cpu_diff();
     Dtype* mumasks = this->masks_[0]->mutable_cpu_data();
     const int num_  = top[i]->shape()[0];
-    const int num_c = top[i]->shape()[1]; /// channel
-    const int num_h = strcmp(this->type(), "InnerProduct") == 0 ? 1 : top[i]->shape()[2]; /// height
-    const int num_w = strcmp(this->type(), "InnerProduct") == 0 ? 1 : top[i]->shape()[3]; /// width
+    const int num_c = top[i]->shape()[1]; // channel
+    const int num_h = strcmp(this->type(), "InnerProduct") == 0 ? 1 : top[i]->shape()[2]; // height
+    const int num_w = strcmp(this->type(), "InnerProduct") == 0 ? 1 : top[i]->shape()[3]; // width
     const int count = this->blobs_[0]->count();
     const int num_row = this->blobs_[0]->shape()[0];
     const int num_col = count / num_row;
     const int L = APP<Dtype>::layer_index[this->layer_param_.name()];
 
     typedef std::pair<Dtype, int> mypair;
-    vector<mypair> fm_score(num_c); /// feature map score
+    vector<mypair> fm_score(num_c); // feature map score
     for (int c = 0; c < num_c; ++c) {
       fm_score[c].second = c;
       fm_score[c].first  = 0;
@@ -747,69 +748,6 @@ void Layer<Dtype>::GenerateMasks() {
   this->IF_restore = true;
 }
 
-/*
-template <typename Dtype>
-void Layer<Dtype>::PruneMinimals() {
-    Dtype* muweight   = this->blobs_[0]->mutable_cpu_data();
-    const int count   = this->blobs_[0]->count();
-    const int num_row = this->blobs_[0]->shape()[0];
-    const int num_col = count / num_row;
-    const int L = APP<Dtype>::layer_index[this->layer_param_.name()];
-    const int group = APP<Dtype>::group[L];
-
-    if (APP<Dtype>::prune_unit == "Weight") {
-        for (int i = 0; i < count; ++i) {
-            if (APP<Dtype>::IF_weight_pruned[L][i]) { continue; }
-            if (fabs(muweight[i]) < APP<Dtype>::prune_threshold || APP<Dtype>::history_reg[L][i] >= APP<Dtype>::target_reg) {
-                this->masks_[0]->mutable_cpu_data()[i] = 0;
-
-                APP<Dtype>::num_pruned_weight[L] += 1;
-                APP<Dtype>::IF_weight_pruned[L][i] = true;
-                APP<Dtype>::hrank[L][i]  = APP<Dtype>::step_ - 1000000 - (APP<Dtype>::history_reg[L][i] - APP<Dtype>::target_reg);
-                APP<Dtype>::hhrank[L][i] = APP<Dtype>::step_ - 1000000 - (APP<Dtype>::history_reg[L][i] - APP<Dtype>::target_reg);
-            }
-        }
-    } else if (APP<Dtype>::prune_unit == "Col") {
-        for (int j = 0; j < num_col; ++j) {
-            if (APP<Dtype>::IF_col_pruned[L][j][0]) { continue; }
-            // bool IF_all_weights_are_small = true;
-            Dtype sum = 0;
-            for (int i = 0; i < num_row; ++i) {
-                sum += fabs(muweight[i * num_col + j]);
-            }
-            sum /= num_row;
-            if (sum < APP<Dtype>::prune_threshold ||  APP<Dtype>::history_reg[L][j] >= APP<Dtype>::target_reg) {
-                for (int i = 0; i < num_row; ++i) {
-                    this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
-                }
-                APP<Dtype>::num_pruned_col[L] += 1;
-                for (int g = 0; g < group; ++g) {
-                    APP<Dtype>::IF_col_pruned[L][j][g] = true;
-                }
-                APP<Dtype>::hrank[L][j] = APP<Dtype>::step_ - 1000000 - (APP<Dtype>::history_reg[L][j] - APP<Dtype>::target_reg);  // the worser column, the earlier pruned column will be ranked in fronter
-            }
-        }
-    } else if (APP<Dtype>::prune_unit == "Row") {
-        for (int i = 0; i < num_row; ++i) {
-            if (APP<Dtype>::IF_row_pruned[L][i]) { continue; }
-            Dtype sum = 0;
-            for (int j = 0; j < num_col; ++j) {
-                sum += fabs(muweight[i * num_col + j]);
-            }
-            sum /= num_col;
-            if (sum < APP<Dtype>::prune_threshold ||  APP<Dtype>::history_reg[L][i] >= APP<Dtype>::target_reg) {
-                for (int j = 0; j < num_col; ++j) {
-                    this->masks_[0]->mutable_cpu_data()[i * num_col + j] = 0;
-                }
-                ++ APP<Dtype>::num_pruned_row[L];
-                APP<Dtype>::IF_row_pruned[L][i] = true;
-                APP<Dtype>::pruned_rows.push_back(i);
-                APP<Dtype>::hrank[L][i] = APP<Dtype>::step_ - 1000000 - (APP<Dtype>::history_reg[L][i] - APP<Dtype>::target_reg);
-            }
-        }
-    }
-}
-*/
 template <typename Dtype>
 void Layer<Dtype>::RestoreMasks() {
   const int count   = this->blobs_[0]->count();
@@ -1106,6 +1044,50 @@ void Layer<Dtype>::PruneBackward(const vector<Blob<Dtype>*>& top) {
   }
 }
 
+template <typename Dtype>
+void Layer<Dtype>::GetAPoZ(const vector<Blob<Dtype>*>& top) {
+  if (this->phase_ == TEST) { return; }
+  for (int i = 0; i < top.size(); ++i) {
+    const int num_  = top[i]->shape()[0];
+    const int num_c = top[i]->shape()[1];
+    const int num_h = strcmp(this->type(), "InnerProduct") == 0 ? 1 : top[i]->shape()[2]; // height
+    const int num_w = strcmp(this->type(), "InnerProduct") == 0 ? 1 : top[i]->shape()[3]; // width
+    vector<Dtype> num_zero(num_ * num_c, 0);
+    vector<Dtype> apoz(num_, 0);
+    const Dtype* top_data = top[i]->cpu_data();
+    Dtype fm_score = 0, fc_score = 0; // feature_cube
+    
+    for (int n = 0; n < num_; ++n) {
+      for (int c = 0; c < num_c; ++c) {
+        for (int h = 0; h < num_h; ++h) {
+          for (int w = 0; w < num_w; ++w) {
+            if (top_data[((n * num_c + c) * num_h + h) * num_w + w] <= 0) {
+              num_zero[n * num_c + c] += 1;
+              apoz[n] += 1;
+            } else {
+              fm_score += fabs(top_data[((n * num_c + c) * num_h + h) * num_w + w]);
+              fc_score += fabs(top_data[((n * num_c + c) * num_h + h) * num_w + w]);
+            }
+          }
+        }
+        num_zero[n * num_c + c] /= (num_h * num_w);
+        // char s1[100];
+        // sprintf(s1, "example %d layer %s channel %d: APoZ = %.6f", n, this->layer_param_.name().c_str(), c, num_zero[n * num_c + c]);
+        // cout << s1 << endl;
+        fm_score = 0;
+      }
+      apoz[n] /= (num_c * num_h * num_w);
+      char s2[100];
+      sprintf(s2, "e%dl%d: APoZ=%.4f", n, APP<Dtype>::layer_index[this->layer_param_.name()], apoz[n]);
+      cout << s2 << endl;
+      char s4[100];
+      sprintf(s4, "e%dl%d: L1norm=%.4f", n, APP<Dtype>::layer_index[this->layer_param_.name()], fc_score);
+      cout << s4 << endl;
+      fc_score = 0;
+
+    }
+  }  
+}
 
 INSTANTIATE_CLASS(Layer);
 
