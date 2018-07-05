@@ -11,8 +11,8 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     this->PruneForward(); /// @mingsuntse, for pruning
     const Dtype* weight = this->blobs_[0]->gpu_data();
     for (int i = 0; i < bottom.size(); ++i) {
-        const Dtype* bottom_data    = bottom[i]->gpu_data();
-        Dtype* top_data    = top[i]->mutable_gpu_data();
+        const Dtype* bottom_data = bottom[i]->gpu_data();
+        Dtype* top_data = top[i]->mutable_gpu_data();
         for (int n = 0; n < this->num_; ++n) {
             this->forward_gpu_gemm(bottom_data + n * this->bottom_dim_, weight, top_data + n * this->top_dim_);
             if (this->bias_term_) {
@@ -21,46 +21,9 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             }
         }
     }
-    /// Print feature map to check --------
-    /// If row 3 and 8 are pruned in previous layer, then channel 3 and 8 will be only biases in this layer's feature map.
-    /**
-    if (!APP<Dtype>::IN_TEST && L == 0) {
-        cout << "bottom.size(): " << bottom.size() << endl;
-        for (int i = 0; i < bottom.size(); ++i) {
-            const Dtype* top_data = top[i]->cpu_data();
-            const int channel = top[i]->shape()[1];
-            const int width   = top[i]->shape()[2];
-            const int height  = top[i]->shape()[3];
-            cout << "channel: " << channel << " " << width << " " <<  height << endl;
-            
-            vector<Dtype> sum(channel, 0);
-            for (int c = 0; c < channel; ++c) {
-                for (int w = 0 ; w < width; ++w) {
-                    for (int h = 0; h < height; ++h) {
-                        sum[c] += fabs(top_data[0 + c * width * height + w * height + h]);
-                    }
-                }
-            }
-            for (int c = 0; c < channel; ++c) {
-                cout << sum[c] << "  ";
-            }
-            cout << endl;
-        }
-    }
-    */
-    
+    this->GetAPoZ(top);
     // Restore weights when using ProbPrune
     if (this->IF_restore) {
-        /*
-        /// cout << layer_name << ": restore weights! " << endl;
-        Dtype* muweight = this->blobs_[0]->mutable_cpu_data();
-        /// this->blobs_[0]->gpu_data(); 
-        /// Interesting! If the above line is added, something like "control" seems to transfer from cpu to gpu. 
-        /// Then modifying cpu weights won't affect their gpu counterparts.
-        for (int i = 0; i < count; ++i) {
-            muweight[i] = this->weight_backup[i];
-        }
-        */
         caffe_gpu_memcpy(this->blobs_[0]->count(),
                          this->blobs_backup_[0]->gpu_data(),
                          this->blobs_[0]->mutable_gpu_data());
