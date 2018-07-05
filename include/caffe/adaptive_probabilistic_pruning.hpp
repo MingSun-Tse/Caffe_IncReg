@@ -126,7 +126,7 @@ public:
     template<typename Dtype>  int     APP<Dtype>::clear_history_interval;
     template<typename Dtype>  int     APP<Dtype>::prune_begin_iter;
     template<typename Dtype>  int     APP<Dtype>::iter_size;
-    template<typename Dtype>  Dtype   APP<Dtype>::learning_rate;
+    template<typename Dtype>  Dtype   APP<Dtype>::learning_rate = 0;
     template<typename Dtype>  Dtype   APP<Dtype>::score_decay = 0;
     template<typename Dtype>  Dtype   APP<Dtype>::AA;
     template<typename Dtype>  Dtype   APP<Dtype>::base_prune_ratio_step = 0.02;

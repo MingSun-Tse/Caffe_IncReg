@@ -122,9 +122,12 @@ void SGDSolver<Dtype>::ApplyUpdate() {
   CHECK(Caffe::root_solver()); // 更新梯度是由主solver来做的
   Dtype rate = GetLearningRate();
   if (APP<Dtype>::prune_method != "None") {
-    rate = AdjustLearningRateForPrune(rate);
+    if (APP<Dtype>::learning_rate == 0) {
+      APP<Dtype>::learning_rate = rate;
+    } else {
+      rate = APP<Dtype>::learning_rate;
+    }
   }
-  APP<Dtype>::learning_rate = rate;
   if (this->param_.display() && this->iter_ % this->param_.display() == 0) {
     LOG(INFO) << "Iteration " << this->iter_ << ", lr = " << rate;
   }

@@ -126,6 +126,7 @@ void Layer<Dtype>::IF_layer_prune_finished() {
             break;
           }
         }
+        cout << "APP<Dtype>::IF_current_target_achieved = " << APP<Dtype>::IF_current_target_achieved << endl;
         if (APP<Dtype>::IF_current_target_achieved) {
           APP<Dtype>::stage_iter_prune_finished = APP<Dtype>::step_ - 1;
         }
@@ -813,16 +814,12 @@ void Layer<Dtype>::RestoreMasks() {
     APP<Dtype>::num_pruned_row[L] = num_pruned_row;
   }
   this->UpdatePrunedRatio();
-  if (APP<Dtype>::pruned_ratio_for_comparison[L] >= APP<Dtype>::prune_ratio[L]) {
-    APP<Dtype>::iter_prune_finished[L] = -1; // TODO(mingsuntse): check multi-GPU
-    cout << "layer " << L << ": " << layer_name << " prune finished." << endl;
-  }
 
   LOG(INFO) << "  Masks restored,"
-            << "  num_pruned_col=" << APP<Dtype>::num_pruned_col[L] << "(" << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << ")"
-            << "  num_pruned_row=" << APP<Dtype>::num_pruned_row[L] << "(" << APP<Dtype>::num_pruned_row[L] * 1.0 / num_row << ")"
-            << "  pruned_ratio="   << APP<Dtype>::pruned_ratio[L]
-            << "  prune_ratio="    << APP<Dtype>::prune_ratio[L];
+            << "  num_pruned_col = " << APP<Dtype>::num_pruned_col[L] << "(" << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << ")"
+            << "  num_pruned_row = " << APP<Dtype>::num_pruned_row[L] << "(" << APP<Dtype>::num_pruned_row[L] * 1.0 / num_row << ")"
+            << "  pruned_ratio = "   << APP<Dtype>::pruned_ratio[L]
+            << "  prune_ratio = "    << APP<Dtype>::prune_ratio[L];
 }
 
 template <typename Dtype>
@@ -832,7 +829,7 @@ void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
   const int num_col = count / num_row;
   APP<Dtype>::prune_ratio.push_back(prune_param.prune_ratio());
   APP<Dtype>::prune_ratio_step.push_back(0.1); // TODO(mingsuntse-newprune)
-  APP<Dtype>::current_prune_ratio.push_back(prune_param.prune_ratio_begin()); // APP<Dtype>::prune_ratio_step.back()); // Start from 20%
+  APP<Dtype>::current_prune_ratio.push_back(min(prune_param.prune_ratio_begin(), prune_param.prune_ratio())); // APP<Dtype>::prune_ratio_step.back()); // Start from 20%
   APP<Dtype>::pruned_ratio.push_back(0); // used in TEST
   this->IF_masks_updated = true;
   if (this->phase_ == TEST) {
