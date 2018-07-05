@@ -93,14 +93,13 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   // APP<Dtype>::score_decay = param_.score_decay();
   
   APP<Dtype>::iter_size = APP<Dtype>::prune_method == "None" ? param_.iter_size() : param_.iter_size() / 4;
-  APP<Dtype>::learning_rate = APP<Dtype>::prune_method == "None" ? param_.base_lr()   : param_.base_lr() * 5;
   APP<Dtype>::accu_borderline = param_.accu_borderline();
   APP<Dtype>::loss_borderline = param_.loss_borderline();
   APP<Dtype>::retrain_test_interval = param_.retrain_test_interval();
   APP<Dtype>::losseval_interval = param_.losseval_interval();
   APP<Dtype>::cnt_loss_cross_borderline.resize(min(APP<Dtype>::losseval_interval, 10000), 1);
 
-  const Dtype index[] = {8,7,6,5,4,3,2}; // When speedup or compRatio = 8~2, snapshot.
+  const Dtype index[] = {8, 7, 6, 5, 4, 3, 2}; // When speedup or compRatio = 8~2, snapshot.
   APP<Dtype>::when_snapshot.insert(APP<Dtype>::when_snapshot.begin(), index, index + sizeof(index)/sizeof(index[0]));
   // ------------------------------------------
 
@@ -451,7 +450,23 @@ void Solver<Dtype>::Step(int iters) {
       const Dtype acc5 = *max_element(APP<Dtype>::val_accuracy.begin(), APP<Dtype>::val_accuracy.end());
       APP<Dtype>::retrain_test_acc1.push_back(acc1);
       APP<Dtype>::retrain_test_acc5.push_back(acc5);
+      if (acc1 > max_acc) {
+        max_acc = acc1;
+        max_acc_index = APP<Dtype>::retrain_test_acc1.size();
+        max_acc_iter = iter_;
+      }
       cout << "[app] Final retrain going on, current acc1 = " << acc1 << ", step: " << APP<Dtype>::step_ << endl;
+      if (APP<Dtype>::retrain_test_acc1.size() - max_acc_index > 6) {
+        cout << "[app] Final retrain finished, final acc1 = " << max_acc << ", going to decay lr. step: " << max_acc_iter + 1 << endl;
+        const string resume_file = param_.snapshot_prefix() + "_iter_" + caffe::format_int(max_acc_iter) + ".solverstate";
+        Restore(resume_file.c_str());
+        APP<Dtype>::learning_rate /= 5;
+        APP<Dtype>::retrain_test_acc1.clear();
+        APP<Dtype>::retrain_test_acc5.clear();
+        max_acc = 0;
+        max_acc_index = 0;
+        max_acc_iter = 0;
+      }
     }
 
     // Print speedup & compression ratio each iter
@@ -535,7 +550,7 @@ void Solver<Dtype>::SetTrainSetting(const string& prune_state) {
     for (int i = 0; i < APP<Dtype>::cnt_loss_cross_borderline.size(); ++i) {
       APP<Dtype>::cnt_loss_cross_borderline[i] = 0;
     }
-  } else if(prune_state == "retrain" || prune_state == "final_retrain") {
+  } else if (prune_state == "retrain" || prune_state == "final_retrain") {
     APP<Dtype>::IF_acc_recovered = false;
     APP<Dtype>::iter_size = param_.iter_size();
   } else {
@@ -586,6 +601,7 @@ void Solver<Dtype>::SetNewCurrentPruneRatio(const bool& IF_roll_back, const Dtyp
     }
   }
   const bool IF_final_target_achieved = all_layer_prune_finished || APP<Dtype>::IF_speedup_achieved || APP<Dtype>::IF_compRatio_achieved;
+  cout << "IF_final_target_achieved: " << IF_final_target_achieved << endl;
   if (IF_final_target_achieved) {
     cout << "[app]\n[app] All layer prune finished: step = " << APP<Dtype>::step_;
     if (APP<Dtype>::IF_eswpf) {
