@@ -1059,26 +1059,29 @@ void Layer<Dtype>::GetAPoZ(const vector<Blob<Dtype>*>& top) {
         for (int h = 0; h < num_h; ++h) {
           for (int w = 0; w < num_w; ++w) {
             if (top_data[((n * num_c + c) * num_h + h) * num_w + w] <= 0) {
-              num_zero[n * num_c + c] += 1;
+              // num_zero[n * num_c + c] += 1;
               apoz[n] += 1;
             } else {
-              fm_score += fabs(top_data[((n * num_c + c) * num_h + h) * num_w + w]);
+              // fm_score += fabs(top_data[((n * num_c + c) * num_h + h) * num_w + w]);
               fc_score += fabs(top_data[((n * num_c + c) * num_h + h) * num_w + w]);
             }
           }
         }
-        num_zero[n * num_c + c] /= (num_h * num_w);
+        // num_zero[n * num_c + c] /= (num_h * num_w);
         // char s1[100];
         // sprintf(s1, "example %d layer %s channel %d: APoZ = %.6f", n, this->layer_param_.name().c_str(), c, num_zero[n * num_c + c]);
         // cout << s1 << endl;
+        
         fm_score = 0;
       }
       apoz[n] /= (num_c * num_h * num_w);
       char s2[100];
-      sprintf(s2, "e%dl%d: APoZ=%.4f", n, APP<Dtype>::layer_index[this->layer_param_.name()], apoz[n]);
+      sprintf(s2, "E%dL%d: APoZ=%.4f", n, APP<Dtype>::layer_index[this->layer_param_.name()], apoz[n]);
       cout << s2 << endl;
+      
+      fc_score /= (num_c * num_h * num_w);
       char s4[100];
-      sprintf(s4, "e%dl%d: L1norm=%.4f", n, APP<Dtype>::layer_index[this->layer_param_.name()], fc_score);
+      sprintf(s4, "E%dL%d: norm=%.4f", n, APP<Dtype>::layer_index[this->layer_param_.name()], fc_score);
       cout << s4 << endl;
       fc_score = 0;
 
