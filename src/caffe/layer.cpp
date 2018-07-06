@@ -814,6 +814,7 @@ void Layer<Dtype>::RestoreMasks() {
     APP<Dtype>::num_pruned_row[L] = num_pruned_row;
   }
   this->UpdatePrunedRatio();
+  this->IF_layer_prune_finished();
 
   LOG(INFO) << "  Masks restored,"
             << "  num_pruned_col = " << APP<Dtype>::num_pruned_col[L] << "(" << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << ")"
