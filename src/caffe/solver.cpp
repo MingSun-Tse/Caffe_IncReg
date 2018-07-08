@@ -635,11 +635,11 @@ void Solver<Dtype>::SetNewCurrentPruneRatio(const bool& IF_roll_back, const Dtyp
     } else {
       APP<Dtype>::last_feasible_prune_ratio[L] = APP<Dtype>::pruned_ratio_for_comparison[L];
       if (APP<Dtype>::last_infeasible_prune_ratio[L] == 0) {
-        APP<Dtype>::current_prune_ratio[L] = APP<Dtype>::pruned_ratio_for_comparison[L] + APP<Dtype>::prune_ratio_step[L];
+        APP<Dtype>::current_prune_ratio[L] = APP<Dtype>::pruned_ratio_for_comparison[L] + 0.1/0.5 * APP<Dtype>::prune_ratio_step[L];
       } else {
         if (APP<Dtype>::last_feasible_prune_ratio[L] >= APP<Dtype>::last_infeasible_prune_ratio[L]) {
-          APP<Dtype>::prune_ratio_step[L] *= 0.8; // each time surpassing the infeasible, half the prune_ratio_step
-          APP<Dtype>::current_prune_ratio[L] = APP<Dtype>::pruned_ratio_for_comparison[L] + APP<Dtype>::prune_ratio_step[L];
+          APP<Dtype>::prune_ratio_step[L] *= 0.5; // each time surpassing the infeasible, decrease the prune_ratio_step
+          APP<Dtype>::current_prune_ratio[L] = APP<Dtype>::pruned_ratio_for_comparison[L] + 0.1/0.5 * APP<Dtype>::prune_ratio_step[L];
           cout << "[app]    " << L << " - surpassed the last_infeasible_prune_ratio" << endl;
         } else if (APP<Dtype>::last_infeasible_prune_ratio[L] - APP<Dtype>::last_feasible_prune_ratio[L] < 0.01) {
           APP<Dtype>::current_prune_ratio[L] = APP<Dtype>::last_infeasible_prune_ratio[L];

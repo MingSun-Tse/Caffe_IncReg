@@ -115,9 +115,9 @@ public:
     static vector<Dtype> when_snapshot;
 }; 
 
-    template<typename Dtype>  string  APP<Dtype>::prune_method   = "None"; /// initialized for caffe test, which has no solver but this info is still needed in layer.
-    template<typename Dtype>  string  APP<Dtype>::prune_unit     = "None";
-    template<typename Dtype>  string  APP<Dtype>::prune_coremthd = "None";
+    template<typename Dtype>  string  APP<Dtype>::prune_method    = "None"; /// initialized for caffe test, which has no solver but this info is still needed in layer.
+    template<typename Dtype>  string  APP<Dtype>::prune_unit      = "None";
+    template<typename Dtype>  string  APP<Dtype>::prune_coremthd  = "None";
     template<typename Dtype>  string  APP<Dtype>::prune_coremthd_ = "None";
     template<typename Dtype>  Dtype   APP<Dtype>::ratio_once_prune;
     template<typename Dtype>  int     APP<Dtype>::prune_interval;
@@ -164,9 +164,9 @@ public:
     template<typename Dtype>  int   APP<Dtype>::inner_iter = 0;
     template<typename Dtype>  int   APP<Dtype>::step_ = -1;
     template<typename Dtype>  int   APP<Dtype>::num_; // batch_size
-    template<typename Dtype>  long   APP<Dtype>::last_time  = 0;
-    template<typename Dtype>  long   APP<Dtype>::first_time = 0;
-    template<typename Dtype>  int    APP<Dtype>::first_iter = 0;
+    template<typename Dtype>  long  APP<Dtype>::last_time  = 0;
+    template<typename Dtype>  long  APP<Dtype>::first_time = 0;
+    template<typename Dtype>  int   APP<Dtype>::first_iter = 0;
     template<typename Dtype>  bool  APP<Dtype>::IF_scheme1_when_Reg_rank;
     template<typename Dtype>  bool  APP<Dtype>::IF_current_target_achieved = false; /// if all layer prune finished in the current pruning iteration
     template<typename Dtype>  bool  APP<Dtype>::IF_speedup_achieved   = false;

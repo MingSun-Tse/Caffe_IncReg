@@ -825,12 +825,12 @@ void Layer<Dtype>::RestoreMasks() {
 
 template <typename Dtype>
 void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
-  const int count   = this->blobs_[0]->count();
+  const int count = this->blobs_[0]->count();
   const int num_row = this->blobs_[0]->shape()[0];
   const int num_col = count / num_row;
   APP<Dtype>::prune_ratio.push_back(prune_param.prune_ratio());
-  APP<Dtype>::prune_ratio_step.push_back(0.1); // TODO(mingsuntse-newprune)
-  APP<Dtype>::current_prune_ratio.push_back(min(prune_param.prune_ratio_begin(), prune_param.prune_ratio())); // APP<Dtype>::prune_ratio_step.back()); // Start from 20%
+  APP<Dtype>::prune_ratio_step.push_back(prune_param.prune_ratio_step());
+  APP<Dtype>::current_prune_ratio.push_back(min(prune_param.prune_ratio_step() * float(0.4), prune_param.prune_ratio()));
   APP<Dtype>::pruned_ratio.push_back(0); // used in TEST
   this->IF_masks_updated = true;
   if (this->phase_ == TEST) {
@@ -846,7 +846,7 @@ void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
     } else if (!strcmp(this->type(), "InnerProduct")) {
       ++ APP<Dtype>::fc_layer_cnt;
     } else {
-      LOG(FATAL) << "Seems wrong, pruning setup can ONLY be put in the layers with learnable parameters (Conv and FC), please check.";
+      LOG(FATAL) << "Seems wrong, PruneSetUp can ONLY be put in the layers with learnable parameters (Conv and FC), please check.";
     }
     LOG(INFO) << "New learnable layer registered: " << layer_name
               << ". Its layer index: " << APP<Dtype>::layer_index[layer_name] << endl;
