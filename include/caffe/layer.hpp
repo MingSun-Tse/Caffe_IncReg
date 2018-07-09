@@ -82,20 +82,12 @@ class Layer {
   /// Added by @mingsuntse, for pruning
   // Tool functions
   void RestoreMasks();
-  void RestorePruneProb();
   void IF_prune_finished();
   bool IF_hppf();
   void UpdateNumPrunedRow();
   void UpdateNumPrunedCol();
   void UpdatePrunedRatio();
   void Print(char mode);
-  // Pruning methods
-  void FilterPrune();
-  void TaylorPrune(const vector<Blob<Dtype>*>& top);
-  void ProbPruneCol(const int& prune_interval);
-  void ProbPruneCol_chl(const int& prune_interval);
-  void ProbPruneRow(const int& prune_interval);
-  void GenerateMasks();
   // Main pruning functions
   void PruneSetUp(const PruneParameter& prune_param);
   void PruneForward();
@@ -521,7 +513,7 @@ inline Dtype Layer<Dtype>::Forward(const vector<Blob<Dtype>*>& bottom,
       const int count = top[top_id]->count();
       const Dtype* data = top[top_id]->cpu_data();
       const Dtype* loss_weights = top[top_id]->cpu_diff();
-      loss += caffe_cpu_dot(count, data, loss_weights); // caffe_cpu_dot是干啥的？？
+      loss += caffe_cpu_dot(count, data, loss_weights);
     }
     break;
   case Caffe::GPU:

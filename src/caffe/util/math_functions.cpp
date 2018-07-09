@@ -20,18 +20,6 @@ void caffe_cpu_gemm<float>(const CBLAS_TRANSPOSE TransA,
       ldb, beta, C, N);
 }
 
-/*
-功能： C=alpha*A*B+beta*C
-A,B,C 是输入矩阵（一维数组格式）
-CblasRowMajor :数据是行主序的（二维数据也是用一维数组储存的）
-TransA, TransB：是否要对A和B做转置操作（CblasTrans CblasNoTrans）
-M： A、C 的行数
-N： B、C 的列数
-K： A 的列数， B 的行数
-lda ： A的列数（不做转置）行数（做转置）
-ldb： B的列数（不做转置）行数（做转置）
- */
-
 template<>
 void caffe_cpu_gemm<double>(const CBLAS_TRANSPOSE TransA,
     const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
@@ -42,9 +30,6 @@ void caffe_cpu_gemm<double>(const CBLAS_TRANSPOSE TransA,
   cblas_dgemm(CblasRowMajor, TransA, TransB, M, N, K, alpha, A, lda, B,
       ldb, beta, C, N);
 }
-
-
-
 
 template <>
 void caffe_cpu_gemv<float>(const CBLAS_TRANSPOSE TransA, const int M,

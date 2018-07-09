@@ -57,7 +57,7 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   param_ = param;
   
   // ------------------------------------------
-  // WANGHUAN, copy prune params
+  // @mingsuntse, copy prune params
   APP<Dtype>::prune_method = param_.prune_method();
   if (APP<Dtype>::prune_method != "None") {
       char* mthd = new char[strlen(APP<Dtype>::prune_method.c_str()) + 1];
@@ -87,8 +87,6 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   APP<Dtype>::IF_eswpf = param_.if_eswpf(); /// if early stop when prune finished
   APP<Dtype>::prune_threshold = param_.prune_threshold();
   APP<Dtype>::reg_cushion_iter = 2000;
-  // APP<Dtype>::mask_generate_mechanism = param_.mask_generate_mechanism();
-  // APP<Dtype>::score_decay = param_.score_decay();
   
   const Dtype index[] = {8,7,6,5,4,3,2};
   APP<Dtype>::when_snapshot.insert(APP<Dtype>::when_snapshot.begin(), index, index + sizeof(index)/sizeof(index[0]));
@@ -258,8 +256,6 @@ void Solver<Dtype>::Step(int iters) {
         break;
       }
     }
-    // 分发参数
-    // std::cout << "call_backs_.size(): " << callbacks_.size() << std::endl; /// WANGHUAN
     for (int i = 0; i < callbacks_.size(); ++i) {
       callbacks_[i]->on_start();
     }
@@ -324,7 +320,7 @@ void Solver<Dtype>::Step(int iters) {
     APP<Dtype>::inner_iter = 0;
     for (int i = 0; i < param_.iter_size(); ++i) {
       loss += net_->ForwardBackward();
-      ++ APP<Dtype>::inner_iter; /// WANGHUAN
+      ++ APP<Dtype>::inner_iter;
     }
     cout << "--- after ForwardBackward: " << (double)(clock() - t1) / CLOCKS_PER_SEC << endl;
     
@@ -369,7 +365,6 @@ void Solver<Dtype>::Step(int iters) {
       }
     }
     
-    // 归约梯度，在Update之前，而在Update中有`Iteration, lr`的logging，合理解释了log中就只有一处这个logging
     for (int i = 0; i < callbacks_.size(); ++i) {
       callbacks_[i]->on_gradients_ready();
     }
@@ -593,120 +588,6 @@ void Solver<Dtype>::Snapshot() {
 
   SnapshotSolverState(model_filename);
 }
-
-/*
-/// @mingsuntse, Deprecated -- use built-in solverstate
-template <typename Dtype>
-void Solver<Dtype>::PruneStateShot() {
-    map<string, int>::iterator it_m;
-    const string prune_state_dir = param_.snapshot_prefix() + APP<Dtype>::prune_state_dir;
-    if (access(prune_state_dir.c_str(), 0)) {
-        LOG(INFO) << "Prune state dir: `" << prune_state_dir << "` doesn't exist, now make it." << endl;
-        mkdir(prune_state_dir.c_str(), S_IRWXU);
-    }
-    for (it_m = APP<Dtype>::layer_index.begin(); it_m != APP<Dtype>::layer_index.end(); ++it_m) {
-        if (APP<Dtype>::iter_prune_finished[it_m->second] != INT_MAX) { continue; }
-        const string outfile = param_.snapshot_prefix() + APP<Dtype>::prune_state_dir + it_m->first + ".txt";
-        ofstream state_stream(outfile.c_str(), ios::out);
-        if (!state_stream.is_open()) {
-            LOG(INFO) << "Error: cannot open file `" << outfile << "`" << endl;
-        } else {
-            state_stream << iter_ << "\n";
-            if (APP<Dtype>::prune_coremthd.substr(0, 2) == "PP") {
-                vector<Dtype> state_punish = APP<Dtype>::history_prob[it_m->second];
-                typename vector<Dtype>::iterator it;
-                for (it = state_punish.begin(); it != state_punish.end(); ++it) {
-                    state_stream << *it << " ";
-                }
-            } else if (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg") {
-                vector<Dtype> state_score  = APP<Dtype>::hrank[it_m->second];
-                vector<Dtype> state_punish = APP<Dtype>::history_reg[it_m->second];
-                typename vector<Dtype>::iterator it;
-                assert (state_score.size() == state_punish.size());
-                for (it = state_score.begin(); it != state_score.end(); ++it) {
-                    state_stream << *it << " ";
-                }
-                for (it = state_punish.begin(); it != state_punish.end(); ++it) {
-                    state_stream << *it << " ";
-                }
-            }
-            state_stream.close();
-            LOG(INFO) << APP<Dtype>::layer_index[it_m->first] << " " << it_m->first << ": save prune state done!";
-        }
-    }
-}
-
-/// @mingsuntse, Deprecated
-template <typename Dtype>
-void Solver<Dtype>::Logshot() {
-    const time_t t = time(NULL);
-    struct tm* ctime = localtime(&t);
-    ostringstream TIME;
-    TIME << 1900 + ctime->tm_year;
-    if (ctime->tm_mon < 9) { TIME << 0; }     
-    TIME << 1 + ctime->tm_mon
-         << ctime->tm_mday
-         << "-"
-         << ctime->tm_hour
-         << ctime->tm_min;
-    
-    const string i_tmp = param_.snapshot_prefix() + TIME.str() + "_log_index.txt";
-    const string w_tmp = param_.snapshot_prefix() + TIME.str() + "_log_weight.txt";
-    const string d_tmp = param_.snapshot_prefix() + TIME.str() + "_log_diff.txt";
-    const char* ii = i_tmp.c_str(); 
-    const char* ww = w_tmp.c_str(); 
-    const char* dd = d_tmp.c_str(); 
-    ofstream log_i(ii, ofstream::app);
-    ofstream log_w(ww, ofstream::app); 
-    ofstream log_d(dd, ofstream::app);
-    
-    typename vector<vector<vector<Dtype> > >::iterator it_l; /// it_layer
-    typename vector<vector<Dtype> >::iterator it_w; /// it_weight
-    typename vector<Dtype>::iterator it_i; /// it_iter
-    vector<vector<int> >::iterator it_il;
-    vector<int>::iterator it_iw;
-
-    if (!log_i.is_open()) { 
-        cout << "Error: opening file failed: " << ii << endl; 
-    } else {
-        for (it_il = APP<Dtype>::log_index.begin(); it_il != APP<Dtype>::log_index.end(); ++it_il) {
-            for (it_iw = (*it_il).begin(); it_iw != (*it_il).end(); ++it_iw) {
-                log_i << *it_iw << " ";
-            }
-            log_i << "\n";
-        }
-    }
-    
-    if (!log_w.is_open()) { 
-        cout << "Error: opening file failed: " << ww << endl; 
-    } else {
-        for (it_l = APP<Dtype>::log_weight.begin(); it_l != APP<Dtype>::log_weight.end(); ++it_l) {
-            for (it_w = (*it_l).begin(); it_w != (*it_l).end(); ++it_w) {
-                for (it_i = (*it_w).begin(); it_i != (*it_w).end(); ++it_i) {
-                    log_w << *it_i << " ";
-                }
-                log_w << "\n";
-            }
-            log_w << "\n";
-        }
-    }
-
-    if (!log_d.is_open()) { 
-        cout << "Error: opening file failed: " << dd << endl; 
-    } else {
-        for (it_l = APP<Dtype>::log_diff.begin(); it_l != APP<Dtype>::log_diff.end(); ++it_l) {
-            for (it_w = (*it_l).begin(); it_w != (*it_l).end(); ++it_w) {
-                for (it_i = (*it_w).begin(); it_i != (*it_w).end(); ++it_i) {
-                    log_d << *it_i << " ";
-                }
-                log_d << "\n";
-            }
-            log_d << "\n";
-        }
-    }
-
-}
-*/
 
 template <typename Dtype>
 void Solver<Dtype>::CheckSnapshotWritePermissions() {

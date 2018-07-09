@@ -259,8 +259,6 @@ RegisterBrewFunction(train);
 
 // Test: score a model.
 int test() {
-  /// DeepCompression::IN_TEST = true; /// WANGHUAN
-  
   CHECK_GT(FLAGS_model.size(), 0) << "Need a model definition to score.";
   CHECK_GT(FLAGS_weights.size(), 0) << "Need model weights to score.";
   vector<string> stages = get_stages_from_flags();
@@ -327,7 +325,6 @@ int test() {
     LOG(INFO) << output_name << " = " << mean_score << loss_msg_stream.str();
   }
   
-  /// DeepCompression::IN_TEST = false; /// WANGHUAN
   return 0;
 }
 RegisterBrewFunction(test);
@@ -335,8 +332,6 @@ RegisterBrewFunction(test);
 
 // Time: benchmark the execution time of a model.
 int time() {
-  /// DeepCompression::IN_TEST = true; /// WANGHUAN
-    
   CHECK_GT(FLAGS_model.size(), 0) << "Need a model definition to time.";
   caffe::Phase phase = get_phase_from_flags(caffe::TRAIN);
   vector<string> stages = get_stages_from_flags();
@@ -423,7 +418,6 @@ int time() {
   LOG(INFO) << "Total Time: " << total_timer.MilliSeconds() << " ms.";
   LOG(INFO) << "*** Benchmark ends ***";
   
-  /// DeepCompression::IN_TEST = false; /// WANGHUAN
   return 0;
 }
 RegisterBrewFunction(time);

@@ -118,7 +118,7 @@ void SGDSolver<Dtype>::ApplyUpdate() {
   clock_t t1 = clock();
   #endif
     
-  CHECK(Caffe::root_solver()); /// 更新梯度是由主solver来做的
+  CHECK(Caffe::root_solver());
   Dtype rate = GetLearningRate();
   if (this->param_.display() && this->iter_ % this->param_.display() == 0) {
     LOG(INFO) << "Iteration " << this->iter_ << ", lr = " << rate;
@@ -177,31 +177,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
       this->net_->params_weight_decay();
   Dtype weight_decay = this->param_.weight_decay();
   string regularization_type = this->param_.regularization_type();
-  // ------------------------------------------------
-  /// Decrease-Weight-Decay Mode, @mingsuntse
-  Dtype current_wd = weight_decay; // default
-  if (this->param_.dwd_mode() != "None") {
-      CHECK_GE(this->param_.wd_end(), 0) << "Error: wd_end must be in [0, 1]";
-      // CHECK_LE(this->param_.wd_end(), 1) << "Error: wd_end must be in [0, 1]"; // weight decay can go up, when wd_end > 1
-      
-      const int begin = this->param_.dwd_begin_iter();
-      if (this->iter_ >= begin) {
-          if (this->param_.dwd_mode() == "linearly") {
-            const int end   = this->param_.dwd_end_iter();
-            CHECK_GT(end, begin) << "Error: dwd_end_iter must be larger than dwd_begin_iter.";
-            current_wd = weight_decay * (1 - (1 - this->param_.wd_end()) / (end - begin) * (std::min(this->iter_, end) - begin));
-          
-          } else if (this->param_.dwd_mode() == "step_linearly") {
-            const int end   = this->param_.dwd_end_iter();
-            CHECK_GT(end, begin) << "Error: dwd_end_iter must be larger than dwd_begin_iter.";
-            const int tmp_iter = (std::min(this->iter_, end) - begin) / this->param_.dwd_step() * this->param_.dwd_step();
-            current_wd = weight_decay * (1 - (1 - this->param_.wd_end()) / (end - begin) * tmp_iter);
-
-          }
-      }
-  }
-  // ------------------------------------------------
-  Dtype local_decay = current_wd * net_params_weight_decay[param_id];
+  Dtype local_decay = weight_decay * net_params_weight_decay[param_id];
   switch (Caffe::mode()) {
   case Caffe::CPU: {
     if (local_decay) {
@@ -265,18 +241,6 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         clock_t t1 = clock();
         #endif
         
-        /* print for check
-        cout << param_id << "  layer_name: " << layer_name << endl;
-        cout << "  num_param_layer_indices: " << this->net_->param_layer_indices().size() << endl; 
-        cout << "  num_layer: "               << this->net_->layer_names().size() << endl;
-        cout << "  num_blob: "                << this->net_->blob_names().size()  << endl;
-        cout << "  num_learnable_param: "     << this->net_->learnable_params().size() << endl;
-
-        // My layer_index only contains conv and fc layers, while caffe's layer_index contains literally all layers.
-        map<string, int> layer_names_index = this->net_->layer_names_index();
-        cout << "my layer_index: " << L 
-             << "  caffe's layer_index: " << layer_names_index[layer_name] << endl;
-        */
         Dtype* muhistory_score  = this->net_->layer_by_name(layer_name)->history_score()[0]->mutable_cpu_data();
         Dtype* muhistory_punish = this->net_->layer_by_name(layer_name)->history_punish()[0]->mutable_cpu_data();
         Dtype* mumasks          = this->net_->layer_by_name(layer_name)->masks()[0]->mutable_cpu_data();
@@ -324,50 +288,14 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                 
                 // Sort 02: sort by history_rank
                 vector<mypair> col_hrank(num_col); // the history_rank of each column, history_rank is like the new score
-                // cout << "ave-magnitude_col " << this->iter_ << " " << layer_name << ":";
                 for (int j = 0; j < num_col; ++j) {
-                    Dtype sum = 0; // for print ave magnitude
-                    for (int i = 0; i < num_row; ++i) {
-                        sum += fabs(weight[i * num_col + j]);
-                    }
-                    // cout << " " << sum/num_row;
                     col_hrank[j].first  = muhistory_score[j];
                     col_hrank[j].second = j;
                 }
                 sort(col_hrank.begin(), col_hrank.end());
-                //cout << endl;
                 #ifdef ShowTimingLog
                 cout  << "  after 2nd sort: " << (double)(clock() - t1)/CLOCKS_PER_SEC << "s" << endl;
                 #endif
-                
-                /*
-                // Print: Check rank, j is column number
-                if (this->iter_ % 20 == 0) {
-                    char iter[10]; sprintf(iter, "%6d", this->iter_ + 1); // max_iter should be in [0, 999999]
-                    cout << iter << "-" << layer_name << "hrank:";
-                    for (int j = 0; j < num_col; ++j) {
-                        cout << "  ";
-                        char s[50];
-                        if (APP<Dtype>::IF_col_pruned[L][j][0]) { 
-                            sprintf(s, "%7.0f", muhistory_score[j]);
-                        } else {
-                            sprintf(s, "%7.2f", muhistory_score[j]);
-                        }
-                        cout << s;
-                    }
-                    cout << endl;
-                    
-                    cout << iter << "-" << layer_name << "rank(by_hrank):";
-                    for (int rk = 0; rk < num_col; ++rk) {
-                        cout << "  ";
-                        char s[50];
-                        const int prune_mark = APP<Dtype>::IF_col_pruned[L][col_hrank[rk].second][0] ? 0 : 1;
-                        sprintf(s, "%4d-%d", col_hrank[rk].second, prune_mark);
-                        cout << s;
-                    }
-                    cout << endl;
-                }
-                */
 
                 // scheme 1, exponential center-symmetrical function
                 const Dtype kk = APP<Dtype>::kk; // u in the paper
@@ -424,42 +352,6 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                              << "   new reg: "  << new_reg << endl;
                     }
                 }
-            } else if (APP<Dtype>::prune_coremthd == "Reg-L1") {
-                typedef std::pair<Dtype, int> mypair;
-                vector<mypair> col_score(num_col);
-                for (int j = 0; j < num_col; ++j) {
-                    col_score[j].second = j;
-                    if (APP<Dtype>::IF_col_pruned[L][j][0]) {
-                        col_score[j].first = INT_MAX;
-                        continue;
-                    }
-                    col_score[j].first  = 0;
-                    for (int i = 0; i < num_row; ++i) {
-                        col_score[j].first += fabs(weight[i * num_col + j]);
-                    }
-                }
-                sort(col_score.begin(), col_score.end());
-                
-                const Dtype k_L1 = (num_col_to_prune_ == 0) ? 0 : AA / (col_score[num_col_to_prune_].first - col_score[0].first);
-                cout << "step: " << this->iter_ + 1 << "  " << layer_name << " k_L1: " << k_L1 << endl;
-                for (int rk = 0; rk < num_col_; ++rk) {
-                    const int col_of_rank_rk = col_score[rk].second;
-                    const Dtype Delta = AA - k_L1 * (col_score[rk].first - col_score[0].first);
-                    const Dtype old_reg = muhistory_punish[col_of_rank_rk];
-                    const Dtype new_reg = std::max(old_reg + Delta, Dtype(0));
-                    for (int i = 0; i < num_row; ++i) {
-                        muhistory_punish[i * num_col + col_of_rank_rk] = new_reg;
-                    }
-                    if (new_reg < old_reg) {
-                        cout << "reduce reg: " << layer_name << "-" << col_of_rank_rk 
-                             << "   old reg: "  << old_reg
-                             << "   new reg: "  << new_reg << endl;
-                    }
-                }
-                const int num_show = APP<Dtype>::show_num_weight > num_col ? num_col : APP<Dtype>::show_num_weight;
-                cout << layer_name << "-score: "; for (int rk = 0; rk < num_show; ++rk) { cout << col_score[rk].first  << " "; } cout << endl;
-                cout << layer_name << "  -col: "; for (int rk = 0; rk < num_show; ++rk) { cout << col_score[rk].second << " "; } cout << endl;
-                cout << layer_name << "  -reg: "; for (int rk = 0; rk < num_show; ++rk) { cout << muhistory_punish[col_score[rk].second] << " "; } cout << endl;
             }
         }
         #ifdef ShowTimingLog
@@ -481,349 +373,6 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         #ifdef ShowTimingLog
         cout << "  after gpu add, end of Reg_Col: " << (double)(clock() - t1)/CLOCKS_PER_SEC << "s" << endl;
         #endif
-      } else if (regularization_type == "Reg-Optimal_Col") {
-         
-        // If return
-        const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[param_id].first];
-        const int L = GetLayerIndex(param_id);
-        if (L == -1) { return; }
-        
-        #ifdef ShowTimingLog
-        cout << layer_name << " Reg-Optimal_Col start timing" << endl;
-        clock_t t1 = clock();
-        #endif
-        
-        Dtype* muhistory_punish = this->net_->layer_by_name(layer_name)->history_punish()[0]->mutable_cpu_data();
-        Dtype* mumasks = this->net_->layer_by_name(layer_name)->masks()[0]->mutable_cpu_data();
-        const Dtype* weight = net_params[param_id]->cpu_data();
-        const Dtype* S      = net_params[param_id]->cpu_secdiff();
-        const int count     = net_params[param_id]->count();
-        const int num_row   = net_params[param_id]->shape()[0];
-        const int num_col   = count / num_row;
-        const int num_pruned_col    = APP<Dtype>::num_pruned_col[L];
-        const int num_col_to_prune_ = ceil(num_col * APP<Dtype>::prune_ratio[L]) - num_pruned_col;
-        if (num_col_to_prune_ <= 0) {
-            LOG(FATAL) << "num_col_to_prune_ <= 0";
-            exit(1);
-        }
-        const Dtype AA = APP<Dtype>::AA; // The fixed reg multiplier
-        
-        cout << layer_name << endl;
-        if (APP<Dtype>::step_ % APP<Dtype>::prune_interval == 0) {
-            // Get alpha
-            Dtype D, E, F;
-            int ix = 19; // fixed_reg_weight_index
-            D = S[ix] + muhistory_punish[ix];
-            E = weight[ix] * weight[ix] * D * D;
-            F = E * muhistory_punish[ix];
-            const Dtype alpha = (-E * AA - F) / ((D + AA) * (D + AA) * (D + AA));
-            
-            // vector<Dtype> compr(num_col, 0); // magnitude compression ratio
-            // typedef std::pair<Dtype, int> mypair;
-            // vector<mypair> col_score(num_col);
-            for (int i = 0; i < count; ++i) {
-                D = S[i] + muhistory_punish[i];
-                E = weight[i] * weight[i] * D * D;
-                F = E * muhistory_punish[i];
-                
-                // solve the 3-order equation
-                const Dtype p = (F - D * E) / alpha;
-                const Dtype q = E / alpha;
-                
-                // Check 
-                Dtype pq0 = q*q/4 + p*p*p/27;
-                if (pq0 < 0) {
-                    // cout << "Wrong: negative " << pq0 << endl;
-                    pq0 = - pq0;
-                }
-                const Dtype pq1 = -q/2 + sqrt(pq0);
-                const Dtype pq2 = -q/2 - sqrt(pq0);
-                const int sign1 = pq1 > 0 ? 1 : -1;
-                const int sign2 = pq2 > 0 ? 1 : -1;
-                
-                const Dtype x = sign1 * pow(fabs(pq1), 1.0/3)
-                              + sign2 * pow(fabs(pq2), 1.0/3); // if q*q/4 + p*p*p/27 > 0?
-                
-                if (i < 10) {
-                    cout << "alpha: " << alpha
-                         << "  S: " << S[i] 
-                         << "  D: " << D 
-                         << "  E: " << E 
-                         << "  F: " << F 
-                         << "  p: " << p 
-                         << "  q: " << q 
-                         << "  pq:" << q*q/4 + p*p*p/27
-                         << "  pq1:" << pq1
-                         << "  pq2:" << pq2
-                         << "  x-D: " << x-D
-                         << endl;
-                }
-                
-                muhistory_punish[i] += min(APP<Dtype>::AA, fabs(x - D));
-                if (muhistory_punish[i] >= APP<Dtype>::target_reg) {
-                    mumasks[i] = 0;
-                }
-                
-                // compr[i % num_col] += fabs((x - D) / x); // |\Delta w / w|
-            }
-            cout << endl;
-            
-            /* 
-            // Sort col_score
-            for (int j = 0; j < num_col; ++j) {
-                col_score[j].first  = compr[j];
-                col_score[j].second = j;
-            }
-            sort(col_score.begin(), col_score.end());
-            
-            
-            for (int rk = 0; rk < num_col; ++rk) {
-                const int col_of_rank_rk = col_score[rk].second;
-                if (rk < num_col_to_prune_) { // rank is not good
-                    
-                } else { // rank is good
-                    
-                }
-                // Get 
-            */
-        }
-
-        #ifdef ShowTimingLog
-        cout  << "  after calculate reg term: " << (double)(clock() - t1)/CLOCKS_PER_SEC << "s" << endl;
-        #endif
-        
-        //Apply Reg
-        caffe_gpu_mul(net_params[param_id]->count(),
-                      net_params[param_id]->gpu_data(),
-                      muhistory_punish,
-                      tmp_[param_id]->mutable_gpu_data());
-        #ifdef ShowTimingLog
-        cout << "  after gpu mul: " << (double)(clock() - t1)/CLOCKS_PER_SEC << "s" << endl;
-        #endif
-        caffe_gpu_add(net_params[param_id]->count(),
-                      tmp_[param_id]->gpu_data(),
-                      net_params[param_id]->gpu_diff(),
-                      net_params[param_id]->mutable_gpu_diff()); 
-        #ifdef ShowTimingLog
-        cout << "  after gpu add, end of Reg-Optimal_Col: " << (double)(clock() - t1)/CLOCKS_PER_SEC << "s" << endl;
-        #endif
-      
-      // ******************************************************************************************
-      // Got idea from cvpr rebuttal, improve SelectiveReg: 1) use L1-norm rather than rank, 2) row prune
-      } else if (regularization_type == "Reg_Row") {
-        // add weight decay, weight decay still used
-        caffe_gpu_axpy(net_params[param_id]->count(),
-                       local_decay,
-                       net_params[param_id]->gpu_data(),
-                       net_params[param_id]->mutable_gpu_diff());
-        // If return
-        const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[param_id].first];
-        const int L = GetLayerIndex(param_id);
-        if (L == -1) { return; }
-        
-        Dtype* muhistory_score  = this->net_->layer_by_name(layer_name)->history_score()[0]->mutable_cpu_data();
-        Dtype* muhistory_punish = this->net_->layer_by_name(layer_name)->history_punish()[0]->mutable_cpu_data();
-        Dtype* gpu_muhistory_punish = this->net_->layer_by_name(layer_name)->history_punish()[0]->mutable_gpu_data();
-        Dtype* mumasks          = this->net_->layer_by_name(layer_name)->masks()[0]->mutable_cpu_data();
-        const Dtype* weight = net_params[param_id]->cpu_data();
-        const int count     = net_params[param_id]->count();
-        const int num_row   = net_params[param_id]->shape()[0];
-        const int num_col   = count / num_row;
-        const Dtype AA = APP<Dtype>::AA;
-        const int num_pruned_row    = APP<Dtype>::num_pruned_row[L];
-        const int num_row_to_prune_ = ceil(num_row * APP<Dtype>::prune_ratio[L]) - num_pruned_row;
-        const int num_row_          = num_row - num_pruned_row;
-        
-        if (APP<Dtype>::prune_coremthd == "Reg-rank") {
-            // Sort 01: sort by L1-norm
-            typedef std::pair<Dtype, int> mypair;
-            vector<mypair> row_score(num_row);
-            for (int i = 0; i < num_row; ++i) {
-                row_score[i].second = i;
-                if (APP<Dtype>::IF_row_pruned[L][i]) {
-                    row_score[i].first = muhistory_score[i * num_col]; // make the pruned row sink down
-                    continue;
-                }
-                row_score[i].first  = 0;
-                for (int j = 0; j < num_col; ++j) {
-                    row_score[i].first += fabs(weight[i * num_col + j]);
-                }
-            }
-            sort(row_score.begin(), row_score.end()); // in ascending order
-            
-            // Make new criteria by rank: history_rank
-            const int n = this->iter_ + 1; // No.n iter (n starts from 1)
-            for (int rk = 0; rk < num_row; ++rk) {
-                const int row_of_rank_rk = row_score[rk].second;
-                if (APP<Dtype>::IF_row_pruned[L][row_of_rank_rk]) { continue; }
-                muhistory_score[row_of_rank_rk * num_col] = ((n-1) * muhistory_score[row_of_rank_rk * num_col] + rk) / n;
-            }
-            
-            // Sort 02: sort by history_rank
-            vector<mypair> row_hrank(num_row);
-            // cout << "ave-magnitude_row " << this->iter_ << " " << layer_name << ":";
-            for (int i = 0; i < num_row; ++i) {
-                row_hrank[i].first  = muhistory_score[i * num_col];
-                row_hrank[i].second = i;
-            }
-            sort(row_hrank.begin(), row_hrank.end());
-            
-            // Punishment Function 
-            assert (num_row_to_prune_ > 0);
-            if (APP<Dtype>::IF_scheme1_when_Reg_rank) {
-                // scheme 1
-                const Dtype kk = APP<Dtype>::kk;
-                const Dtype alpha = log(2/kk) / (num_row_to_prune_ + 1);
-                const Dtype N1 = -log(kk)/alpha;
-                for (int rk = 0; rk < num_row_; ++rk) {
-                    const int row_of_rank_rk = row_hrank[rk + num_pruned_row].second; // Note the real rank is j + num_pruned_col
-                    const Dtype Delta = rk < N1 ? AA * exp(-alpha * rk) : -AA * exp(-alpha * (2*N1-rk)) + 2*kk*AA;
-                    const Dtype old_reg = muhistory_punish[row_of_rank_rk * num_col];
-                    const Dtype new_reg = std::max(old_reg + Delta, Dtype(0));
-                    caffe_gpu_set(num_col, new_reg, gpu_muhistory_punish + row_of_rank_rk * num_col);
-                    if (new_reg < old_reg) {
-                        cout << "reduce reg: " << layer_name << "-" << row_of_rank_rk 
-                             << "  old reg: "  << old_reg
-                             << "  new reg: "  << new_reg << endl;
-                    }
-                }
-            } else {
-                // scheme 2, the dis-continual function
-                const Dtype kk2 = APP<Dtype>::kk2;
-                const Dtype alpha1 = (num_row_to_prune_ == 1)          ? 0 : log(1/kk2) / (num_row_to_prune_ - 1);
-                const Dtype alpha2 = (num_row_to_prune_ == num_row_-1) ? 0 : log(1/kk2) / (num_row_-1 - num_row_to_prune_);
-                for (int rk = 0; rk < num_row_; ++rk) {
-                    const int row_of_rank_rk = row_hrank[rk + num_pruned_row].second; // Note the real rank is j + num_pruned_col
-                    const Dtype Delta = rk < num_row_to_prune_ ? AA * exp(-alpha1 * rk) : -AA * exp(-alpha2 * (num_row_-1 - rk));
-                    const Dtype old_reg = muhistory_punish[row_of_rank_rk * num_col];
-                    const Dtype new_reg = std::max(old_reg + Delta, Dtype(0));
-                    caffe_gpu_set(num_col, new_reg, gpu_muhistory_punish + row_of_rank_rk * num_col);
-                }
-            }
-        
-        // use L1-norm rather than rank
-        } else if (APP<Dtype>::prune_coremthd == "Reg-L1") {
-            // sort by L1-norm
-            typedef std::pair<Dtype, int> mypair;
-            vector<mypair> row_score(num_row);
-            for (int i = 0; i < num_row; ++i) {
-                row_score[i].second = i;
-                if (APP<Dtype>::IF_row_pruned[L][i]) {
-                    row_score[i].first = INT_MAX; // make the pruned row float up
-                    continue;
-                }
-                row_score[i].first  = 0;
-                for (int j = 0; j < num_col; ++j) {
-                    row_score[i].first += fabs(weight[i * num_col + j]);
-                }
-            }
-            sort(row_score.begin(), row_score.end()); // in ascending order
-            
-            // Punishment Function
-            assert (num_row_to_prune_ > 0 && num_row_to_prune_ < num_row);
-            cout << "num_row_to_prune_: " <<num_row_to_prune_ << endl;
-            const Dtype k_L1 = num_row_to_prune_ == 0 ? 0 : AA / (row_score[num_row_to_prune_].first - row_score[0].first);
-            cout << "k_L1: " << k_L1 << endl;
-            for (int rk = 0; rk < num_row_; ++rk) {
-                const int row_of_rank_rk = row_score[rk].second;
-                const Dtype Delta = AA - k_L1 * (row_score[rk].first - row_score[0].first);
-                const Dtype old_reg = muhistory_punish[row_of_rank_rk * num_col];
-                const Dtype new_reg = std::max(old_reg + Delta, Dtype(0));
-                caffe_gpu_set(num_col, new_reg, gpu_muhistory_punish + row_of_rank_rk * num_col);
-                if (new_reg < old_reg) {
-                    cout << "reduce reg: " << layer_name << "-" << row_of_rank_rk 
-                         << "  old reg: "  << old_reg
-                         << "  new reg: "  << new_reg << endl;
-                }
-            }
-            const int num_show = 10000 > num_row ? num_row : APP<Dtype>::show_num_weight;
-            cout << "score: ";   for (int rk = 0; rk < num_show; ++rk) { cout << row_score[rk].first  << " "; }
-            cout << "\n  row: "; for (int rk = 0; rk < num_show; ++rk) { cout << row_score[rk].second << " "; }
-            cout << "\n  reg: "; for (int rk = 0; rk < num_show; ++rk) { cout << muhistory_punish[row_score[rk].second * num_col] << " "; }
-            cout << endl;
-        }
-        //Apply Reg
-        caffe_gpu_mul(net_params[param_id]->count(),
-                      net_params[param_id]->gpu_data(),
-                      muhistory_punish,
-                      tmp_[param_id]->mutable_gpu_data());
-        caffe_gpu_add(net_params[param_id]->count(),
-                      tmp_[param_id]->gpu_data(),
-                      net_params[param_id]->gpu_diff(),
-                      net_params[param_id]->mutable_gpu_diff()); 
-                      
-      } else if (regularization_type == "Reg_Weight") {
-        // add weight decay, weight decay still used
-        caffe_gpu_axpy(net_params[param_id]->count(),
-                       local_decay,
-                       net_params[param_id]->gpu_data(),
-                       net_params[param_id]->mutable_gpu_diff());    
-        // If return
-        const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[param_id].first];
-        const int L = GetLayerIndex(param_id);
-        if (L == -1) { return; }
-        
-        Dtype* muhistory_score  = this->net_->layer_by_name(layer_name)->history_score()[0]->mutable_cpu_data();
-        Dtype* muhistory_punish = this->net_->layer_by_name(layer_name)->history_punish()[0]->mutable_cpu_data();
-        Dtype* mumasks          = this->net_->layer_by_name(layer_name)->masks()[0]->mutable_cpu_data();
-        const Dtype* weight = net_params[param_id]->cpu_data();
-        Dtype* muweight = net_params[param_id]->mutable_cpu_data();
-        const int count = net_params[param_id]->count();
-        
-        // estimate threhold score
-        Dtype score_min = 999;
-        Dtype score_max = -1;
-        for (int i = 0; i < count; ++i) {
-            if (i < 20) {
-                cout << muweight[i] << " ";
-            }
-            if (fabs(muweight[i]) > score_max) {
-                score_max = fabs(muweight[i]);
-            }
-            if (fabs(muweight[i]) < score_min) {
-                score_min = fabs(muweight[i]);
-            }
-        }
-        cout << endl;
-        // Dtype score_max=0.246919, score_min=1.91997e-05;
-        const Dtype u = (score_max + score_min) / 2; // mean
-        const Dtype sigma = (score_max - score_min) / 8; //stddev assumption: all weights are included in 4-sigma scope
-        const Dtype prune_ratio = (APP<Dtype>::prune_ratio[L] < 0.5) ? 1 - APP<Dtype>::prune_ratio[L] : APP<Dtype>::prune_ratio[L]; // the lookup table only contains half of the normal distribution
-        const Dtype normalized_prune_ratio = round(prune_ratio / 0.05) * 0.05; // e.g. 0.63 -> 0.65; 0.05 is the prune ratio step 
-        const int index = int((normalized_prune_ratio - 0.5) / 0.05);
-        const Dtype normal_lookup_table[10] = {0, 0.125, 0.255, 0.385, 0.525, 0.675, 0.845, 1.035, 1.285, 1.645};
-        const Dtype score_thr = APP<Dtype>::prune_ratio[L] > 0.5
-                                    ? u + normal_lookup_table[index] * sigma
-                                    : u - normal_lookup_table[index] * sigma;
-        assert(score_thr < score_max && score_thr > score_min);
-        cout << layer_name << " u=" << u << " sigma=" << sigma 
-                           << " | score_thr=" << score_thr << " score_max=" << score_max << " score_min=" << score_min << endl;
-
-        // assign Delta
-        const Dtype AA = APP<Dtype>::AA;
-        const Dtype k1 = AA / (score_thr - score_min);
-        const Dtype k2 = AA / (score_max - score_thr);
-        for (int i = 0; i < count; ++i) {
-            const Dtype Delta = fabs(weight[i]) < score_thr 
-                                    ? AA - k1 * (fabs(weight[i]) - score_min)
-                                    : k2 * (score_thr - fabs(weight[i]));
-            const Dtype old_reg = muhistory_punish[i];
-            const Dtype new_reg = max(old_reg + Delta, Dtype(0));
-            muhistory_punish[i] = new_reg;
-            if (new_reg < old_reg) {
-                cout << "recover reg: " << layer_name << "-" << i 
-                     << "  old reg: " << old_reg
-                     << "  new reg: " << new_reg << endl;
-            }
-        }
-        caffe_gpu_mul(net_params[param_id]->count(),
-                      net_params[param_id]->gpu_data(),
-                      muhistory_punish,
-                      tmp_[param_id]->mutable_gpu_data());
-        caffe_gpu_add(net_params[param_id]->count(),
-                      tmp_[param_id]->gpu_data(),
-                      net_params[param_id]->gpu_diff(),
-                      net_params[param_id]->mutable_gpu_diff());
       } else {
           LOG(FATAL) << "Unknown regularization type: " << regularization_type;
       }
