@@ -303,6 +303,12 @@ message SolverState {
   repeated BlobProto history_score = 5; // `history_score` is used to evaluate the relative importance of different weight groups in pruning.
   repeated BlobProto history_punish = 6; // Based on `history_score`, get punishment for different weight groups, accumulated history punishment gives `history_punish`.
   optional int32 current_step = 4 [default = 0]; // The current step for learning rate
+  optional string prune_state = 7;
+  optional int32 stage_iter_prune_finished = 8;
+  optional int32 last_feasible_prune_iter = 9;
+  repeated BlobProto current_prune_ratio = 10;
+  repeated BlobProto last_feasible_prune_ratio = 11;
+  repeated BlobProto last_infeasible_prune_ratio = 12;
 } 
 
 enum Phase {

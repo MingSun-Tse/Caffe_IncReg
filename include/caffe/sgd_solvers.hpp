@@ -44,6 +44,7 @@ class SGDSolver : public Solver<Dtype> {
   // temp maintains other information that might be needed in computation
   //   of gradients/updates and is not needed in snapshots
   vector<shared_ptr<Blob<Dtype> > > history_, update_, temp_, tmp_; /// @mingsuntse, for pruning
+  vector<shared_ptr<Blob<Dtype> > > current_prune_ratio_, last_feasible_prune_ratio_, last_infeasible_prune_ratio_;
 
   DISABLE_COPY_AND_ASSIGN(SGDSolver);
 };

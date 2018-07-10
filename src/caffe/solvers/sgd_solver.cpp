@@ -77,7 +77,7 @@ void SGDSolver<Dtype>::PreSolve() {
   temp_.clear();
   /// @mingsuntse, for pruning
   tmp_.clear();
-
+  
   for (int i = 0; i < net_params.size(); ++i) {
     const vector<int>& shape = net_params[i]->shape();
     history_.push_back(shared_ptr<Blob<Dtype> >(new Blob<Dtype>(shape)));
@@ -87,12 +87,16 @@ void SGDSolver<Dtype>::PreSolve() {
     /// @mingsuntse, for pruning
     tmp_.push_back(shared_ptr<Blob<Dtype> >(new Blob<Dtype>(shape)));
   }
+  const int num_learnable_layer = APP<Dtype>::layer_index.size();
+  vector<int> shape2(1, num_learnable_layer);
+  current_prune_ratio_.push_back(shared_ptr<Blob<Dtype> >(new Blob<Dtype>(shape2)));
+  last_feasible_prune_ratio_.push_back(shared_ptr<Blob<Dtype> >(new Blob<Dtype>(shape2)));
+  last_infeasible_prune_ratio_.push_back(shared_ptr<Blob<Dtype> >(new Blob<Dtype>(shape2)));
 }
 
 template <typename Dtype>
 void SGDSolver<Dtype>::ClipGradients() {
   const Dtype clip_gradients = this->param_.clip_gradients();
-  // cout << "clip_gradients: " << clip_gradients << endl; // WANGHUAN
   if (clip_gradients < 0) {
     return;
   }
@@ -119,7 +123,7 @@ void SGDSolver<Dtype>::ApplyUpdate() {
   cout << "ApplyUpdate begins timing" << endl;
   clock_t t1 = clock();
 #endif
-  CHECK(Caffe::root_solver()); // 更新梯度是由主solver来做的
+  CHECK(Caffe::root_solver());
   Dtype rate = GetLearningRate();
   if (APP<Dtype>::prune_method != "None") {
     if (APP<Dtype>::learning_rate == 0) {
@@ -1005,27 +1009,45 @@ void SGDSolver<Dtype>::SnapshotSolverStateToBinaryProto(
   state.set_iter(this->iter_);
   state.set_learned_net(model_filename);
   state.set_current_step(this->current_step_);
+  
+  state.set_prune_state(APP<Dtype>::prune_state);
+  state.set_stage_iter_prune_finished(APP<Dtype>::stage_iter_prune_finished);
+  state.set_last_feasible_prune_iter(APP<Dtype>::last_feasible_prune_iter);
+  
+  BlobProto* current_prune_ratio_blob = state.add_current_prune_ratio();
+  BlobProto* last_feasible_prune_ratio_blob = state.add_last_feasible_prune_ratio();
+  BlobProto* last_infeasible_prune_ratio_blob = state.add_last_infeasible_prune_ratio();
+  for (int L = 0; L < APP<Dtype>::layer_index.size(); ++L) {
+    current_prune_ratio_[0]->mutable_cpu_data()[L] = APP<Dtype>::current_prune_ratio[L];
+    last_feasible_prune_ratio_[0]->mutable_cpu_data()[L] = APP<Dtype>::last_feasible_prune_ratio[L];
+    last_infeasible_prune_ratio_[0]->mutable_cpu_data()[L] = APP<Dtype>::last_infeasible_prune_ratio[L];
+  }
+  current_prune_ratio_[0]->ToProto(current_prune_ratio_blob);
+  last_feasible_prune_ratio_[0]->ToProto(last_feasible_prune_ratio_blob);
+  last_infeasible_prune_ratio_[0]->ToProto(last_infeasible_prune_ratio_blob);
+  
   state.clear_history();
   state.clear_history_score(); /// @mingsuntse, for pruning
   state.clear_history_punish();
-
+  
   string previous_layer_name = "";
   int local_blob_index = 0;
-  for (int i = 0; i < history_.size(); ++i) {
+  for (int i = 0; i < history_.size(); ++i) { // i: param_id
     // Add history
     BlobProto* history_blob = state.add_history();
-    BlobProto* history_score_blob = state.add_history_score(); /// @mingsuntse, for pruning
+    BlobProto* history_score_blob = state.add_history_score();
     BlobProto* history_punish_blob = state.add_history_punish();
     history_[i]->ToProto(history_blob);
+    
     const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[i].first];
     if (APP<Dtype>::layer_index.count(layer_name) &&
-        (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg" or APP<Dtype>::prune_coremthd.substr(0, 2) == "PP")) { // i: param_id
+        (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg" or APP<Dtype>::prune_coremthd.substr(0, 2) == "PP")) {
       local_blob_index = layer_name == previous_layer_name ? local_blob_index + 1 : 0;
-      this->net_->layer_by_name(layer_name)->history_score()[local_blob_index]->ToProto(history_score_blob);
+      this->net_->layer_by_name(layer_name)->history_score()[local_blob_index]->ToProto(history_score_blob); // Save history_score for weights as well as biases
       this->net_->layer_by_name(layer_name)->history_punish()[local_blob_index]->ToProto(history_punish_blob);
       previous_layer_name = layer_name;
     }
-  }
+  }    
   string snapshot_filename = Solver<Dtype>::SnapshotFilename(".solverstate");
   LOG(INFO)
       << "Snapshotting solver state to binary proto file " << snapshot_filename;
@@ -1066,6 +1088,19 @@ void SGDSolver<Dtype>::RestoreSolverStateFromBinaryProto(
   ReadProtoFromBinaryFile(state_file, &state);
   this->iter_ = state.iter();
   APP<Dtype>::step_ = this->iter_ + 1;
+  
+  APP<Dtype>::prune_state = state.prune_state();
+  APP<Dtype>::stage_iter_prune_finished = state.stage_iter_prune_finished();
+  APP<Dtype>::last_feasible_prune_iter = state.last_feasible_prune_iter();
+  current_prune_ratio_[0]->FromProto(state.current_prune_ratio(0));
+  last_feasible_prune_ratio_[0]->FromProto(state.last_feasible_prune_ratio(0));
+  last_infeasible_prune_ratio_[0]->FromProto(state.last_infeasible_prune_ratio(0));
+  for (int L = 0; L < APP<Dtype>::layer_index.size(); ++L) {
+    APP<Dtype>::current_prune_ratio[L] = current_prune_ratio_[0]->mutable_cpu_data()[L];
+    APP<Dtype>::last_feasible_prune_ratio[L] = last_feasible_prune_ratio_[0]->mutable_cpu_data()[L];
+    APP<Dtype>::last_infeasible_prune_ratio[L] = last_infeasible_prune_ratio_[0]->mutable_cpu_data()[L];
+  }
+  
   if (state.has_learned_net()) {
     NetParameter net_param;
     ReadNetParamsFromBinaryFileOrDie(state.learned_net().c_str(), &net_param);

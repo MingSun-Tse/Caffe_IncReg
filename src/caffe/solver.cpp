@@ -336,7 +336,6 @@ void Solver<Dtype>::Step(int iters) {
       }
     }
     
-    // 归约梯度，在Update之前，而在Update中有`Iteration, lr`的logging，合理解释了log中就只有一处这个logging
     for (int i = 0; i < callbacks_.size(); ++i) {
       callbacks_[i]->on_gradients_ready();
     }
@@ -460,7 +459,7 @@ void Solver<Dtype>::Step(int iters) {
         cout << "[app] Final retrain finished, final acc1 = " << max_acc << ", going to decay lr. step: " << max_acc_iter + 1 << endl;
         const string resume_file = param_.snapshot_prefix() + "_iter_" + caffe::format_int(max_acc_iter) + ".solverstate";
         Restore(resume_file.c_str());
-        APP<Dtype>::learning_rate /= 5;
+        APP<Dtype>::learning_rate /= 5; // When current learning rate has reached its ceiling accuracy, decay it.
         APP<Dtype>::retrain_test_acc1.clear();
         APP<Dtype>::retrain_test_acc5.clear();
         max_acc = 0;
