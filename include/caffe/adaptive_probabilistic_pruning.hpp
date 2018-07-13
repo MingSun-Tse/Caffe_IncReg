@@ -42,7 +42,6 @@ public:
     static bool IF_speedup_count_fc;
     static bool IF_compr_count_conv;
     static bool IF_eswpf;
-    static bool IF_acc_recovered;
     static vector<bool> cnt_loss_cross_borderline;
     static int cnt_acc_hit;
     static int cnt_acc_bad;
@@ -139,7 +138,6 @@ public:
     template<typename Dtype>  bool    APP<Dtype>::IF_speedup_count_fc;
     template<typename Dtype>  bool    APP<Dtype>::IF_compr_count_conv;
     template<typename Dtype>  bool    APP<Dtype>::IF_eswpf;
-    template<typename Dtype>  bool    APP<Dtype>::IF_acc_recovered = true;
     template<typename Dtype>  vector<bool> APP<Dtype>::cnt_loss_cross_borderline;
     template<typename Dtype>  int     APP<Dtype>::cnt_acc_hit = 0;
     template<typename Dtype>  int     APP<Dtype>::cnt_acc_bad = 0;
@@ -158,7 +156,7 @@ public:
     template<typename Dtype>  Dtype APP<Dtype>::loss_borderline;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::retrain_test_acc1;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::retrain_test_acc5;
-    template<typename Dtype>  string APP<Dtype>::prune_state;
+    template<typename Dtype>  string APP<Dtype>::prune_state = "prune";
 
     // 1.2 Info shared between solver and layer, initailized here
     template<typename Dtype>  int   APP<Dtype>::inner_iter = 0;

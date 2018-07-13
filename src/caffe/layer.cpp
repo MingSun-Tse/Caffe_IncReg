@@ -988,7 +988,7 @@ void Layer<Dtype>::PruneForward() {
       cout << "  current prune_ratio: "  << APP<Dtype>::current_prune_ratio[L];
       cout << "  prune_ratio: "  << APP<Dtype>::prune_ratio[L] << endl;
       cout << "  iter_prune_finished: " << APP<Dtype>::iter_prune_finished[L];
-      cout << "  IF_acc_recovered: " << APP<Dtype>::IF_acc_recovered;
+      cout << "  prune_state: " << APP<Dtype>::prune_state;
       cout << "  lr: " << APP<Dtype>::learning_rate;
       cout << "  iter_size: " << APP<Dtype>::iter_size;
       cout << endl;

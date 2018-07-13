@@ -21,7 +21,7 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
             }
         }
     }
-    this->GetAPoZ(top);
+    // this->GetAPoZ(top);
     // Restore weights when using ProbPrune
     if (this->IF_restore) {
         caffe_gpu_memcpy(this->blobs_[0]->count(),

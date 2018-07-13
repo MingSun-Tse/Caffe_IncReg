@@ -345,7 +345,7 @@ void Solver<Dtype>::Step(int iters) {
 
     // -----------------------------------------------------------------
     // Prune finished
-    if(APP<Dtype>::IF_current_target_achieved) {
+    if(APP<Dtype>::prune_state == "prune" && APP<Dtype>::IF_current_target_achieved) {
     Dtype current_speedup, current_compRatio, GFLOPs_origin, num_param_origin;
     GetPruneProgress(&current_speedup,
                      &current_compRatio,
@@ -359,7 +359,8 @@ void Solver<Dtype>::Step(int iters) {
         if (APP<Dtype>::prune_ratio[L] == 0) { continue; }
         cout << "[app]    " << L << " - pruned_ratio: " << APP<Dtype>::pruned_ratio_col[L] << endl;
       }
-      APP<Dtype>::IF_current_target_achieved = false; // Got in here ONLY once.
+      SetPruneState("losseval");
+      APP<Dtype>::IF_current_target_achieved = false;
       
       // Check reg
       map<string, int>::iterator map_it;
@@ -394,25 +395,15 @@ void Solver<Dtype>::Step(int iters) {
     }
 
     // Estimate accuracy based on loss
-    if (APP<Dtype>::IF_acc_recovered == true) {
+    if (APP<Dtype>::prune_state == "losseval") {
       const int vec_size = APP<Dtype>::cnt_loss_cross_borderline.size();
       APP<Dtype>::cnt_loss_cross_borderline[iter_ % vec_size] = (smoothed_loss_ < APP<Dtype>::loss_borderline) ? 0 : 1;
+      // Check acc based on loss
+      if (iter_ - APP<Dtype>::stage_iter_prune_finished == APP<Dtype>::losseval_interval) {
+        const int cnt_loss_cross_borderline = accumulate(APP<Dtype>::cnt_loss_cross_borderline.begin(), APP<Dtype>::cnt_loss_cross_borderline.end(), 0);
+        CheckPruneState(cnt_loss_cross_borderline < APP<Dtype>::cnt_loss_cross_borderline.size() / 2);
+      }
     }
-
-    // Check acc based on loss
-    if (iter_ - APP<Dtype>::stage_iter_prune_finished == APP<Dtype>::losseval_interval) {
-      const int cnt_loss_cross_borderline = accumulate(APP<Dtype>::cnt_loss_cross_borderline.begin(), APP<Dtype>::cnt_loss_cross_borderline.end(), 0);
-      CheckPruneState(cnt_loss_cross_borderline < APP<Dtype>::cnt_loss_cross_borderline.size() / 2);
-    }
-
-    /*// Check acc based on true acc
-    if (APP<Dtype>::IF_acc_recovered == false 
-      && iter_ - APP<Dtype>::stage_iter_prune_finished == APP<Dtype>::losseval_interval + ceil(APP<Dtype>::recovery_interval * pow(1.2, APP<Dtype>::cnt_acc_bad))) {
-      OfflineTest();
-      const Dtype true_val_acc = *min_element(APP<Dtype>::val_accuracy.begin(), APP<Dtype>::val_accuracy.end());
-      cout << "[app] Retrain finished, true_val_acc = " << true_val_acc << ", step: " << APP<Dtype>::step_ << endl;
-      CheckPruneState(0, true_val_acc);
-    }*/
     
     if (APP<Dtype>::prune_state == "retrain"
           && iter_ % APP<Dtype>::retrain_test_interval == 0) {
@@ -432,7 +423,7 @@ void Solver<Dtype>::Step(int iters) {
       if (APP<Dtype>::retrain_test_acc1.size() - max_acc_index > 4) {
         cout << "[app] Retrain finished, final acc1 = " << max_acc << " step: " << max_acc_iter + 1 << endl;
         const string resume_file = param_.snapshot_prefix() + "_iter_" + caffe::format_int(max_acc_iter) + ".solverstate";
-        Restore(resume_file.c_str());
+        Restore(resume_file.c_str(), false);
         CheckPruneState(0, max_acc);
         APP<Dtype>::retrain_test_acc1.clear();
         APP<Dtype>::retrain_test_acc5.clear();
@@ -456,15 +447,19 @@ void Solver<Dtype>::Step(int iters) {
       }
       cout << "[app] Final retrain going on, current acc1 = " << acc1 << ", step: " << APP<Dtype>::step_ << endl;
       if (APP<Dtype>::retrain_test_acc1.size() - max_acc_index > 6) {
-        cout << "[app] Final retrain finished, final acc1 = " << max_acc << ", going to decay lr. step: " << max_acc_iter + 1 << endl;
+        cout << "[app] Final retrain of current learning rate finished, final acc1 = " << max_acc << ", going to decay lr. step: " << max_acc_iter + 1 << endl;
         const string resume_file = param_.snapshot_prefix() + "_iter_" + caffe::format_int(max_acc_iter) + ".solverstate";
-        Restore(resume_file.c_str());
-        APP<Dtype>::learning_rate /= 5; // When current learning rate has reached its ceiling accuracy, decay it.
+        Restore(resume_file.c_str(), false);
+        APP<Dtype>::learning_rate /= 10; // When current learning rate has reached its ceiling accuracy, decay it.
         APP<Dtype>::retrain_test_acc1.clear();
         APP<Dtype>::retrain_test_acc5.clear();
         max_acc = 0;
         max_acc_index = 0;
         max_acc_iter = 0;
+        if (APP<Dtype>::learning_rate < 1e-6) {
+          cout << "[app]    learning_rate < 1e-6, all final retrain done. Exit!" << endl;
+          exit(0);
+        }
       }
     }
 
@@ -541,16 +536,16 @@ void Solver<Dtype>::GetPruneProgress(Dtype* speedup, Dtype* compRatio, Dtype* GF
 }
 
 template <typename Dtype>
-void Solver<Dtype>::SetTrainSetting(const string& prune_state) {
+void Solver<Dtype>::SetPruneState(const string& prune_state) {
   APP<Dtype>::prune_state = prune_state;
   if (prune_state == "prune") {
-    APP<Dtype>::IF_acc_recovered = true;
+    APP<Dtype>::iter_size = param_.iter_size() / 4;
+  } else if (prune_state == "losseval") {
     APP<Dtype>::iter_size = param_.iter_size() / 4;
     for (int i = 0; i < APP<Dtype>::cnt_loss_cross_borderline.size(); ++i) {
-      APP<Dtype>::cnt_loss_cross_borderline[i] = 0;
+      APP<Dtype>::cnt_loss_cross_borderline[i] = 1;
     }
   } else if (prune_state == "retrain" || prune_state == "final_retrain") {
-    APP<Dtype>::IF_acc_recovered = false;
     APP<Dtype>::iter_size = param_.iter_size();
   } else {
     cout << "Wrong: unknown prune_state, please check." << endl;
@@ -562,12 +557,13 @@ template <typename Dtype>
 void Solver<Dtype>::CheckPruneState(const bool& IF_acc_far_from_borderline, const Dtype& true_val_acc) {
   if (true_val_acc == -1) { // check accuracy based on loss
     if (IF_acc_far_from_borderline) {
-      cout << "[app] Estimated accuracy **significantly good**, directly start a new pruning stage without retraining. step: " << APP<Dtype>::step_ << endl;
+      cout << "[app] Estimated accuracy **significantly good**, save caffemodel, directly start a new pruning stage without retraining. step: " << APP<Dtype>::step_ << endl;
       APP<Dtype>::last_feasible_prune_iter = iter_;
       SetNewCurrentPruneRatio(false, 1.0);
+      Snapshot();
     } else {
       cout << "[app] Estimated accuracy **NOT significantly good**, retrain to check accuracy before starting a new pruning stage. step: " << APP<Dtype>::step_ << endl;
-      SetTrainSetting("retrain");
+      SetPruneState("retrain");
     }
   } else { // check accuracy based on true accuracy
     if (APP<Dtype>::accu_borderline - true_val_acc > 0.0005) { // accuracy bad
@@ -579,12 +575,13 @@ void Solver<Dtype>::CheckPruneState(const bool& IF_acc_far_from_borderline, cons
       const string resume_file = param_.snapshot_prefix() + "_iter_" + caffe::format_int(APP<Dtype>::last_feasible_prune_iter) + ".solverstate";
       cout << "[app]    ===== resuming from: " << resume_file << endl;
       SetNewCurrentPruneRatio(true, true_val_acc);
-      Restore(resume_file.c_str()); // Restore weights after 'current_prune_ratio' update, because restoring will change the 'pruned_ratio'.
-    } else { // accuracy good
-      Snapshot();
-      APP<Dtype>::last_feasible_prune_iter = iter_;
-      cout << "[app]    true_val_acc **still good**, start a new pruning stage." << endl;
+      Restore(resume_file.c_str(), false); // Restore weights after 'current_prune_ratio' update, because restoring will change the 'pruned_ratio'.
+      SetPruneState("prune"); // Restore will resume the 'retrain' prune_state, which is not intended.
+    } else { // accuracy good     
+      cout << "[app]    accuracy **still good**, save caffemodel, start a new pruning stage." << endl;
+      APP<Dtype>::last_feasible_prune_iter = iter_; 
       SetNewCurrentPruneRatio(false, true_val_acc);
+      Snapshot();
     }
   }
 }
@@ -600,7 +597,6 @@ void Solver<Dtype>::SetNewCurrentPruneRatio(const bool& IF_roll_back, const Dtyp
     }
   }
   const bool IF_final_target_achieved = all_layer_prune_finished || APP<Dtype>::IF_speedup_achieved || APP<Dtype>::IF_compRatio_achieved;
-  cout << "IF_final_target_achieved: " << IF_final_target_achieved << endl;
   if (IF_final_target_achieved) {
     cout << "[app]\n[app] All layer prune finished: step = " << APP<Dtype>::step_;
     if (APP<Dtype>::IF_eswpf) {
@@ -608,7 +604,7 @@ void Solver<Dtype>::SetNewCurrentPruneRatio(const bool& IF_roll_back, const Dtyp
       exit(0);
     } else {
       cout << " -- go on to retrain." << endl;
-      SetTrainSetting("final_retrain");
+      SetPruneState("final_retrain");
       return;
     }
   }
@@ -617,11 +613,8 @@ void Solver<Dtype>::SetNewCurrentPruneRatio(const bool& IF_roll_back, const Dtyp
   if (fabs(val_acc - APP<Dtype>::accu_borderline) < 0.0005 && (++ APP<Dtype>::cnt_acc_hit) == 6) {
     cout << "[app]    #" << APP<Dtype>::cnt_acc_hit << " - true_val_acc hit" << endl;
     cout << "[app]    All pruning done, stop exploring new current_prune_ratio. Next is all retraining." << endl;
-    SetTrainSetting("final_retrain");
+    SetPruneState("final_retrain");
     return;
-  }
-  if (APP<Dtype>::cnt_acc_hit) { 
-    cout << "[app]    #" << APP<Dtype>::cnt_acc_hit << " - true_val_acc hit" << endl; 
   }
   
   // Go on pruning
@@ -654,8 +647,7 @@ void Solver<Dtype>::SetNewCurrentPruneRatio(const bool& IF_roll_back, const Dtyp
     cout << "[app]    " << L << " - current_prune_ratio: " 
          << APP<Dtype>::last_feasible_prune_ratio[L] << " -> " << APP<Dtype>::current_prune_ratio[L] << endl;
   }
-  SetTrainSetting("prune");
-  
+  SetPruneState("prune");
 }
 
 template <typename Dtype>
@@ -747,7 +739,7 @@ void Solver<Dtype>::OfflineTest() {
   Caffe::set_mode(Caffe::GPU);
   
   // Create test net
-  Snapshot();
+  Snapshot(); // save caffemodel to evaluate it on another GPU
   const string& weights = param_.snapshot_prefix() + "_iter_" + caffe::format_int(iter_) + ".caffemodel";
   Net<Dtype> test_net(APP<Dtype>::model_prototxt, caffe::TEST);
   test_net.CopyTrainedLayersFrom(weights);
@@ -984,120 +976,6 @@ void Solver<Dtype>::Snapshot() {
   SnapshotSolverState(model_filename); // save solverstate
 }
 
-/*
-/// @mingsuntse, Deprecated -- use built-in solverstate
-template <typename Dtype>
-void Solver<Dtype>::PruneStateShot() {
-    map<string, int>::iterator it_m;
-    const string prune_state_dir = param_.snapshot_prefix() + APP<Dtype>::prune_state_dir;
-    if (access(prune_state_dir.c_str(), 0)) {
-        LOG(INFO) << "Prune state dir: `" << prune_state_dir << "` doesn't exist, now make it." << endl;
-        mkdir(prune_state_dir.c_str(), S_IRWXU);
-    }
-    for (it_m = APP<Dtype>::layer_index.begin(); it_m != APP<Dtype>::layer_index.end(); ++it_m) {
-        if (APP<Dtype>::iter_prune_finished[it_m->second] != INT_MAX) { continue; }
-        const string outfile = param_.snapshot_prefix() + APP<Dtype>::prune_state_dir + it_m->first + ".txt";
-        ofstream state_stream(outfile.c_str(), ios::out);
-        if (!state_stream.is_open()) {
-            LOG(INFO) << "Error: cannot open file `" << outfile << "`" << endl;
-        } else {
-            state_stream << iter_ << "\n";
-            if (APP<Dtype>::prune_coremthd.substr(0, 2) == "PP") {
-                vector<Dtype> state_punish = APP<Dtype>::history_prob[it_m->second];
-                typename vector<Dtype>::iterator it;
-                for (it = state_punish.begin(); it != state_punish.end(); ++it) {
-                    state_stream << *it << " ";
-                }
-            } else if (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg") {
-                vector<Dtype> state_score  = APP<Dtype>::hrank[it_m->second];
-                vector<Dtype> state_punish = APP<Dtype>::history_reg[it_m->second];
-                typename vector<Dtype>::iterator it;
-                assert (state_score.size() == state_punish.size());
-                for (it = state_score.begin(); it != state_score.end(); ++it) {
-                    state_stream << *it << " ";
-                }
-                for (it = state_punish.begin(); it != state_punish.end(); ++it) {
-                    state_stream << *it << " ";
-                }
-            }
-            state_stream.close();
-            LOG(INFO) << APP<Dtype>::layer_index[it_m->first] << " " << it_m->first << ": save prune state done!";
-        }
-    }
-}
-
-/// @mingsuntse, Deprecated
-template <typename Dtype>
-void Solver<Dtype>::Logshot() {
-    const time_t t = time(NULL);
-    struct tm* ctime = localtime(&t);
-    ostringstream TIME;
-    TIME << 1900 + ctime->tm_year;
-    if (ctime->tm_mon < 9) { TIME << 0; }     
-    TIME << 1 + ctime->tm_mon
-         << ctime->tm_mday
-         << "-"
-         << ctime->tm_hour
-         << ctime->tm_min;
-    
-    const string i_tmp = param_.snapshot_prefix() + TIME.str() + "_log_index.txt";
-    const string w_tmp = param_.snapshot_prefix() + TIME.str() + "_log_weight.txt";
-    const string d_tmp = param_.snapshot_prefix() + TIME.str() + "_log_diff.txt";
-    const char* ii = i_tmp.c_str(); 
-    const char* ww = w_tmp.c_str(); 
-    const char* dd = d_tmp.c_str(); 
-    ofstream log_i(ii, ofstream::app);
-    ofstream log_w(ww, ofstream::app); 
-    ofstream log_d(dd, ofstream::app);
-    
-    typename vector<vector<vector<Dtype> > >::iterator it_l; /// it_layer
-    typename vector<vector<Dtype> >::iterator it_w; /// it_weight
-    typename vector<Dtype>::iterator it_i; /// it_iter
-    vector<vector<int> >::iterator it_il;
-    vector<int>::iterator it_iw;
-
-    if (!log_i.is_open()) { 
-        cout << "Error: opening file failed: " << ii << endl; 
-    } else {
-        for (it_il = APP<Dtype>::log_index.begin(); it_il != APP<Dtype>::log_index.end(); ++it_il) {
-            for (it_iw = (*it_il).begin(); it_iw != (*it_il).end(); ++it_iw) {
-                log_i << *it_iw << " ";
-            }
-            log_i << "\n";
-        }
-    }
-    
-    if (!log_w.is_open()) { 
-        cout << "Error: opening file failed: " << ww << endl; 
-    } else {
-        for (it_l = APP<Dtype>::log_weight.begin(); it_l != APP<Dtype>::log_weight.end(); ++it_l) {
-            for (it_w = (*it_l).begin(); it_w != (*it_l).end(); ++it_w) {
-                for (it_i = (*it_w).begin(); it_i != (*it_w).end(); ++it_i) {
-                    log_w << *it_i << " ";
-                }
-                log_w << "\n";
-            }
-            log_w << "\n";
-        }
-    }
-
-    if (!log_d.is_open()) { 
-        cout << "Error: opening file failed: " << dd << endl; 
-    } else {
-        for (it_l = APP<Dtype>::log_diff.begin(); it_l != APP<Dtype>::log_diff.end(); ++it_l) {
-            for (it_w = (*it_l).begin(); it_w != (*it_l).end(); ++it_w) {
-                for (it_i = (*it_w).begin(); it_i != (*it_w).end(); ++it_i) {
-                    log_d << *it_i << " ";
-                }
-                log_d << "\n";
-            }
-            log_d << "\n";
-        }
-    }
-
-}
-*/
-
 template <typename Dtype>
 void Solver<Dtype>::CheckSnapshotWritePermissions() {
   if (Caffe::root_solver() && param_.snapshot()) {
@@ -1141,14 +1019,14 @@ string Solver<Dtype>::SnapshotToHDF5() {
 }
 
 template <typename Dtype>
-void Solver<Dtype>::Restore(const char* state_file) {
+void Solver<Dtype>::Restore(const char* state_file, const bool& restore_prune_state) {
   CHECK(Caffe::root_solver());
   string state_filename(state_file);
   if (state_filename.size() >= 3 &&
       state_filename.compare(state_filename.size() - 3, 3, ".h5") == 0) {
     RestoreSolverStateFromHDF5(state_filename);
   } else {
-    RestoreSolverStateFromBinaryProto(state_filename);
+    RestoreSolverStateFromBinaryProto(state_filename, restore_prune_state);
   }
 }
 

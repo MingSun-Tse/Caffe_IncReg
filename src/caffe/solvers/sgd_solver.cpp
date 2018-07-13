@@ -157,15 +157,6 @@ void SGDSolver<Dtype>::ApplyUpdate() {
 }
 
 template <typename Dtype>
-const Dtype SGDSolver<Dtype>::AdjustLearningRateForPrune(const Dtype& rate) {
-  if (APP<Dtype>::prune_state == "final_retrain") {
-    return rate;
-  } else {
-    return rate * 5;
-  }
-}
-
-template <typename Dtype>
 void SGDSolver<Dtype>::Normalize(int param_id) {
   if (this->param_.iter_size() == 1) {
     return;
@@ -1083,22 +1074,24 @@ void SGDSolver<Dtype>::SnapshotSolverStateToHDF5(
 
 template <typename Dtype>
 void SGDSolver<Dtype>::RestoreSolverStateFromBinaryProto(
-  const string& state_file) {
+  const string& state_file, const bool& restore_prune_state) {
   SolverState state;
   ReadProtoFromBinaryFile(state_file, &state);
   this->iter_ = state.iter();
   APP<Dtype>::step_ = this->iter_ + 1;
   
-  APP<Dtype>::prune_state = state.prune_state();
-  APP<Dtype>::stage_iter_prune_finished = state.stage_iter_prune_finished();
-  APP<Dtype>::last_feasible_prune_iter = state.last_feasible_prune_iter();
-  current_prune_ratio_[0]->FromProto(state.current_prune_ratio(0));
-  last_feasible_prune_ratio_[0]->FromProto(state.last_feasible_prune_ratio(0));
-  last_infeasible_prune_ratio_[0]->FromProto(state.last_infeasible_prune_ratio(0));
-  for (int L = 0; L < APP<Dtype>::layer_index.size(); ++L) {
-    APP<Dtype>::current_prune_ratio[L] = current_prune_ratio_[0]->mutable_cpu_data()[L];
-    APP<Dtype>::last_feasible_prune_ratio[L] = last_feasible_prune_ratio_[0]->mutable_cpu_data()[L];
-    APP<Dtype>::last_infeasible_prune_ratio[L] = last_infeasible_prune_ratio_[0]->mutable_cpu_data()[L];
+  if (restore_prune_state) {
+    APP<Dtype>::prune_state = state.prune_state();
+    APP<Dtype>::stage_iter_prune_finished = state.stage_iter_prune_finished();
+    APP<Dtype>::last_feasible_prune_iter = state.last_feasible_prune_iter();
+    current_prune_ratio_[0]->FromProto(state.current_prune_ratio(0));
+    last_feasible_prune_ratio_[0]->FromProto(state.last_feasible_prune_ratio(0));
+    last_infeasible_prune_ratio_[0]->FromProto(state.last_infeasible_prune_ratio(0));
+    for (int L = 0; L < APP<Dtype>::layer_index.size(); ++L) {
+      APP<Dtype>::current_prune_ratio[L] = current_prune_ratio_[0]->mutable_cpu_data()[L];
+      APP<Dtype>::last_feasible_prune_ratio[L] = last_feasible_prune_ratio_[0]->mutable_cpu_data()[L];
+      APP<Dtype>::last_infeasible_prune_ratio[L] = last_infeasible_prune_ratio_[0]->mutable_cpu_data()[L];
+    }
   }
   
   if (state.has_learned_net()) {
@@ -1150,11 +1143,11 @@ const int SGDSolver<Dtype>::GetLayerIndex(const int& param_id) {
   }
 
   // 3.
-  const bool IF_want_prune     = APP<Dtype>::prune_method != "None" && APP<Dtype>::prune_ratio[L] > 0;
-  const bool IF_been_pruned    = APP<Dtype>::pruned_ratio[L] > 0;
-  const bool IF_enough_iter    = APP<Dtype>::step_ >= APP<Dtype>::prune_begin_iter + 1;
-  const bool IF_not_recovering = APP<Dtype>::IF_acc_recovered;
-  const bool IF_prune = IF_want_prune && (IF_been_pruned || IF_enough_iter) && IF_not_recovering;
+  const bool IF_want_prune  = APP<Dtype>::prune_method != "None" && APP<Dtype>::prune_ratio[L] > 0;
+  const bool IF_been_pruned = APP<Dtype>::pruned_ratio[L] > 0;
+  const bool IF_enough_iter = APP<Dtype>::step_ >= APP<Dtype>::prune_begin_iter + 1;
+  const bool IF_in_prune    = APP<Dtype>::prune_state == "prune";
+  const bool IF_prune = IF_want_prune && (IF_been_pruned || IF_enough_iter) && IF_in_prune;
   if (!(IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX)) {
     return -1;
   }

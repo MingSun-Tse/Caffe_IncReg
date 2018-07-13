@@ -61,7 +61,7 @@ class Solver {
   // The Restore method simply dispatches to one of the
   // RestoreSolverStateFrom___ protected methods. You should implement these
   // methods to restore the state from the appropriate snapshot type.
-  void Restore(const char* resume_file);
+  void Restore(const char* resume_file, const bool& restore_prune_state = true);
   // The Solver::Snapshot function implements the basic snapshotting utility
   // that stores the learned net. You should implement the SnapshotSolverState()
   // function that produces a SolverState protocol buffer that needs to be
@@ -71,7 +71,7 @@ class Solver {
   void GetPruneProgress(Dtype* speedup, Dtype* compRatio, Dtype* GFLOPs_origin_, Dtype* num_param_origin_);
   void CheckPruneState(const bool& IF_acc_far_from_borderline, const Dtype& true_val_acc = -1);
   void SetNewCurrentPruneRatio(const bool& IF_roll_back, const Dtype& val_acc);
-  void SetTrainSetting(const string& prune_state);
+  void SetPruneState(const string& prune_state);
   void OfflineTest();
   void OfflineTest(int gpu_id, const int& num_iter); // TODO(mingsuntse): to be fixed
   
@@ -114,7 +114,7 @@ class Solver {
   void Test(const int test_net_id = 0);
   virtual void SnapshotSolverState(const string& model_filename) = 0;
   virtual void RestoreSolverStateFromHDF5(const string& state_file) = 0;
-  virtual void RestoreSolverStateFromBinaryProto(const string& state_file) = 0;
+  virtual void RestoreSolverStateFromBinaryProto(const string& state_file, const bool& restore_prune_state) = 0;
   void DisplayOutputBlobs(const int net_id);
   void UpdateSmoothedLoss(Dtype loss, int start_iter, int average_loss);
 
@@ -157,7 +157,7 @@ class WorkerSolver : public Solver<Dtype> {
   void SnapshotSolverState(const string& model_filename) {
     LOG(FATAL) << "Should not be called on worker solver.";
   }
-  void RestoreSolverStateFromBinaryProto(const string& state_file) {
+  void RestoreSolverStateFromBinaryProto(const string& state_file, const bool& restore_prune_state) {
     LOG(FATAL) << "Should not be called on worker solver.";
   }
   void RestoreSolverStateFromHDF5(const string& state_file) {
