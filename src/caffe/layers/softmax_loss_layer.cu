@@ -145,8 +145,8 @@ void SoftmaxWithLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
       caffe_gpu_asum(nthreads, counts, &valid_count);
     }
     const Dtype loss_weight = top[0]->cpu_diff()[0] / get_normalizer(normalization_, valid_count); // normalizer = bacth_size for convnet exp
-    // std::cout << "valid_count: " << valid_count // -1 for convnet exp
-    //           << "  loss_weight: " << loss_weight << std::endl; 
+    std::cout << "valid_count: " << valid_count // -1 for convnet exp
+               << "  loss_weight: " << loss_weight << std::endl; 
     // loss_weight is the multiplier for a loss term in total loss, usually used in the multi-loss task
     caffe_gpu_scal(prob_.count(), loss_weight , bottom_diff);
     // caffe_gpu_scal(prob_.count(), loss_weight , bottom[0]->mutable_gpu_secdiff()); /// @mingsuntse

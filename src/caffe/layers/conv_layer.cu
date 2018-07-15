@@ -20,6 +20,15 @@ void ConvolutionLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
                 this->forward_gpu_bias(top_data + n * this->top_dim_, bias);
             }
         }
+        /*// --------------------------------------------
+        // Check multi-loss
+        const string layer_name = this->layer_param_.name();
+        cout << "check_loss forward feature map: " << layer_name << endl;
+        const Dtype* cpu_top_data = top[i]->cpu_data();
+        for (int ii = 0; ii < 10; ++ii) {
+          cout << cpu_top_data[ii] << endl;
+        }
+        // --------------------------------------------*/
     }
     // this->GetAPoZ(top);
     // Restore weights when using ProbPrune
@@ -55,6 +64,16 @@ void ConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
         // this->backward_gpu_bias(bias_secdiff, top_secdiff + n * this->top_dim_); // TODO(mingsuntse): check this, maybe wrong.
       }
     }
+    /*// --------------------------------------------
+    // Check multi-loss
+    const string layer_name = this->layer_param_.name();
+    cout << "check_loss backward feature map diff: " << layer_name << endl;
+    const Dtype* cpu_top_diff = top[i]->cpu_diff();
+    for (int ii = 0; ii < 10; ++ii) {
+      cout << cpu_top_diff[ii] << endl;
+    }
+    // --------------------------------------------*/
+    
     if (this->param_propagate_down_[0] || propagate_down[i]) {
       const Dtype* bottom_data = bottom[i]->gpu_data();
       /*

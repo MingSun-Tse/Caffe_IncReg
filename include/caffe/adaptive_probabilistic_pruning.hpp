@@ -214,8 +214,8 @@ public:
     template<typename Dtype>  bool    APP<Dtype>::simulate_5d = false;
     template<typename Dtype>  int     APP<Dtype>::h_off = 0; // used in data transformation
     template<typename Dtype>  int     APP<Dtype>::w_off = 0;
-    template<typename Dtype>  int APP<Dtype>::show_interval = 10; // the interval to print pruning progress log
-    template<typename Dtype>  string APP<Dtype>::show_layer = "1000"; // '1' means to print the weights of the layer with the index
+    template<typename Dtype>  int APP<Dtype>::show_interval = 1; // the interval to print pruning progress log
+    template<typename Dtype>  string APP<Dtype>::show_layer = "1111"; // '1' means to print the weights of the layer with the index
     template<typename Dtype>  int APP<Dtype>::show_num_layer = 100; // work with show_interval, how many layers get printed
     template<typename Dtype>  int APP<Dtype>::show_num_weight = 20; // work with show_layer, how many weights get printed
     template<typename Dtype>  vector<Dtype> APP<Dtype>::when_snapshot;
