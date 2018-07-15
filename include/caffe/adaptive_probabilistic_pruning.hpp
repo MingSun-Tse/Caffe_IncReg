@@ -50,8 +50,11 @@ public:
     static Dtype prune_threshold;
     static Dtype target_reg;
     static vector<Dtype> last_feasible_prune_ratio;
+    static Dtype         last_prune_ratio_incre;
+    static Dtype         prune_ratio_begin_ave;
     static int           last_feasible_prune_iter;
     static vector<Dtype> last_infeasible_prune_ratio;
+    static Dtype         last_feasible_acc;
     static vector<Dtype> val_accuracy;
     static string model_prototxt;
     static int original_gpu_id;
@@ -61,6 +64,7 @@ public:
     static vector<Dtype> retrain_test_acc1;
     static vector<Dtype> retrain_test_acc5;
     static string prune_state;
+    static Dtype STANDARD_SPARSITY;
     
     static int inner_iter;
     static int step_;
@@ -146,8 +150,11 @@ public:
     template<typename Dtype>  Dtype   APP<Dtype>::prune_threshold;
     template<typename Dtype>  Dtype   APP<Dtype>::target_reg;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::last_feasible_prune_ratio;
+    template<typename Dtype>  Dtype         APP<Dtype>::last_prune_ratio_incre = 0;
+    template<typename Dtype>  Dtype         APP<Dtype>::prune_ratio_begin_ave = 0.2; // the average sparsity for the first pruning stage
     template<typename Dtype>  int           APP<Dtype>::last_feasible_prune_iter = -1;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::last_infeasible_prune_ratio;
+    template<typename Dtype>  Dtype         APP<Dtype>::last_feasible_acc = 0;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::val_accuracy;
     template<typename Dtype>  string APP<Dtype>::model_prototxt;
     template<typename Dtype>  int APP<Dtype>::original_gpu_id;
@@ -157,6 +164,7 @@ public:
     template<typename Dtype>  vector<Dtype> APP<Dtype>::retrain_test_acc1;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::retrain_test_acc5;
     template<typename Dtype>  string APP<Dtype>::prune_state = "prune";
+    template<typename Dtype>  Dtype APP<Dtype>::STANDARD_SPARSITY = 0.5; // If this changes, the prune_ratio_step should change accordingly.
 
     // 1.2 Info shared between solver and layer, initailized here
     template<typename Dtype>  int   APP<Dtype>::inner_iter = 0;

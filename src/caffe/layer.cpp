@@ -96,13 +96,17 @@ void Layer<Dtype>::kmeans_cluster(vector<int> &cLabel, vector<Dtype> &cCentro, D
 template<typename Dtype>
 void Layer<Dtype>::IF_layer_prune_finished() {
   const string layer_name = this->layer_param_.name();
+  const int num_col = this->blobs_[0]->count(1);
   if (APP<Dtype>::layer_index.count(layer_name) != 0) {
     const int L = APP<Dtype>::layer_index[layer_name];
     if (APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
-      const bool layer_finish     = APP<Dtype>::pruned_ratio_for_comparison[L] >= APP<Dtype>::current_prune_ratio[L]; // layer pruning target achieved
+      const bool layer_finish = APP<Dtype>::num_pruned_col[L] >= ceil(num_col * APP<Dtype>::current_prune_ratio[L]); // layer pruning target achieved
       const bool net_finish_speed = APP<Dtype>::IF_speedup_achieved;   // net pruning target of speed achieved
       const bool net_finish_param = APP<Dtype>::IF_compRatio_achieved; // net pruning target of compression achieved
-
+      
+      cout << layer_name << " layer_finish: " << layer_finish << " " << APP<Dtype>::pruned_ratio_col[L]  
+           << " " << APP<Dtype>::current_prune_ratio[L] 
+           << " " << APP<Dtype>::current_prune_ratio[L] - APP<Dtype>::pruned_ratio_col[L] << endl;
       if (layer_finish || net_finish_speed || net_finish_param) {
         APP<Dtype>::iter_prune_finished[L] = APP<Dtype>::step_ - 1;
         // print when finished
@@ -830,7 +834,7 @@ void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
   const int num_col = count / num_row;
   APP<Dtype>::prune_ratio.push_back(prune_param.prune_ratio());
   APP<Dtype>::prune_ratio_step.push_back(prune_param.prune_ratio_step());
-  APP<Dtype>::current_prune_ratio.push_back(min(prune_param.prune_ratio_step() * float(0.4), prune_param.prune_ratio()));
+  APP<Dtype>::current_prune_ratio.push_back(min(Dtype(prune_param.prune_ratio_step() * APP<Dtype>::prune_ratio_begin_ave / 0.5), Dtype(prune_param.prune_ratio())));
   APP<Dtype>::pruned_ratio.push_back(0); // used in TEST
   this->IF_masks_updated = true;
   if (this->phase_ == TEST) {
@@ -932,7 +936,7 @@ void Layer<Dtype>::PruneForward() {
         && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0) {
       this->Print('f');
     }
-
+    
     // Update masks
     if (IF_prune && APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
       if (APP<Dtype>::prune_coremthd.substr(0, 2) == "FP" && APP<Dtype>::prune_unit == "Row" && (APP<Dtype>::step_ - 1) % APP<Dtype>::prune_interval == 0) {
@@ -981,17 +985,17 @@ void Layer<Dtype>::PruneForward() {
     }
     // Summary print
     if (mthd != "None" && L < APP<Dtype>::show_num_layer) {
-      cout << layer_name << "  IF_prune: " << IF_prune
-           << "  pruned_ratio: " << APP<Dtype>::pruned_ratio[L];
-      cout << "  pruned_ratio_row: " << APP<Dtype>::num_pruned_row[L] * 1.0 / num_row << "(" << APP<Dtype>::num_pruned_row[L] << ")"
-           << "  pruned_ratio_col: " << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << "(" << APP<Dtype>::num_pruned_col[L] << ")";
-      cout << "  current prune_ratio: "  << APP<Dtype>::current_prune_ratio[L];
-      cout << "  prune_ratio: "  << APP<Dtype>::prune_ratio[L] << endl;
+      cout << layer_name << "  IF_prune: " << IF_prune;
+           // << "  pruned_ratio: " << APP<Dtype>::pruned_ratio[L];
+      // cout << "  pruned_ratio_row: " << APP<Dtype>::num_pruned_row[L] * 1.0 / num_row << "(" << APP<Dtype>::num_pruned_row[L] << ")"
+      cout << "  pruned_ratio_col: " << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << "(" << APP<Dtype>::num_pruned_col[L] << ")";
+      cout << "  current_prune_ratio: "  << APP<Dtype>::current_prune_ratio[L];
+      // cout << "  prune_ratio: "  << APP<Dtype>::prune_ratio[L];
       cout << "  iter_prune_finished: " << APP<Dtype>::iter_prune_finished[L];
-      cout << "  prune_state: " << APP<Dtype>::prune_state;
-      cout << "  lr: " << APP<Dtype>::learning_rate;
-      cout << "  iter_size: " << APP<Dtype>::iter_size;
-      cout << endl;
+      cout << "  (" << APP<Dtype>::prune_state;
+      cout << "-" << APP<Dtype>::learning_rate;
+      cout << "-" << APP<Dtype>::iter_size;
+      cout << ")" << endl;
     }
 
     // Apply masks

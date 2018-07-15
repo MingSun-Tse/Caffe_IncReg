@@ -301,9 +301,10 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         const int num_col = count / num_row;
         const int num_pruned_col = APP<Dtype>::num_pruned_col[L];
         const int real_num_col_to_prune_ = ceil(num_col * APP<Dtype>::current_prune_ratio[L]) - num_pruned_col;
-        int num_col_to_prune_ = real_num_col_to_prune_; // ceil(num_col * (APP<Dtype>::current_prune_ratio[L] - APP<Dtype>::last_feasible_prune_ratio[L] + 0.02));
+        int num_col_to_prune_ = real_num_col_to_prune_;
         const int num_col_ = num_col - num_pruned_col;
-        CHECK_GE(num_col_to_prune_, 0);
+        cout << layer_name << " " << num_col_to_prune_ << endl;
+        CHECK_GT(num_col_to_prune_, 0);
         
         const Dtype AA = APP<Dtype>::AA;
         if (APP<Dtype>::step_ % APP<Dtype>::prune_interval == 0) {
