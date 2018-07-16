@@ -21,6 +21,7 @@
 #define CNT_ACC_HIT 3
 #define CNT_AFTER_MAX_ACC 4
 #define COEFF_ACC_PR 10
+#define INCRE_PR_THRESHOLD 1e-3
 
 namespace caffe {
 
@@ -602,7 +603,6 @@ void Solver<Dtype>::CheckPruneState(const bool& IF_acc_far_from_borderline, cons
       cout << "[app]    ===== resuming from: " << resume_file << endl;
       SetNewCurrentPruneRatio(true, true_val_acc);
       Restore(resume_file.c_str(), false);
-      SetPruneState("prune");
     } else { // accuracy good
       APP<Dtype>::last_feasible_prune_iter = iter_;
       APP<Dtype>::last_feasible_acc = true_val_acc;
@@ -623,12 +623,11 @@ void Solver<Dtype>::SetNewCurrentPruneRatio(const bool& IF_roll_back, const Dtyp
     const Dtype new_incre_pr = APP<Dtype>::last_prune_ratio_incre / (APP<Dtype>::last_feasible_acc - val_acc) 
             * (APP<Dtype>::last_feasible_acc - APP<Dtype>::accu_borderline);
     APP<Dtype>::last_prune_ratio_incre = new_incre_pr;
-    // Check if all pruning done, case 0: cannot start a new meaningful pruning stage
-    if (new_incre_pr < 1e-3) {
+    // Check if all pruning done, case 0: cannot start a new pruning stage with large enough current_prune_ratio
+    if (new_incre_pr < INCRE_PR_THRESHOLD) {
       cout << "[app]    new_incre_pr: " << new_incre_pr
            << " - new prune ratio increment is too small, so another pruning stage is meaningless. Go to final_retrain" << endl;
       SetPruneState("final_retrain");
-      return;
     } else {
       cout << "[app]    new_incre_pr: " << new_incre_pr << endl;
       for (int L  = 0; L < APP<Dtype>::layer_index.size(); ++L) {
