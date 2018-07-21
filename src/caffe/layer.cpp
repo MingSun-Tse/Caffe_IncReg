@@ -130,7 +130,6 @@ void Layer<Dtype>::IF_layer_prune_finished() {
             break;
           }
         }
-        cout << "APP<Dtype>::IF_current_target_achieved = " << APP<Dtype>::IF_current_target_achieved << endl;
         if (APP<Dtype>::IF_current_target_achieved) {
           APP<Dtype>::stage_iter_prune_finished = APP<Dtype>::step_ - 1;
         }
@@ -834,7 +833,7 @@ void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
   const int num_col = count / num_row;
   APP<Dtype>::prune_ratio.push_back(prune_param.prune_ratio());
   APP<Dtype>::prune_ratio_step.push_back(prune_param.prune_ratio_step());
-  APP<Dtype>::current_prune_ratio.push_back(min(Dtype(prune_param.prune_ratio_step() * APP<Dtype>::prune_ratio_begin_ave / 0.5), Dtype(prune_param.prune_ratio())));
+  APP<Dtype>::current_prune_ratio.push_back(min(Dtype(prune_param.prune_ratio_step() * APP<Dtype>::prune_ratio_begin_ave / APP<Dtype>::STANDARD_SPARSITY), Dtype(prune_param.prune_ratio())));
   APP<Dtype>::pruned_ratio.push_back(0); // used in TEST
   this->IF_masks_updated = true;
   if (this->phase_ == TEST) {

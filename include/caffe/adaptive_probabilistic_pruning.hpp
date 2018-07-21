@@ -51,6 +51,7 @@ public:
     static Dtype target_reg;
     static vector<Dtype> last_feasible_prune_ratio;
     static Dtype         last_prune_ratio_incre;
+    static Dtype         accumulated_ave_incre_pr;
     static Dtype         prune_ratio_begin_ave;
     static int           last_feasible_prune_iter;
     static vector<Dtype> last_infeasible_prune_ratio;
@@ -151,6 +152,7 @@ public:
     template<typename Dtype>  Dtype   APP<Dtype>::target_reg;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::last_feasible_prune_ratio;
     template<typename Dtype>  Dtype         APP<Dtype>::last_prune_ratio_incre = 0;
+    template<typename Dtype>  Dtype         APP<Dtype>::accumulated_ave_incre_pr = 0;
     template<typename Dtype>  Dtype         APP<Dtype>::prune_ratio_begin_ave = 0.2; // the average sparsity for the first pruning stage
     template<typename Dtype>  int           APP<Dtype>::last_feasible_prune_iter = -1;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::last_infeasible_prune_ratio;
@@ -168,7 +170,7 @@ public:
 
     // 1.2 Info shared between solver and layer, initailized here
     template<typename Dtype>  int   APP<Dtype>::inner_iter = 0;
-    template<typename Dtype>  int   APP<Dtype>::step_ = -1;
+    template<typename Dtype>  int   APP<Dtype>::step_ = 1;
     template<typename Dtype>  int   APP<Dtype>::num_; // batch_size
     template<typename Dtype>  long  APP<Dtype>::last_time  = 0;
     template<typename Dtype>  long  APP<Dtype>::first_time = 0;
