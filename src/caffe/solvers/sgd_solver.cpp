@@ -698,7 +698,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         Dtype* muhistory_score      = this->net_->layer_by_name(layer_name)->history_score()[0]->mutable_cpu_data();
         Dtype* muhistory_punish     = this->net_->layer_by_name(layer_name)->history_punish()[0]->mutable_cpu_data();
         Dtype* gpu_muhistory_punish = this->net_->layer_by_name(layer_name)->history_punish()[0]->mutable_gpu_data();
-        Dtype* mumasks              = this->net_->layer_by_name(layer_name)->masks()[0]->mutable_cpu_data();
+        // Dtype* mumasks              = this->net_->layer_by_name(layer_name)->masks()[0]->mutable_cpu_data();
         const Dtype* weight = net_params[param_id]->cpu_data();
         const int count     = net_params[param_id]->count();
         const int num_row   = net_params[param_id]->shape()[0];
@@ -850,9 +850,9 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
           return;
         }
 
-        Dtype* muhistory_score  = this->net_->layer_by_name(layer_name)->history_score()[0]->mutable_cpu_data();
+        // Dtype* muhistory_score  = this->net_->layer_by_name(layer_name)->history_score()[0]->mutable_cpu_data();
         Dtype* muhistory_punish = this->net_->layer_by_name(layer_name)->history_punish()[0]->mutable_cpu_data();
-        Dtype* mumasks          = this->net_->layer_by_name(layer_name)->masks()[0]->mutable_cpu_data();
+        // Dtype* mumasks          = this->net_->layer_by_name(layer_name)->masks()[0]->mutable_cpu_data();
         const Dtype* weight = net_params[param_id]->cpu_data();
         Dtype* muweight = net_params[param_id]->mutable_cpu_data();
         const int count = net_params[param_id]->count();
@@ -1031,13 +1031,17 @@ void SGDSolver<Dtype>::SnapshotSolverStateToBinaryProto(
     BlobProto* history_punish_blob = state.add_history_punish();
     history_[i]->ToProto(history_blob);
     
+    // Add history_score and history_punish
     const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[i].first];
-    if (APP<Dtype>::layer_index.count(layer_name) &&
-        (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg" or APP<Dtype>::prune_coremthd.substr(0, 2) == "PP")) {
-      local_blob_index = layer_name == previous_layer_name ? local_blob_index + 1 : 0;
-      this->net_->layer_by_name(layer_name)->history_score()[local_blob_index]->ToProto(history_score_blob); // Save history_score for weights as well as biases
-      this->net_->layer_by_name(layer_name)->history_punish()[local_blob_index]->ToProto(history_punish_blob);
-      previous_layer_name = layer_name;
+    if (APP<Dtype>::layer_index.count(layer_name)
+        && (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg" or APP<Dtype>::prune_coremthd.substr(0, 2) == "PP")) {
+      const int L = APP<Dtype>::layer_index[layer_name];
+      if (APP<Dtype>::prune_ratio[L] > 0) { // Only add the layers which want to be pruned.
+        local_blob_index = layer_name == previous_layer_name ? local_blob_index + 1 : 0;
+        this->net_->layer_by_name(layer_name)->history_score()[local_blob_index]->ToProto(history_score_blob); // Save history_score for weights as well as biases
+        this->net_->layer_by_name(layer_name)->history_punish()[local_blob_index]->ToProto(history_punish_blob);
+        previous_layer_name = layer_name;
+      }
     }
   }    
   string snapshot_filename = Solver<Dtype>::SnapshotFilename(".solverstate");
@@ -1104,7 +1108,7 @@ void SGDSolver<Dtype>::RestoreSolverStateFromBinaryProto(
   CHECK_EQ(state.history_size(), history_.size())
       << "Incorrect length of history blobs.";
   LOG(INFO) << "SGDSolver: restoring history";
-  if (APP<Dtype>::prune_method != "None") {
+  if (APP<Dtype>::prune_method != "None") { // Check the size of history_score and history_punish
     CHECK_EQ(state.history_score_size(), history_.size())
         << "Incorrect length of history score blobs.";
     LOG(INFO) << "SGDSolver: restoring history score";
@@ -1116,13 +1120,18 @@ void SGDSolver<Dtype>::RestoreSolverStateFromBinaryProto(
   int local_blob_index = 0;
   for (int i = 0; i < history_.size(); ++i) {
     history_[i]->FromProto(state.history(i));
+    
+    // Restore history_punish, history_score
     const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[i].first];
     if (APP<Dtype>::layer_index.count(layer_name) &&
         (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg" or APP<Dtype>::prune_coremthd.substr(0, 2) == "PP")) {
-      local_blob_index = layer_name == previous_layer_name ? local_blob_index + 1 : 0;
-      this->net_->layer_by_name(layer_name)->history_score()[local_blob_index]->FromProto(state.history_score(i));
-      this->net_->layer_by_name(layer_name)->history_punish()[local_blob_index]->FromProto(state.history_punish(i));
-      previous_layer_name = layer_name;
+      const int L = APP<Dtype>::layer_index[layer_name];
+      if (APP<Dtype>::prune_ratio[L] > 0) {
+        local_blob_index = layer_name == previous_layer_name ? local_blob_index + 1 : 0;
+        this->net_->layer_by_name(layer_name)->history_score()[local_blob_index]->FromProto(state.history_score(i));
+        this->net_->layer_by_name(layer_name)->history_punish()[local_blob_index]->FromProto(state.history_punish(i));
+        previous_layer_name = layer_name;
+      }
     }
   }
 }
