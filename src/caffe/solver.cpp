@@ -78,8 +78,8 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
       strcpy(coremthd, APP<Dtype>::prune_coremthd.c_str());
       APP<Dtype>::prune_coremthd_ = strtok(coremthd, "-");
   }
-  APP<Dtype>::ratio_once_prune = param_.ratio_once_prune();
-  APP<Dtype>::prune_interval = param_.prune_interval();
+  APP<Dtype>::ratio_once_prune = 0; // param_.ratio_once_prune();
+  APP<Dtype>::prune_interval = 1; // param_.prune_interval();
   APP<Dtype>::clear_history_interval = 1;
   APP<Dtype>::prune_begin_iter = -1;
   APP<Dtype>::AA = param_.aa();
@@ -93,11 +93,11 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   APP<Dtype>::IF_compr_count_conv = param.if_compr_count_conv();
   APP<Dtype>::IF_scheme1_when_Reg_rank = param.if_scheme1_when_reg_rank();
   APP<Dtype>::IF_eswpf = param_.if_eswpf(); /// if early stop when prune finished
-  APP<Dtype>::prune_threshold = param_.prune_threshold();
+  APP<Dtype>::prune_threshold = 0; // param_.prune_threshold();
   // APP<Dtype>::mask_generate_mechanism = param_.mask_generate_mechanism();
   // APP<Dtype>::score_decay = param_.score_decay();
   
-  APP<Dtype>::iter_size = APP<Dtype>::prune_method == "None" ? param_.iter_size() : param_.iter_size() / 4;
+  APP<Dtype>::iter_size = APP<Dtype>::prune_method == "None" ? param_.iter_size() : param_.iter_size_prune();
   APP<Dtype>::accu_borderline = param_.accu_borderline();
   APP<Dtype>::loss_borderline = param_.loss_borderline();
   APP<Dtype>::retrain_test_interval = param_.retrain_test_interval();
@@ -569,14 +569,16 @@ template <typename Dtype>
 void Solver<Dtype>::SetPruneState(const string& prune_state) {
   APP<Dtype>::prune_state = prune_state;
   if (prune_state == "prune") {
-    APP<Dtype>::iter_size = param_.iter_size() / 4;
+    APP<Dtype>::iter_size = this->param_.iter_size_prune();
   } else if (prune_state == "losseval") {
-    APP<Dtype>::iter_size = param_.iter_size() / 4;
+    APP<Dtype>::iter_size = this->param_.iter_size_losseval();
     for (int i = 0; i < APP<Dtype>::cnt_loss_cross_borderline.size(); ++i) {
       APP<Dtype>::cnt_loss_cross_borderline[i] = 1;
     }
-  } else if (prune_state == "retrain" || prune_state == "final_retrain") {
-    APP<Dtype>::iter_size = param_.iter_size();
+  } else if (prune_state == "retrain") {
+    APP<Dtype>::iter_size = this->param_.iter_size_retrain();
+  } else if (prune_state == "final_retrain") {
+    APP<Dtype>::iter_size = this->param_.iter_size_final_retrain();
   } else {
     cout << "Wrong: unknown prune_state, please check." << endl;
     exit(1);
