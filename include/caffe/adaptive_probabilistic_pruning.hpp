@@ -66,6 +66,7 @@ public:
     static vector<Dtype> retrain_test_acc5;
     static string prune_state;
     static Dtype STANDARD_SPARSITY;
+    static Dtype STANDARD_INCRE_PR;
     
     static int inner_iter;
     static int step_;
@@ -148,8 +149,8 @@ public:
     template<typename Dtype>  int     APP<Dtype>::cnt_acc_bad = 0;
     template<typename Dtype>  bool    APP<Dtype>::IF_acc_far_from_borderline = true;
     template<typename Dtype>  vector<bool> APP<Dtype>::IF_layer_far_from_borderline;
-    template<typename Dtype>  Dtype   APP<Dtype>::prune_threshold;
-    template<typename Dtype>  Dtype   APP<Dtype>::target_reg;
+    template<typename Dtype>  Dtype APP<Dtype>::prune_threshold;
+    template<typename Dtype>  Dtype APP<Dtype>::target_reg;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::last_feasible_prune_ratio;
     template<typename Dtype>  Dtype         APP<Dtype>::last_prune_ratio_incre = 0;
     template<typename Dtype>  Dtype         APP<Dtype>::accumulated_ave_incre_pr = 0;
@@ -167,6 +168,7 @@ public:
     template<typename Dtype>  vector<Dtype> APP<Dtype>::retrain_test_acc5;
     template<typename Dtype>  string APP<Dtype>::prune_state = "prune";
     template<typename Dtype>  Dtype APP<Dtype>::STANDARD_SPARSITY = 0.5; // If this changes, the prune_ratio_step should change accordingly.
+    template<typename Dtype>  Dtype APP<Dtype>::STANDARD_INCRE_PR = 0.05;
 
     // 1.2 Info shared between solver and layer, initailized here
     template<typename Dtype>  int   APP<Dtype>::inner_iter = 0;

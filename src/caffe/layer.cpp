@@ -103,10 +103,7 @@ void Layer<Dtype>::IF_layer_prune_finished() {
       const bool layer_finish = APP<Dtype>::num_pruned_col[L] >= ceil(num_col * APP<Dtype>::current_prune_ratio[L]); // layer pruning target achieved
       const bool net_finish_speed = APP<Dtype>::IF_speedup_achieved;   // net pruning target of speed achieved
       const bool net_finish_param = APP<Dtype>::IF_compRatio_achieved; // net pruning target of compression achieved
-      
-      cout << layer_name << " layer_finish: " << layer_finish << " " << APP<Dtype>::pruned_ratio_col[L]  
-           << " " << APP<Dtype>::current_prune_ratio[L] 
-           << " " << APP<Dtype>::current_prune_ratio[L] - APP<Dtype>::pruned_ratio_col[L] << endl;
+
       if (layer_finish || net_finish_speed || net_finish_param) {
         APP<Dtype>::iter_prune_finished[L] = APP<Dtype>::step_ - 1;
         // print when finished

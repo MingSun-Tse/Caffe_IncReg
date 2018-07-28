@@ -74,6 +74,7 @@ class Solver {
   void SetPruneState(const string& prune_state);
   void OfflineTest();
   void OfflineTest(int gpu_id, const int& num_iter); // TODO(mingsuntse): to be fixed
+  const Dtype IncrePR_2_TRMul(const Dtype& incre_pr);
   
   virtual ~Solver() {}
   inline const SolverParameter& param() const { return param_; }
@@ -126,6 +127,7 @@ class Solver {
   vector<Callback*> callbacks_;
   vector<Dtype> losses_;
   Dtype smoothed_loss_;
+  char buffer_[50];
 
   // The root solver that holds root nets (actually containing shared layers)
   // in data parallelism
