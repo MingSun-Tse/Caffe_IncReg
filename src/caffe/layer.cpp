@@ -991,6 +991,7 @@ void Layer<Dtype>::PruneForward() {
       cout << "  (" << APP<Dtype>::prune_state;
       cout << "-" << APP<Dtype>::learning_rate;
       cout << "-" << APP<Dtype>::iter_size;
+      cout << "-" << APP<Dtype>::target_reg;
       cout << ")" << endl;
     }
 
