@@ -269,6 +269,17 @@ void Solver<Dtype>::Step(int iters) {
   Dtype max_acc_final_retrain = 0;
   int max_acc_iter_final_retrain = 0;
   time_t rawtime;
+  time(&rawtime);
+  const struct tm* timeinfo = localtime(&rawtime);
+  strftime(buffer_, 50, " (%Y/%m/%d-%H:%M)", timeinfo);
+  Dtype current_speedup, current_compRatio, GFLOPs_origin, num_param_origin;
+  GetPruneProgress(&current_speedup,
+                   &current_compRatio,
+                   &GFLOPs_origin,
+                   &num_param_origin);
+  cout << "[app] Training starts, iter: " << iter_ << buffer_
+       << ", speedup: " << current_speedup 
+       << ", compRatio: " << current_compRatio << endl;
   
   while (iter_ < stop_iter) {
     APP<Dtype>::step_ = iter_ + 1;
@@ -358,7 +369,6 @@ void Solver<Dtype>::Step(int iters) {
     // -----------------------------------------------------------------
     // Prune finished
     if(APP<Dtype>::prune_state == "prune" && APP<Dtype>::IF_current_target_achieved) {
-      Dtype current_speedup, current_compRatio, GFLOPs_origin, num_param_origin;
       GetPruneProgress(&current_speedup,
                        &current_compRatio,
                        &GFLOPs_origin,
@@ -484,8 +494,7 @@ void Solver<Dtype>::Step(int iters) {
              << ", going to decay lr (new: " << APP<Dtype>::learning_rate << "). iter: " << max_acc_iter << buffer_ << endl;
         if (APP<Dtype>::learning_rate < 1e-6) {
           cout << "[app]    learning_rate < 1e-6, all final retrain done. Exit!"
-               << " Final output caffemodel iter = " << max_acc_iter_final_retrain
-               << " , speedup = " << APP<Dtype>::speedup << endl;
+               << " Final output caffemodel iter = " << max_acc_iter_final_retrain << endl;
           exit(0);
         } else if (max_acc < max_acc_final_retrain) {
           cout << "[app]    max accuracy of this learning rate stage is not better than previous one, so all final retrain done. Exit!"
@@ -503,7 +512,6 @@ void Solver<Dtype>::Step(int iters) {
     }
 
     // Print speedup & compression ratio each iter
-    Dtype current_speedup, current_compRatio, GFLOPs_origin, num_param_origin;
     GetPruneProgress(&current_speedup,
                      &current_compRatio,
                      &GFLOPs_origin,

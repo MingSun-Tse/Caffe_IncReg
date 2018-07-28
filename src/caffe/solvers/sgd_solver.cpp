@@ -300,7 +300,10 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         const int num_row = net_params[param_id]->shape()[0];
         const int num_col = count / num_row;
         const int num_pruned_col = APP<Dtype>::num_pruned_col[L];
-        const int real_num_col_to_prune_ = ceil(num_col * APP<Dtype>::current_prune_ratio[L]) - num_pruned_col;
+        srand((unsigned)time(NULL));
+        const int real_num_col_to_prune_ = rand() % 2 == 0 
+                                         ? int(num_col * APP<Dtype>::current_prune_ratio[L]) - num_pruned_col
+                                         : ceil(num_col * APP<Dtype>::current_prune_ratio[L]) - num_pruned_col;
         int num_col_to_prune_ = real_num_col_to_prune_;
         const int num_col_ = num_col - num_pruned_col;
         CHECK_GT(num_col_to_prune_, 0);
