@@ -383,7 +383,6 @@ void Solver<Dtype>::Step(int iters) {
         cout << "[app]    " << L << " - pruned_ratio: " << APP<Dtype>::pruned_ratio_col[L] << endl;
       }
       SetPruneState("losseval"); // Going to prune_state 'losseval'
-      APP<Dtype>::IF_current_target_achieved = false;
       
       // Check reg
       map<string, int>::iterator map_it;
@@ -587,6 +586,11 @@ void Solver<Dtype>::SetPruneState(const string& prune_state) {
   APP<Dtype>::prune_state = prune_state;
   if (prune_state == "prune") {
     APP<Dtype>::iter_size = this->param_.iter_size_prune();
+    for (int L = 0; L < APP<Dtype>::layer_index.size(); ++L) {
+      if (APP<Dtype>::prune_ratio[L] == 0) { continue; }
+      APP<Dtype>::iter_prune_finished[L] = INT_MAX;
+    }
+    APP<Dtype>::IF_current_target_achieved = false;
   } else if (prune_state == "losseval") {
     APP<Dtype>::iter_size = this->param_.iter_size_losseval();
     for (int i = 0; i < APP<Dtype>::cnt_loss_cross_borderline.size(); ++i) {
@@ -672,7 +676,6 @@ void Solver<Dtype>::SetNewCurrentPruneRatio(const bool& IF_roll_back, const Dtyp
         APP<Dtype>::current_prune_ratio[L] = APP<Dtype>::last_feasible_prune_ratio[L] 
               + new_incre_pr / APP<Dtype>::STANDARD_SPARSITY * APP<Dtype>::prune_ratio_step[L];
         APP<Dtype>::current_prune_ratio[L] = min(APP<Dtype>::current_prune_ratio[L], APP<Dtype>::prune_ratio[L]);
-        APP<Dtype>::iter_prune_finished[L] = INT_MAX;
         cout << "[app]    " << L << " - current_prune_ratio: " 
              << APP<Dtype>::last_feasible_prune_ratio[L] << " -> " << APP<Dtype>::current_prune_ratio[L]
              << " (+" << APP<Dtype>::current_prune_ratio[L] - APP<Dtype>::last_feasible_prune_ratio[L] << ")" << endl;
@@ -885,76 +888,6 @@ void Solver<Dtype>::OfflineTest() {
   Caffe::SetDevice(APP<Dtype>::original_gpu_id); // Change back to original gpu
 }
 
-/// @mingsuntse, divide train net and test net on different GPUs, failed for now.
-template <typename Dtype>
-void Solver<Dtype>::OfflineTest(int gpu_id, const int& num_iter) {  
-  // Create test_net
-  NetParameter net_param; 
-  ReadNetParamsFromTextFileOrDie(param_.net(), &net_param);
-  shared_ptr<Net<Dtype> > test_net;
-  test_net.reset(new Net<Dtype>(net_param));
-  CHECK_NOTNULL(test_net.get())->ShareTrainedLayersWith(net_.get()); // Copy weights to test_net
-  
-  // Switch GPU
-  if (gpu_id == -1) {
-    gpu_id = APP<Dtype>::original_gpu_id;
-  }
-  LOG(INFO) << "Use GPU with device ID " << gpu_id;
-#ifndef CPU_ONLY
-  cudaDeviceProp device_prop;
-  cudaGetDeviceProperties(&device_prop, gpu_id);
-  LOG(INFO) << "GPU device name: " << device_prop.name;
-#endif
-  Caffe::SetDevice(gpu_id);
-  Caffe::set_mode(Caffe::GPU);
-  
-  // Testing runs
-  LOG(INFO) << "Running for " << num_iter << " iterations.";
-  APP<Dtype>::val_accuracy.clear();
-  vector<int> test_score_output_id;
-  vector<Dtype> test_score;
-  Dtype loss = 0;
-  for (int i = 0; i < num_iter; ++i) {
-    Dtype iter_loss;
-    const vector<Blob<Dtype>*>& result =
-        test_net->Forward(&iter_loss);
-    loss += iter_loss;
-    int idx = 0;
-    for (int j = 0; j < result.size(); ++j) {
-      const Dtype* result_vec = result[j]->cpu_data();
-      for (int k = 0; k < result[j]->count(); ++k, ++idx) {
-        const Dtype score = result_vec[k];
-        if (i == 0) {
-          test_score.push_back(score);
-          test_score_output_id.push_back(j);
-        } else {
-          test_score[idx] += score;
-        }
-      }
-    }
-  }
-  loss /= num_iter;
-  LOG(INFO) << "Loss: " << loss;
-  for (int i = 0; i < test_score.size(); ++i) {
-    const std::string& output_name = test_net->blob_names()[
-        test_net->output_blob_indices()[test_score_output_id[i]]];
-    const Dtype loss_weight = test_net->blob_loss_weights()[
-        test_net->output_blob_indices()[test_score_output_id[i]]];
-    std::ostringstream loss_msg_stream;
-    const Dtype mean_score = test_score[i] / num_iter;
-    if (loss_weight) {
-      loss_msg_stream << " (* " << loss_weight
-                      << " = " << loss_weight * mean_score << " loss)";
-    }
-    LOG(INFO) << output_name << " = " << mean_score << loss_msg_stream.str();
-    if (output_name.substr(1, 3) == "ccu") { // TODO(mingsuntse): improve this
-      APP<Dtype>::val_accuracy.push_back(mean_score);
-    }
-  }
-  Caffe::SetDevice(APP<Dtype>::original_gpu_id); // Change back to original gpu
-}
-// --------------------------------------------------------------------------------
-
 template <typename Dtype>
 const Dtype Solver<Dtype>::IncrePR_2_TRMul(const Dtype& incre_pr) {
   /*
@@ -1059,7 +992,7 @@ void Solver<Dtype>::Test(const int test_net_id) {
     }
     LOG(INFO) << "    Test net output #" << i << ": " << output_name << " = "
               << mean_score << loss_msg_stream.str();
-    if (output_name.substr(1, 3) == "ccu") { // "Accuracy" or "accuracy", TODO(mingsuntse): improve this
+    if (output_name.find("ccuracy") != std::string::npos) { // TODO(mingsuntse): improve this
       APP<Dtype>::val_accuracy.push_back(mean_score);
     }
   }

@@ -275,7 +275,7 @@ void Layer<Dtype>::Print(char mode) {
   string info = "";
   if (APP<Dtype>::prune_coremthd.substr(0, 2) == "PP") {
     info = "HistoryProb";
-  } else if (APP<Dtype>::prune_coremthd.substr(0, 2) == "Reg") {
+  } else if (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg") {
     info = "HistoryReg";
   } else {
     info = "WeightBeforeMasked";
