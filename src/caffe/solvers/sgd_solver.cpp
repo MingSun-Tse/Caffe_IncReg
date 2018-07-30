@@ -984,10 +984,10 @@ void SGDSolver<Dtype>::ClearHistory(const int& param_id) {
 }
 
 template <typename Dtype>
-void SGDSolver<Dtype>::SnapshotSolverState(const string& model_filename) {
+void SGDSolver<Dtype>::SnapshotSolverState(const string& model_filename, const string& prefix) {
   switch (this->param_.snapshot_format()) {
   case caffe::SolverParameter_SnapshotFormat_BINARYPROTO:
-    SnapshotSolverStateToBinaryProto(model_filename);
+    SnapshotSolverStateToBinaryProto(model_filename, prefix);
     break;
   case caffe::SolverParameter_SnapshotFormat_HDF5:
     SnapshotSolverStateToHDF5(model_filename);
@@ -999,7 +999,7 @@ void SGDSolver<Dtype>::SnapshotSolverState(const string& model_filename) {
 
 template <typename Dtype>
 void SGDSolver<Dtype>::SnapshotSolverStateToBinaryProto(
-  const string& model_filename) {
+  const string& model_filename, const string& prefix) {
   SolverState state;
   state.set_iter(this->iter_);
   state.set_learned_net(model_filename);
@@ -1047,7 +1047,7 @@ void SGDSolver<Dtype>::SnapshotSolverStateToBinaryProto(
       }
     }
   }    
-  string snapshot_filename = Solver<Dtype>::SnapshotFilename(".solverstate");
+  string snapshot_filename = Solver<Dtype>::SnapshotFilename(".solverstate", prefix);
   LOG(INFO)
       << "Snapshotting solver state to binary proto file " << snapshot_filename;
   WriteProtoToBinaryFile(state, snapshot_filename.c_str());

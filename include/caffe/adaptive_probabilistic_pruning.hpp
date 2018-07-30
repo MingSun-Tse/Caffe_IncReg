@@ -65,6 +65,7 @@ public:
     static vector<Dtype> retrain_test_acc1;
     static vector<Dtype> retrain_test_acc5;
     static string prune_state;
+    static int prune_stage;
     static Dtype STANDARD_SPARSITY;
     static Dtype STANDARD_INCRE_PR;
     
@@ -167,6 +168,7 @@ public:
     template<typename Dtype>  vector<Dtype> APP<Dtype>::retrain_test_acc1;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::retrain_test_acc5;
     template<typename Dtype>  string APP<Dtype>::prune_state = "prune";
+    template<typename Dtype>  int    APP<Dtype>::prune_stage = 1;
     template<typename Dtype>  Dtype APP<Dtype>::STANDARD_SPARSITY = 0.5; // If this changes, the prune_ratio_step should change accordingly.
     template<typename Dtype>  Dtype APP<Dtype>::STANDARD_INCRE_PR = 0.05;
 

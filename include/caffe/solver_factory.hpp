@@ -54,11 +54,6 @@ template <typename Dtype>
 class SolverRegistry {
  public:
   typedef Solver<Dtype>* (*Creator)(const SolverParameter&);
-    /*
-     * SolverParameter在caffe.pb.h中定义
-     * 创建一个指向函数的指针 Creator
-     * 函数指针，返回类型是 Solver<Dtype>* ，类指针，
-     */
   typedef std::map<string, Creator> CreatorRegistry;
 
   static CreatorRegistry& Registry() {

@@ -33,8 +33,8 @@ class SGDSolver : public Solver<Dtype> {
   virtual void Regularize(int param_id);
   virtual void ComputeUpdateValue(int param_id, Dtype rate);
   virtual void ClipGradients();
-  virtual void SnapshotSolverState(const string& model_filename);
-  virtual void SnapshotSolverStateToBinaryProto(const string& model_filename);
+  virtual void SnapshotSolverState(const string& model_filename, const string& prefix);
+  virtual void SnapshotSolverStateToBinaryProto(const string& model_filename, const string& prefix);
   virtual void SnapshotSolverStateToHDF5(const string& model_filename);
   virtual void RestoreSolverStateFromHDF5(const string& state_file);
   virtual void RestoreSolverStateFromBinaryProto(const string& state_file, const bool& restore_prune_state);

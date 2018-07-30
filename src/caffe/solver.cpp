@@ -268,6 +268,9 @@ void Solver<Dtype>::Step(int iters) {
   int max_acc_iter = 0;
   Dtype max_acc_final_retrain = 0;
   int max_acc_iter_final_retrain = 0;
+  vector<Dtype> retrain_iters;
+  vector<Dtype> snapshot_iters;
+  
   time_t rawtime;
   time(&rawtime);
   const struct tm* timeinfo = localtime(&rawtime);
@@ -374,7 +377,8 @@ void Solver<Dtype>::Step(int iters) {
                        &GFLOPs_origin,
                        &num_param_origin);
                        
-      cout << "[app]\n[app] Current pruning stage finished. Go on training for a little while before checking accuracy."
+      cout << "[app]\n[app] Current pruning stage (stage = "
+           << APP<Dtype>::prune_stage << ") finished. Go on training for a little while before checking accuracy."
            << " speedup: " << current_speedup
            << " iter: " << APP<Dtype>::stage_iter_prune_finished << buffer_ << endl;
            
@@ -436,6 +440,7 @@ void Solver<Dtype>::Step(int iters) {
     if (APP<Dtype>::prune_state == "retrain"
           && APP<Dtype>::retrain_test_interval && iter_ % APP<Dtype>::retrain_test_interval == 0) {
       OfflineTest();
+      retrain_iters.push_back(iter_);
       const Dtype acc1 = *min_element(APP<Dtype>::val_accuracy.begin(), APP<Dtype>::val_accuracy.end());
       const Dtype acc5 = *max_element(APP<Dtype>::val_accuracy.begin(), APP<Dtype>::val_accuracy.end());
       APP<Dtype>::retrain_test_acc1.push_back(acc1);
@@ -457,7 +462,9 @@ void Solver<Dtype>::Step(int iters) {
       cout << ", ave_acc = " << ave_acc << endl;
       if (APP<Dtype>::retrain_test_acc1.size() - max_acc_index > CNT_AFTER_MAX_ACC) { // ave_acc > APP<Dtype>::accu_borderline
         cout << "[app]    Retrain finished, final acc1 = " << max_acc << " iter: " << max_acc_iter << buffer_ << endl;
-        const string resume_file = param_.snapshot_prefix() + "_iter_" + caffe::format_int(max_acc_iter) + ".solverstate";
+        stringstream sstream;
+        sstream << "_stage" << APP<Dtype>::prune_stage << "-" << APP<Dtype>::prune_state;
+        const string resume_file = param_.snapshot_prefix() + sstream.str() + "_iter_" + caffe::format_int(max_acc_iter) + ".solverstate";
         Restore(resume_file.c_str(), false);
         CheckPruneState(0, max_acc);
         APP<Dtype>::retrain_test_acc1.clear();
@@ -465,6 +472,15 @@ void Solver<Dtype>::Step(int iters) {
         max_acc = 0;
         max_acc_index = 0;
         max_acc_iter = 0;
+        
+        // Delete extra caffemodels
+        for (int i = 0; i < retrain_iters.size(); ++i) {
+          const string path_caffemodel  = param_.snapshot_prefix() + sstream.str() + "_iter_" + caffe::format_int(retrain_iters[i]) + ".caffemodel";
+          const string path_solverstate = param_.snapshot_prefix() + sstream.str() + "_iter_" + caffe::format_int(retrain_iters[i]) + ".solverstate";
+          std::remove(path_caffemodel.c_str());
+          std::remove(path_solverstate.c_str());
+        }
+        retrain_iters.clear();
       }
     }
     
@@ -472,6 +488,7 @@ void Solver<Dtype>::Step(int iters) {
     if (APP<Dtype>::prune_state == "final_retrain" 
           && APP<Dtype>::retrain_test_interval && iter_ % APP<Dtype>::retrain_test_interval == 0) {
       OfflineTest();
+      retrain_iters.push_back(iter_);
       const Dtype acc1 = *min_element(APP<Dtype>::val_accuracy.begin(), APP<Dtype>::val_accuracy.end());
       const Dtype acc5 = *max_element(APP<Dtype>::val_accuracy.begin(), APP<Dtype>::val_accuracy.end());
       APP<Dtype>::retrain_test_acc1.push_back(acc1);
@@ -491,6 +508,22 @@ void Solver<Dtype>::Step(int iters) {
         APP<Dtype>::learning_rate /= 10; // When current learning rate has reached its ceiling accuracy, decay it.
         cout << "[app]    Final retrain of current learning rate finished, final acc1 = " << max_acc 
              << ", going to decay lr (new: " << APP<Dtype>::learning_rate << "). iter: " << max_acc_iter << buffer_ << endl;
+        stringstream sstream;
+        sstream << "_finalretrain";
+        const string resume_file = param_.snapshot_prefix() + sstream.str() + "_iter_" + caffe::format_int(max_acc_iter) + ".solverstate";
+        Restore(resume_file.c_str(), false);
+        
+        // Delete extra caffemodels
+        for (int i = 0; i < retrain_iters.size(); ++i) {
+          if (retrain_iters[i] == max_acc_iter_final_retrain) { continue; }
+          const string path_caffemodel = param_.snapshot_prefix() + sstream.str() + "_iter_" + caffe::format_int(retrain_iters[i]) + ".caffemodel";
+          const string path_solverstate = param_.snapshot_prefix() + sstream.str() + "_iter_" + caffe::format_int(retrain_iters[i]) + ".solverstate";
+          std::remove(path_caffemodel.c_str());
+          std::remove(path_solverstate.c_str());
+        }
+        retrain_iters.clear();
+        retrain_iters.push_back(max_acc_iter_final_retrain);
+        
         if (APP<Dtype>::learning_rate < 1e-6) {
           cout << "[app]    learning_rate < 1e-6, all final retrain done. Exit!"
                << " Final output caffemodel iter = " << max_acc_iter_final_retrain << endl;
@@ -500,8 +533,6 @@ void Solver<Dtype>::Step(int iters) {
                << " Final output caffemodel iter = " << max_acc_iter_final_retrain << endl;
           exit(0);
         }
-        const string resume_file = param_.snapshot_prefix() + "_iter_" + caffe::format_int(max_acc_iter) + ".solverstate";
-        Restore(resume_file.c_str(), false);
         APP<Dtype>::retrain_test_acc1.clear();
         APP<Dtype>::retrain_test_acc5.clear();
         max_acc = 0;
@@ -539,6 +570,14 @@ void Solver<Dtype>::Step(int iters) {
          && Caffe::root_solver()) ||
          (request == SolverAction::SNAPSHOT)) {
       Snapshot();
+      // Remove extra saved caffemodels and solverstates to save disk space
+      if (snapshot_iters.size() && APP<Dtype>::prune_method != "None") {
+        const string previous_caffemodel_path = param_.snapshot_prefix() + "_iter_" + caffe::format_int(snapshot_iters.back()) + ".caffemodel";
+        const string previous_solverstate_path = param_.snapshot_prefix() + "_iter_" + caffe::format_int(snapshot_iters.back()) + ".solverstate";
+        std::remove(previous_caffemodel_path.c_str());
+        std::remove(previous_solverstate_path.c_str());
+      }
+      snapshot_iters.push_back(iter_);
     }
     if (SolverAction::STOP == request) {
       requested_early_exit_ = true;
@@ -618,7 +657,10 @@ void Solver<Dtype>::CheckPruneState(const bool& IF_acc_far_from_borderline, cons
            << iter_ << buffer_ << endl;
       APP<Dtype>::last_feasible_prune_iter = iter_;
       SetNewCurrentPruneRatio(false, 1.0); // TODO(mingsuntse): use loss to estimate acc, then replace 1.0 with it.
-      Snapshot();
+      stringstream sstream;
+      sstream << "_stage" << APP<Dtype>::prune_stage;
+      Snapshot(sstream.str());
+      ++ APP<Dtype>::prune_stage;
     } else {
       cout << "[app]    Estimated accuracy **NOT significantly good**, retrain to check accuracy before starting a new pruning stage. iter: "
            << iter_ << buffer_ << endl;
@@ -630,12 +672,15 @@ void Solver<Dtype>::CheckPruneState(const bool& IF_acc_far_from_borderline, cons
         if (APP<Dtype>::prune_ratio[L] == 0) { continue; }
         APP<Dtype>::last_infeasible_prune_ratio[L] = APP<Dtype>::pruned_ratio_for_comparison[L];
       }
-      cout << "[app]    accuracy bad, roll back weights to iter = " << APP<Dtype>::last_feasible_prune_iter << endl;
+      cout << "[app]    accuracy bad, roll back weights to iter = " << APP<Dtype>::last_feasible_prune_iter 
+           << " (stage = " << APP<Dtype>::prune_stage - 1 << ")" << endl;
       if (APP<Dtype>::last_feasible_prune_iter == -1) {
         cout << "[app]    The first pruning stage failed, please decrease the initial prune_ratio." << endl;
         exit(1);
       }
-      const string resume_file = param_.snapshot_prefix() + "_iter_" + caffe::format_int(APP<Dtype>::last_feasible_prune_iter) + ".solverstate";
+      stringstream sstream;
+      sstream << "_stage" << APP<Dtype>::prune_stage - 1;
+      const string resume_file = param_.snapshot_prefix() + sstream.str() + "_iter_" + caffe::format_int(APP<Dtype>::last_feasible_prune_iter) + ".solverstate";
       cout << "[app]    ===== resuming from: " << resume_file << endl;
       SetNewCurrentPruneRatio(true, true_val_acc);
       Restore(resume_file.c_str(), false);
@@ -648,7 +693,10 @@ void Solver<Dtype>::CheckPruneState(const bool& IF_acc_far_from_borderline, cons
       }
       cout << "[app]    accuracy **still good**, save caffemodel, start a new pruning stage." << endl;
       SetNewCurrentPruneRatio(false, true_val_acc);
-      Snapshot(); // Snapshot after SetNewCurrentPruneRatio, then the prune_state will be updated.
+      stringstream sstream;
+      sstream << "_stage" << APP<Dtype>::prune_stage;
+      Snapshot(sstream.str()); // Snapshot after SetNewCurrentPruneRatio, then the prune_state will be updated.
+      ++ APP<Dtype>::prune_stage;
     }
   }
 }
@@ -826,8 +874,14 @@ void Solver<Dtype>::OfflineTest() {
   Caffe::set_mode(Caffe::GPU);
   
   // Create test net
-  Snapshot(); // save caffemodel to evaluate it on another GPU
-  const string& weights = param_.snapshot_prefix() + "_iter_" + caffe::format_int(iter_) + ".caffemodel";
+  stringstream sstream;
+  if (APP<Dtype>::prune_state == "retrain") {
+    sstream << "_stage" << APP<Dtype>::prune_stage << "-" << APP<Dtype>::prune_state;
+  } else if (APP<Dtype>::prune_state == "final_retrain") {
+    sstream << "_finalretrain";
+  }
+  Snapshot(sstream.str()); // save caffemodel to evaluate it on another GPU
+  const string& weights = param_.snapshot_prefix() + sstream.str() + "_iter_" + caffe::format_int(iter_) + ".caffemodel";
   Net<Dtype> test_net(APP<Dtype>::model_prototxt, caffe::TEST);
   test_net.CopyTrainedLayersFrom(weights);
   
@@ -999,12 +1053,12 @@ void Solver<Dtype>::Test(const int test_net_id) {
 }
 
 template <typename Dtype>
-void Solver<Dtype>::Snapshot() {
+void Solver<Dtype>::Snapshot(const string& prefix) {
   CHECK(Caffe::root_solver());
   string model_filename;
   switch (param_.snapshot_format()) {
   case caffe::SolverParameter_SnapshotFormat_BINARYPROTO:
-    model_filename = SnapshotToBinaryProto(); // save caffemodel
+    model_filename = SnapshotToBinaryProto(prefix); // save caffemodel
     break;
   case caffe::SolverParameter_SnapshotFormat_HDF5:
     model_filename = SnapshotToHDF5();
@@ -1012,7 +1066,7 @@ void Solver<Dtype>::Snapshot() {
   default:
     LOG(FATAL) << "Unsupported snapshot format.";
   }
-  SnapshotSolverState(model_filename); // save solverstate
+  SnapshotSolverState(model_filename, prefix); // save solverstate
 }
 
 template <typename Dtype>
@@ -1034,14 +1088,13 @@ void Solver<Dtype>::CheckSnapshotWritePermissions() {
 }
 
 template <typename Dtype>
-string Solver<Dtype>::SnapshotFilename(const string extension) {
-  return param_.snapshot_prefix() + "_iter_" + caffe::format_int(iter_)
-    + extension;
+string Solver<Dtype>::SnapshotFilename(const string extension, const string& prefix) {
+  return param_.snapshot_prefix() + prefix + "_iter_" + caffe::format_int(iter_) + extension;
 }
 
 template <typename Dtype>
-string Solver<Dtype>::SnapshotToBinaryProto() {
-  string model_filename = SnapshotFilename(".caffemodel");
+string Solver<Dtype>::SnapshotToBinaryProto(const string& prefix) {
+  string model_filename = SnapshotFilename(".caffemodel", prefix);
   LOG(INFO) << "Snapshotting to binary proto file " << model_filename;
   NetParameter net_param;
   net_->ToProto(&net_param, param_.snapshot_diff());
@@ -1066,9 +1119,9 @@ void Solver<Dtype>::Restore(const char* state_file, const bool& restore_prune_st
     RestoreSolverStateFromHDF5(state_filename);
   } else {
     RestoreSolverStateFromBinaryProto(state_filename, restore_prune_state);
-	if (restore_prune_state) {
-      SetPruneState(APP<Dtype>::prune_state);
-	}
+    if (restore_prune_state) {
+        SetPruneState(APP<Dtype>::prune_state);
+    }
   }
 }
 

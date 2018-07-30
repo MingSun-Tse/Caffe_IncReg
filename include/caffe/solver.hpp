@@ -66,7 +66,7 @@ class Solver {
   // that stores the learned net. You should implement the SnapshotSolverState()
   // function that produces a SolverState protocol buffer that needs to be
   // written to disk together with the learned net.
-  void Snapshot();
+  void Snapshot(const string& prefix = "");
   void PrintFinalPrunedRatio();
   void GetPruneProgress(Dtype* speedup, Dtype* compRatio, Dtype* GFLOPs_origin_, Dtype* num_param_origin_);
   void CheckPruneState(const bool& IF_acc_far_from_borderline, const Dtype& true_val_acc = -1);
@@ -107,13 +107,13 @@ class Solver {
  protected:
   // Make and apply the update value for the current iteration.
   virtual void ApplyUpdate() = 0;
-  string SnapshotFilename(const string extension);
-  string SnapshotToBinaryProto();
+  string SnapshotFilename(const string extension, const string& prefix = "");
+  string SnapshotToBinaryProto(const string& prefix);
   string SnapshotToHDF5();
   // The test routine
   void TestAll();
   void Test(const int test_net_id = 0);
-  virtual void SnapshotSolverState(const string& model_filename) = 0;
+  virtual void SnapshotSolverState(const string& model_filename, const string& prefix) = 0;
   virtual void RestoreSolverStateFromHDF5(const string& state_file) = 0;
   virtual void RestoreSolverStateFromBinaryProto(const string& state_file, const bool& restore_prune_state) = 0;
   void DisplayOutputBlobs(const int net_id);
@@ -156,7 +156,7 @@ class WorkerSolver : public Solver<Dtype> {
 
  protected:
   void ApplyUpdate() {}
-  void SnapshotSolverState(const string& model_filename) {
+  void SnapshotSolverState(const string& model_filename, const string& prefix) {
     LOG(FATAL) << "Should not be called on worker solver.";
   }
   void RestoreSolverStateFromBinaryProto(const string& state_file, const bool& restore_prune_state) {
