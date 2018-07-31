@@ -478,10 +478,13 @@ void SGDSolver<Dtype>::SnapshotSolverStateToBinaryProto(
     const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[i].first];
     if (APP<Dtype>::layer_index.count(layer_name) && 
             (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg" or APP<Dtype>::prune_coremthd.substr(0, 2) == "PP")) { // i: param_id
-        local_blob_index = layer_name == previous_layer_name ? local_blob_index + 1 : 0;
-        this->net_->layer_by_name(layer_name)->history_score()[local_blob_index]->ToProto(history_score_blob);
-        this->net_->layer_by_name(layer_name)->history_punish()[local_blob_index]->ToProto(history_punish_blob);
-        previous_layer_name = layer_name;
+	const int L = APP<Dtype>::layer_index[layer_name];
+	if (APP<Dtype>::prune_ratio[L] > 0) {
+          local_blob_index = layer_name == previous_layer_name ? local_blob_index + 1 : 0;
+          this->net_->layer_by_name(layer_name)->history_score()[local_blob_index]->ToProto(history_score_blob);
+          this->net_->layer_by_name(layer_name)->history_punish()[local_blob_index]->ToProto(history_punish_blob);
+          previous_layer_name = layer_name;
+	}
     }
   }
   string snapshot_filename = Solver<Dtype>::SnapshotFilename(".solverstate");
@@ -548,10 +551,13 @@ void SGDSolver<Dtype>::RestoreSolverStateFromBinaryProto(
     const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[i].first];
     if (APP<Dtype>::layer_index.count(layer_name) && 
             (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg" or APP<Dtype>::prune_coremthd.substr(0, 2) == "PP")) {
-        local_blob_index = layer_name == previous_layer_name ? local_blob_index + 1 : 0;
-        this->net_->layer_by_name(layer_name)->history_score()[local_blob_index]->FromProto(state.history_score(i));
-        this->net_->layer_by_name(layer_name)->history_punish()[local_blob_index]->FromProto(state.history_punish(i));
-        previous_layer_name = layer_name;
+        const int L = APP<Dtype>::layer_index[layer_name];
+	if (APP<Dtype>::prune_ratio[L] > 0) {
+	  local_blob_index = layer_name == previous_layer_name ? local_blob_index + 1 : 0;
+          this->net_->layer_by_name(layer_name)->history_score()[local_blob_index]->FromProto(state.history_score(i));
+          this->net_->layer_by_name(layer_name)->history_punish()[local_blob_index]->FromProto(state.history_punish(i));
+          previous_layer_name = layer_name;
+	}
     }
   }
 }

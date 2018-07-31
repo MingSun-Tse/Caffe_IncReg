@@ -442,7 +442,7 @@ void Layer<Dtype>::PruneForward() {
             }
         }
         
-        // Print and check, before update probs
+        // Print and check
         // put this outside, to print even when we do not prune
         if (APP<Dtype>::show_layer.size() >= L+1 && APP<Dtype>::show_layer[L] == '1'
                     && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0) {
