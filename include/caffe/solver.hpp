@@ -128,6 +128,7 @@ class Solver {
   vector<Dtype> losses_;
   Dtype smoothed_loss_;
   char buffer_[50];
+  vector<Dtype> test_accuracy_;
 
   // The root solver that holds root nets (actually containing shared layers)
   // in data parallelism

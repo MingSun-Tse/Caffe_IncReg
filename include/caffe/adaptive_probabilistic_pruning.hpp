@@ -56,7 +56,6 @@ public:
     static int           last_feasible_prune_iter;
     static vector<Dtype> last_infeasible_prune_ratio;
     static Dtype         last_feasible_acc;
-    static vector<Dtype> val_accuracy;
     static string model_prototxt;
     static int original_gpu_id;
     static int test_gpu_id;
@@ -159,7 +158,6 @@ public:
     template<typename Dtype>  int           APP<Dtype>::last_feasible_prune_iter = -1;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::last_infeasible_prune_ratio;
     template<typename Dtype>  Dtype         APP<Dtype>::last_feasible_acc = 0;
-    template<typename Dtype>  vector<Dtype> APP<Dtype>::val_accuracy;
     template<typename Dtype>  string APP<Dtype>::model_prototxt;
     template<typename Dtype>  int APP<Dtype>::original_gpu_id;
     template<typename Dtype>  int APP<Dtype>::test_gpu_id = -1;

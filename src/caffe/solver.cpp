@@ -439,10 +439,14 @@ void Solver<Dtype>::Step(int iters) {
     // Retrain, check acc
     if (APP<Dtype>::prune_state == "retrain"
           && APP<Dtype>::retrain_test_interval && iter_ % APP<Dtype>::retrain_test_interval == 0) {
-      OfflineTest();
+      if (APP<Dtype>::test_gpu_id != -1) {
+        OfflineTest();
+      } else {
+        TestAll();
+      }
       retrain_iters.push_back(iter_);
-      const Dtype acc1 = *min_element(APP<Dtype>::val_accuracy.begin(), APP<Dtype>::val_accuracy.end());
-      const Dtype acc5 = *max_element(APP<Dtype>::val_accuracy.begin(), APP<Dtype>::val_accuracy.end());
+      const Dtype acc1 = *min_element(test_accuracy_.begin(), test_accuracy_.end());
+      const Dtype acc5 = *max_element(test_accuracy_.begin(), test_accuracy_.end());
       APP<Dtype>::retrain_test_acc1.push_back(acc1);
       APP<Dtype>::retrain_test_acc5.push_back(acc5);
       if (acc1 > max_acc) {
@@ -487,10 +491,14 @@ void Solver<Dtype>::Step(int iters) {
     // Final retrain, check acc
     if (APP<Dtype>::prune_state == "final_retrain" 
           && APP<Dtype>::retrain_test_interval && iter_ % APP<Dtype>::retrain_test_interval == 0) {
-      OfflineTest();
+      if(APP<Dtype>::test_gpu_id != -1) {
+        OfflineTest();
+      } else {
+        TestAll();
+      }
       retrain_iters.push_back(iter_);
-      const Dtype acc1 = *min_element(APP<Dtype>::val_accuracy.begin(), APP<Dtype>::val_accuracy.end());
-      const Dtype acc5 = *max_element(APP<Dtype>::val_accuracy.begin(), APP<Dtype>::val_accuracy.end());
+      const Dtype acc1 = *min_element(test_accuracy_.begin(), test_accuracy_.end());
+      const Dtype acc5 = *max_element(test_accuracy_.begin(), test_accuracy_.end());
       APP<Dtype>::retrain_test_acc1.push_back(acc1);
       APP<Dtype>::retrain_test_acc5.push_back(acc5);
       if (acc1 > max_acc) {
@@ -893,7 +901,7 @@ void Solver<Dtype>::OfflineTest() {
  
   const int num_iter = param_.test_iter(0);
   LOG(INFO) << "Running for " << num_iter << " iterations.";
-  APP<Dtype>::val_accuracy.clear();
+  test_accuracy_.clear();
   vector<int> test_score_output_id;
   vector<Dtype> test_score;
   Dtype loss = 0;
@@ -935,7 +943,7 @@ void Solver<Dtype>::OfflineTest() {
     }
     LOG(INFO) << output_name << " = " << mean_score << loss_msg_stream.str();
     if (output_name.find("ccuracy") != std::string::npos) { // TODO(mingsuntse): improve this
-      APP<Dtype>::val_accuracy.push_back(mean_score);
+      test_accuracy_.push_back(mean_score);
     }
   }
   LOG(INFO) << "-------------------------- retrain test done --------------------------";
@@ -975,8 +983,8 @@ void Solver<Dtype>::TestAll() {
 
 template <typename Dtype>
 void Solver<Dtype>::Test(const int test_net_id) {
-  APP<Dtype>::val_accuracy.clear();
-  CHECK(Caffe::root_solver());  
+  test_accuracy_.clear();
+  CHECK(Caffe::root_solver());
   LOG(INFO) << "Iteration " << iter_
             << ", Testing net (#" << test_net_id << ")";
   CHECK_NOTNULL(test_nets_[test_net_id].get())->
@@ -985,6 +993,19 @@ void Solver<Dtype>::Test(const int test_net_id) {
   vector<int> test_score_output_id;
   const shared_ptr<Net<Dtype> >& test_net = test_nets_[test_net_id];
   Dtype loss = 0;
+  
+  if (APP<Dtype>::prune_method != "None" && (APP<Dtype>::prune_state == "retrain" 
+    || APP<Dtype>::prune_state == "final_retrain")) {
+    stringstream sstream;
+    if (APP<Dtype>::prune_state == "retrain") {
+      sstream << "_stage" << APP<Dtype>::prune_stage << "-" << APP<Dtype>::prune_state;
+    } else if (APP<Dtype>::prune_state == "final_retrain") {
+      sstream << "_finalretrain";
+    }
+    Snapshot(sstream.str()); // save caffemodel, because one of them will be restored later
+    LOG(INFO) << "-------------------------- retrain test begins --------------------------";
+  }
+  
   for (int i = 0; i < param_.test_iter(test_net_id); ++i) {
     SolverAction::Enum request = GetRequestedAction();
     // Check to see if stoppage of testing/training has been requested.
@@ -1000,7 +1021,6 @@ void Solver<Dtype>::Test(const int test_net_id) {
       // break out of test loop.
       break;
     }
-
     Dtype iter_loss;
     const vector<Blob<Dtype>*>& result =
         test_net->Forward(&iter_loss);
@@ -1047,8 +1067,13 @@ void Solver<Dtype>::Test(const int test_net_id) {
     LOG(INFO) << "    Test net output #" << i << ": " << output_name << " = "
               << mean_score << loss_msg_stream.str();
     if (output_name.find("ccuracy") != std::string::npos) { // TODO(mingsuntse): improve this
-      APP<Dtype>::val_accuracy.push_back(mean_score);
+      test_accuracy_.push_back(mean_score);
     }
+  }
+  if (APP<Dtype>::prune_method != "None" && (APP<Dtype>::prune_state == "retrain" 
+    || APP<Dtype>::prune_state == "final_retrain")) {
+    LOG(INFO) << "-------------------------- retrain test ends --------------------------";
+    
   }
 }
 
