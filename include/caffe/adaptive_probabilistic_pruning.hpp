@@ -67,6 +67,7 @@ public:
     static int prune_stage;
     static Dtype STANDARD_SPARSITY;
     static Dtype STANDARD_INCRE_PR;
+    static bool decay_lr;
     
     static int inner_iter;
     static int step_;
@@ -169,6 +170,7 @@ public:
     template<typename Dtype>  int    APP<Dtype>::prune_stage = 1;
     template<typename Dtype>  Dtype APP<Dtype>::STANDARD_SPARSITY = 0.5; // If this changes, the prune_ratio_step should change accordingly.
     template<typename Dtype>  Dtype APP<Dtype>::STANDARD_INCRE_PR = 0.05;
+    template<typename Dtype>  bool APP<Dtype>::decay_lr = false;
 
     // 1.2 Info shared between solver and layer, initailized here
     template<typename Dtype>  int   APP<Dtype>::inner_iter = 0;

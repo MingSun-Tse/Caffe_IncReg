@@ -11,7 +11,7 @@
 #include "caffe/util/db.hpp"
 
 namespace caffe {
-
+static bool data_is_video_flag;
 /**
  * @brief Reads data from a source to queues available to data layers.
  * A single reading thread is created per source, even if multiple solvers
@@ -20,8 +20,6 @@ namespace caffe {
  * subset of the database. Data is distributed to solvers in a round-robin
  * way to keep parallel training deterministic.
  */
- 
-static bool data_is_video_flag;
  
 class DataReader {
  public:

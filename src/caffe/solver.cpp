@@ -268,8 +268,12 @@ void Solver<Dtype>::Step(int iters) {
   int max_acc_iter = 0;
   Dtype max_acc_final_retrain = 0;
   int max_acc_iter_final_retrain = 0;
+  vector<Dtype> retrain_accs;
   vector<Dtype> retrain_iters;
   vector<Dtype> snapshot_iters;
+  Dtype lr_before_retrain = 0;
+  int retrain_finished_iter = 0;
+  int first_retrain_finished_iter = 0; // the iter of retraining finished before decaying lr
   
   time_t rawtime;
   time(&rawtime);
@@ -439,7 +443,10 @@ void Solver<Dtype>::Step(int iters) {
     // Retrain, check acc
     if (APP<Dtype>::prune_state == "retrain"
           && APP<Dtype>::retrain_test_interval && iter_ % APP<Dtype>::retrain_test_interval == 0) {
-      if (APP<Dtype>::test_gpu_id != -1) {
+      if (lr_before_retrain == 0) { 
+        lr_before_retrain = APP<Dtype>::learning_rate;
+      }
+      if(APP<Dtype>::test_gpu_id != -1) {
         OfflineTest();
       } else {
         TestAll();
@@ -449,48 +456,80 @@ void Solver<Dtype>::Step(int iters) {
       const Dtype acc5 = *max_element(test_accuracy_.begin(), test_accuracy_.end());
       APP<Dtype>::retrain_test_acc1.push_back(acc1);
       APP<Dtype>::retrain_test_acc5.push_back(acc5);
+      retrain_accs.push_back(acc1);
       if (acc1 > max_acc) {
         max_acc = acc1;
         max_acc_index = APP<Dtype>::retrain_test_acc1.size();
         max_acc_iter = iter_;
       }
-      cout << "[app]    Retrain going on, current acc1 = " << acc1 << ", iter: " << iter_ << buffer_;
-      
-      const int ix_begin = max(int(APP<Dtype>::retrain_test_acc1.size()) - 5, 0);
-      Dtype ave_acc = 0;
-      for (int i = ix_begin; i < APP<Dtype>::retrain_test_acc1.size(); ++i) {
-        ave_acc += APP<Dtype>::retrain_test_acc1[i];
+      if (acc1 > max_acc_final_retrain) {
+        max_acc_final_retrain = acc1;
+        max_acc_iter_final_retrain = iter_;
       }
-      ave_acc /= (APP<Dtype>::retrain_test_acc1.size() - ix_begin);
-      // const Dtype ave_acc = accumulate(APP<Dtype>::retrain_test_acc1.begin(), APP<Dtype>::retrain_test_acc1.end(), 0) / window_size;
-      cout << ", ave_acc = " << ave_acc << endl;
-      if (APP<Dtype>::retrain_test_acc1.size() - max_acc_index > CNT_AFTER_MAX_ACC) { // ave_acc > APP<Dtype>::accu_borderline
-        cout << "[app]    Retrain finished, final acc1 = " << max_acc << " iter: " << max_acc_iter << buffer_ << endl;
+      cout << "[app]    Retrain going on, current acc1 = " << acc1 << ", iter: " << iter_ << buffer_ << endl;
+      
+      if (APP<Dtype>::retrain_test_acc1.size() - max_acc_index > CNT_AFTER_MAX_ACC + 2) {
+        if (first_retrain_finished_iter == 0) {
+          first_retrain_finished_iter = max_acc_iter;
+        }
+        
         stringstream sstream;
-        sstream << "_stage" << APP<Dtype>::prune_stage << "-" << APP<Dtype>::prune_state;
-        const string resume_file = param_.snapshot_prefix() + sstream.str() + "_iter_" + caffe::format_int(max_acc_iter) + ".solverstate";
-        Restore(resume_file.c_str(), false);
-        CheckPruneState(0, max_acc);
+        sstream << "_stage" << APP<Dtype>::prune_stage << "retrain";
+        
+        // Decay lr
+        APP<Dtype>::learning_rate /= 10; // When current learning rate has reached its ceiling accuracy, decay it.
+        cout << "[app]    Retrain of current learning rate finished, final acc1 = " << max_acc 
+             << ", going to decay lr (new: " << APP<Dtype>::learning_rate << "). iter: " << max_acc_iter << buffer_ << endl;
+        
+        // Check if "retrain" can be stopped
+        if (APP<Dtype>::learning_rate < 1e-6 || max_acc < max_acc_final_retrain) {
+          cout << "[app]    learning_rate < 1e-6 or max accuracy of this lr stage is not better than previous one, all retrain done."
+               << " Output the best caffemodel, iter = " << max_acc_iter_final_retrain << ", acc1 = " << max_acc_final_retrain
+               << ". Resume from iter = " << first_retrain_finished_iter << endl;
+               
+          // Resume
+          const string resume_file = param_.snapshot_prefix() + sstream.str() + "_iter_" + caffe::format_int(first_retrain_finished_iter) + ".solverstate";
+          Restore(resume_file.c_str(), false); // Restore from the best model of the first lr stage
+          RemoveUselessSnapshot(sstream.str(), first_retrain_finished_iter);
+          
+          // Check accuracy
+          sort(retrain_accs.begin(), retrain_accs.end(), greater<Dtype>()); // in descending order
+          CheckPruneState(0, (retrain_accs[0] + retrain_accs[1] + retrain_accs[2]) / 3); // use averaged acc to alleviate the influence of acc impulse
+
+          // Clear for next cycle of retraining
+          max_acc_final_retrain = 0;
+          max_acc_iter_final_retrain = 0;
+          first_retrain_finished_iter = 0;
+          APP<Dtype>::learning_rate = lr_before_retrain; // restore to previous learning_rate for "prune" state
+          lr_before_retrain = 0;
+          retrain_accs.clear();
+          retrain_finished_iter = iter_;
+        } else {
+          // Restore and check accuracy
+          const string resume_file = param_.snapshot_prefix() + sstream.str() + "_iter_" + caffe::format_int(max_acc_iter) + ".solverstate";
+          Restore(resume_file.c_str(), false);
+        }
+        
+        // Remove useless caffemodels
+        for (int i = 0; i < retrain_iters.size(); ++i) {
+          if (retrain_iters[i] != first_retrain_finished_iter) { // spare the max_acc_final_retrain Caffemodel, because it may be restored later
+            RemoveUselessSnapshot(sstream.str(), retrain_iters[i]);
+          }
+        }
+
+        // Clear for next retraining cycle
         APP<Dtype>::retrain_test_acc1.clear();
         APP<Dtype>::retrain_test_acc5.clear();
+        retrain_iters.clear();
         max_acc = 0;
         max_acc_index = 0;
         max_acc_iter = 0;
-        
-        // Delete extra caffemodels
-        for (int i = 0; i < retrain_iters.size(); ++i) {
-          const string path_caffemodel  = param_.snapshot_prefix() + sstream.str() + "_iter_" + caffe::format_int(retrain_iters[i]) + ".caffemodel";
-          const string path_solverstate = param_.snapshot_prefix() + sstream.str() + "_iter_" + caffe::format_int(retrain_iters[i]) + ".solverstate";
-          std::remove(path_caffemodel.c_str());
-          std::remove(path_solverstate.c_str());
-        }
-        retrain_iters.clear();
       }
     }
     
     // Final retrain, check acc
-    if (APP<Dtype>::prune_state == "final_retrain" 
-          && APP<Dtype>::retrain_test_interval && iter_ % APP<Dtype>::retrain_test_interval == 0) {
+    if (APP<Dtype>::prune_state == "final_retrain"
+          && APP<Dtype>::retrain_test_interval && iter_ % APP<Dtype>::retrain_test_interval == 0 && retrain_finished_iter != iter_) {
       if(APP<Dtype>::test_gpu_id != -1) {
         OfflineTest();
       } else {
@@ -524,21 +563,16 @@ void Solver<Dtype>::Step(int iters) {
         // Delete extra caffemodels
         for (int i = 0; i < retrain_iters.size(); ++i) {
           if (retrain_iters[i] == max_acc_iter_final_retrain) { continue; }
-          const string path_caffemodel = param_.snapshot_prefix() + sstream.str() + "_iter_" + caffe::format_int(retrain_iters[i]) + ".caffemodel";
-          const string path_solverstate = param_.snapshot_prefix() + sstream.str() + "_iter_" + caffe::format_int(retrain_iters[i]) + ".solverstate";
-          std::remove(path_caffemodel.c_str());
-          std::remove(path_solverstate.c_str());
+          RemoveUselessSnapshot(sstream.str(), retrain_iters[i]);
         }
         retrain_iters.clear();
         retrain_iters.push_back(max_acc_iter_final_retrain);
         
-        if (APP<Dtype>::learning_rate < 1e-6) {
-          cout << "[app]    learning_rate < 1e-6, all final retrain done. Exit!"
-               << " Final output caffemodel iter = " << max_acc_iter_final_retrain << endl;
-          exit(0);
-        } else if (max_acc < max_acc_final_retrain) {
-          cout << "[app]    max accuracy of this learning rate stage is not better than previous one, so all final retrain done. Exit!"
-               << " Final output caffemodel iter = " << max_acc_iter_final_retrain << endl;
+        if (APP<Dtype>::learning_rate < 1e-6 || max_acc < max_acc_final_retrain) {
+          cout << "[app]    learning_rate < 1e-6 or max accuracy of this lr stage is not better than previous one, all final_retrain done. Exit!"
+               << " Output best caffemodel, iter = " << max_acc_iter_final_retrain << ", acc1 = " << max_acc_final_retrain << endl;
+          // Remove useless snapshots
+          RemoveUselessSnapshot(sstream.str(), snapshot_iters.back());
           exit(0);
         }
         APP<Dtype>::retrain_test_acc1.clear();
@@ -578,12 +612,9 @@ void Solver<Dtype>::Step(int iters) {
          && Caffe::root_solver()) ||
          (request == SolverAction::SNAPSHOT)) {
       Snapshot();
-      // Remove extra saved caffemodels and solverstates to save disk space
+      // Remove useless caffemodels and solverstates to save disk space
       if (snapshot_iters.size() && APP<Dtype>::prune_method != "None") {
-        const string previous_caffemodel_path = param_.snapshot_prefix() + "_iter_" + caffe::format_int(snapshot_iters.back()) + ".caffemodel";
-        const string previous_solverstate_path = param_.snapshot_prefix() + "_iter_" + caffe::format_int(snapshot_iters.back()) + ".solverstate";
-        std::remove(previous_caffemodel_path.c_str());
-        std::remove(previous_solverstate_path.c_str());
+        RemoveUselessSnapshot("", snapshot_iters.back());
       }
       snapshot_iters.push_back(iter_);
     }
@@ -645,6 +676,7 @@ void Solver<Dtype>::SetPruneState(const string& prune_state) {
     }
   } else if (prune_state == "retrain") {
     APP<Dtype>::iter_size = this->param_.iter_size_retrain();
+    APP<Dtype>::decay_lr = true;
   } else if (prune_state == "final_retrain") {
     APP<Dtype>::iter_size = this->param_.iter_size_final_retrain();
     if (param_.iter_size_retrain() == param_.iter_size_final_retrain()) {
@@ -870,6 +902,15 @@ void Solver<Dtype>::PrintFinalPrunedRatio() {
   }
 }
 
+template <typename Dtype>
+void Solver<Dtype>::RemoveUselessSnapshot(const string& prefix, const int& iter) {
+  if (iter >= 0) {
+    const string caffemodel_path = param_.snapshot_prefix() + prefix + "_iter_" + caffe::format_int(iter) + ".caffemodel";
+    const string solverstate_path = param_.snapshot_prefix() + prefix + "_iter_" + caffe::format_int(iter) + ".solverstate";
+    std::remove(caffemodel_path.c_str());
+    std::remove(solverstate_path.c_str());
+  }
+}
 // ----------------------------------------------------------------------------------
 template <typename Dtype>
 void Solver<Dtype>::OfflineTest() {
@@ -998,7 +1039,7 @@ void Solver<Dtype>::Test(const int test_net_id) {
     || APP<Dtype>::prune_state == "final_retrain")) {
     stringstream sstream;
     if (APP<Dtype>::prune_state == "retrain") {
-      sstream << "_stage" << APP<Dtype>::prune_stage << "-" << APP<Dtype>::prune_state;
+      sstream << "_stage" << APP<Dtype>::prune_stage << "retrain";
     } else if (APP<Dtype>::prune_state == "final_retrain") {
       sstream << "_finalretrain";
     }
@@ -1145,7 +1186,7 @@ void Solver<Dtype>::Restore(const char* state_file, const bool& restore_prune_st
   } else {
     RestoreSolverStateFromBinaryProto(state_filename, restore_prune_state);
     if (restore_prune_state) {
-        SetPruneState(APP<Dtype>::prune_state);
+      SetPruneState(APP<Dtype>::prune_state);
     }
   }
 }

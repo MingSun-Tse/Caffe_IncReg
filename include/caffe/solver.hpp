@@ -75,6 +75,7 @@ class Solver {
   void OfflineTest();
   void OfflineTest(int gpu_id, const int& num_iter); // TODO(mingsuntse): to be fixed
   const Dtype IncrePR_2_TRMul(const Dtype& incre_pr);
+  void RemoveUselessSnapshot(const string& prefix, const int& iter);
   
   virtual ~Solver() {}
   inline const SolverParameter& param() const { return param_; }
