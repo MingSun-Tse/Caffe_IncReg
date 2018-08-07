@@ -765,7 +765,7 @@ const Dtype Solver<Dtype>::SetNewCurrentPruneRatio(const bool& IF_roll_back, con
   // Check incre_pr
   APP<Dtype>::last_prune_ratio_incre = incre_pr;
   APP<Dtype>::accumulated_ave_incre_pr += incre_pr;
-  APP<Dtype>::target_reg = max(param_.target_reg() * IncrePR_2_TRMul(incre_pr), (Dtype)5000); // intuitively set minimal target_reg = 5000
+  APP<Dtype>::target_reg = param_.target_reg() * IncrePR_2_TRMul(incre_pr);
   cout << "[app]    incre_pr: " << incre_pr 
        << " (now ave_pr = " << APP<Dtype>::prune_ratio_begin_ave + APP<Dtype>::accumulated_ave_incre_pr
        << ", target_reg = " << APP<Dtype>::target_reg << ")" << endl;
