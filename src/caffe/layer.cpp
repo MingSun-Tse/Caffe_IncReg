@@ -996,7 +996,7 @@ void Layer<Dtype>::PruneForward() {
     }
 
     // Apply masks
-    if (1) {
+    if (APP<Dtype>::prune_method != "None") {
       caffe_gpu_mul(this->blobs_[0]->count(),
                     this->blobs_[0]->gpu_data(),
                     this->masks_[0]->gpu_data(),
