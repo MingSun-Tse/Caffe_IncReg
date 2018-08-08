@@ -1006,6 +1006,7 @@ void SGDSolver<Dtype>::SnapshotSolverStateToBinaryProto(
   state.set_current_step(this->current_step_);
   
   state.set_prune_state(APP<Dtype>::prune_state);
+  state.set_prune_stage(APP<Dtype>::prune_stage);
   state.set_stage_iter_prune_finished(APP<Dtype>::stage_iter_prune_finished);
   state.set_last_feasible_prune_iter(APP<Dtype>::last_feasible_prune_iter);
   
@@ -1090,6 +1091,7 @@ void SGDSolver<Dtype>::RestoreSolverStateFromBinaryProto(
   
   if (restore_prune_state) {
     APP<Dtype>::prune_state = state.prune_state();
+    APP<Dtype>::prune_stage = state.prune_stage();
     APP<Dtype>::stage_iter_prune_finished = state.stage_iter_prune_finished();
     APP<Dtype>::last_feasible_prune_iter = state.last_feasible_prune_iter();
     current_prune_ratio_[0]->FromProto(state.current_prune_ratio(0));

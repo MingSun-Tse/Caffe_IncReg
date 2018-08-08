@@ -290,6 +290,7 @@ void Solver<Dtype>::Step(int iters) {
   }
   
   // This is the begining of training, so snapshot as stage0's output.
+  UpdateSnapshotNaming();
   if (iter_ == 0) {
     Snapshot("_stage0");
     ++ APP<Dtype>::prune_stage;
@@ -697,7 +698,7 @@ void Solver<Dtype>::CheckPruneStage(const bool& IF_acc_far_from_borderline, cons
         APP<Dtype>::last_infeasible_prune_ratio[L] = APP<Dtype>::pruned_ratio_for_comparison[L];
       }
       cout << "[app]    accuracy **bad**, going to roll back weights to iter = " << APP<Dtype>::last_feasible_prune_iter 
-           << " (stage = " << APP<Dtype>::prune_stage - 1 << "). Rea-ssign the incre_pr:" << endl;
+           << " (stage = " << APP<Dtype>::prune_stage - 1 << "). Re-assign the incre_pr:" << endl;
       if (APP<Dtype>::last_feasible_prune_iter == -1) {
         cout << "[app]    The first pruning stage failed, please decrease the initial prune_ratio." << endl;
         exit(1);
