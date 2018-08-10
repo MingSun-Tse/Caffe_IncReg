@@ -686,7 +686,7 @@ void Solver<Dtype>::CheckPruneStage(const Dtype& acc, const int& last_max_acc_it
     SetPruneState("prune");
     // Check if incre_pr is large enough
     if (incre_pr < INCRE_PR_BOTTOMLINE) {
-      cout << "[app]\n[app] Stop: incre_pr is too small, so another pruning stage is meaningless. Go to 'final_retrain'." << endl;
+      cout << "[app]\n[app] Stop: incre_pr is too small (<" << INCRE_PR_BOTTOMLINE << "), so another pruning stage is meaningless. Go to 'final_retrain'." << endl;
       const string resume_file = param_.snapshot_prefix() + lastretrain_prefix_ + "_iter_" + caffe::format_int(APP<Dtype>::last_feasible_prune_iter2) + ".solverstate";
       Restore(resume_file.c_str(), false);
       cout << "[app]    ===== resuming from: " << resume_file << endl;
@@ -840,8 +840,8 @@ void Solver<Dtype>::PrintFinalPrunedRatio() {
     const string shape_str = this->net_->layer_by_name(layer_name)->blobs()[0]->shape_string();
     const int num_row = this->net_->layer_by_name(layer_name)->blobs()[0]->shape()[0];
     const int num_col = this->net_->layer_by_name(layer_name)->blobs()[0]->count(1);
-    const int num_pruned_col = APP<Dtype>::pruned_ratio_col[L];
-    const int num_pruned_row = APP<Dtype>::pruned_ratio_row[L];
+    const int num_pruned_col = APP<Dtype>::num_pruned_col[L];
+    const int num_pruned_row = APP<Dtype>::num_pruned_row[L];
     char logstr[500];
     sprintf(logstr, "[app]    %s, shape = %s | num_col = %d, num_pruned_col = %d (%f) | num_row = %d, num_pruned_row = %d (%f)",
            layer_name.c_str(), shape_str.c_str(), num_col, num_pruned_col, num_pruned_col*1.0/num_col, num_row, num_pruned_row, num_pruned_row*1.0/num_row);
