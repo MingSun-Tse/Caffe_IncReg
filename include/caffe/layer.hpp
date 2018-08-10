@@ -1,6 +1,5 @@
 #ifndef CAFFE_LAYER_H_
 #define CAFFE_LAYER_H_
-
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -10,8 +9,6 @@
 #include "caffe/proto/caffe.pb.h"
 #include "caffe/util/math_functions.hpp"
 #include <limits>
-
-
 
 /**
  Forward declare boost::thread instead of including boost/thread.hpp
@@ -82,25 +79,16 @@ class Layer {
   /// Added by @mingsuntse, for pruning
   // Tool functions
   void RestoreMasks();
-  void RestorePruneProb();
   void IF_layer_prune_finished();
-  bool IF_hppf();
   void UpdateNumPrunedRow();
   void UpdateNumPrunedCol();
   void UpdatePrunedRatio();
   void Print(char mode);
-  void GetAPoZ(const vector<Blob<Dtype>*>& top);
-  // Pruning methods
-  void FilterPrune();
-  void TaylorPrune(const vector<Blob<Dtype>*>& top);
-  void ProbPruneCol(const int& prune_interval);
-  void ProbPruneCol_chl(const int& prune_interval);
-  void ProbPruneRow(const int& prune_interval);
-  void GenerateMasks();
+
   // Main pruning functions
   void PruneSetUp(const PruneParameter& prune_param);
   void PruneForward();
-  void PruneBackward(const vector<Blob<Dtype>*>& top);
+  void PruneBackward();
 
   int num_pruned_col;
   int num_pruned_row;
@@ -109,7 +97,6 @@ class Layer {
   Dtype pruned_ratio;
   bool IF_restore;
   bool IF_prune;
-  bool IF_masks_updated;
   vector<bool> IF_col_pruned;
   vector<bool> IF_row_pruned;
   
@@ -345,10 +332,6 @@ class Layer {
     return true;
   }
 
-
-
-
-
   /**
    * @brief Specifies whether the layer should compute gradients w.r.t. a
    *        parameter at a particular index given by param_id.
@@ -380,7 +363,6 @@ class Layer {
   vector<shared_ptr<Blob<Dtype> > > blobs_;
   /// @mingsuntse, for pruning
   vector<shared_ptr<Blob<Dtype> > > masks_;
-  vector<shared_ptr<Blob<Dtype> > > blobs_backup_;
   vector<shared_ptr<Blob<Dtype> > > history_score_;
   vector<shared_ptr<Blob<Dtype> > > history_punish_;
   

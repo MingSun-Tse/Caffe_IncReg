@@ -171,10 +171,7 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       if (APP<Dtype>::prune_method != "None") {
         this->masks_.resize(2);
       }
-      if (APP<Dtype>::prune_method.substr(0, 2) == "PP") {
-        this->blobs_backup_.resize(2);
-      }
-      if (APP<Dtype>::prune_method.substr(0, 2) == "PP" || APP<Dtype>::prune_method.substr(0, 3) == "Reg") {
+      if (APP<Dtype>::prune_method.substr(0, 3) == "Reg") {
         this->history_score_.resize(2);
         this->history_punish_.resize(2);
       }
@@ -183,10 +180,7 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       if (APP<Dtype>::prune_method != "None") {
         this->masks_.resize(1);
       }
-      if (APP<Dtype>::prune_method.substr(0, 2) == "PP") {
-        this->blobs_backup_.resize(1);
-      }
-      if (APP<Dtype>::prune_method.substr(0, 2) == "PP" || APP<Dtype>::prune_method.substr(0, 3) == "Reg") {
+      if (APP<Dtype>::prune_method.substr(0, 3) == "Reg") {
         this->history_score_.resize(1);
         this->history_punish_.resize(1);
       }
@@ -197,10 +191,7 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     if (APP<Dtype>::prune_method != "None") {
       this->masks_[0].reset(new Blob<Dtype>(weight_shape));
     }
-    if (APP<Dtype>::prune_method.substr(0, 2) == "PP") {
-      this->blobs_backup_[0].reset(new Blob<Dtype>(weight_shape));
-    }
-    if (APP<Dtype>::prune_method.substr(0, 2) == "PP" || APP<Dtype>::prune_method.substr(0, 3) == "Reg") {
+    if (APP<Dtype>::prune_method.substr(0, 3) == "Reg") {
       this->history_score_[0].reset(new Blob<Dtype>(weight_shape));
       this->history_punish_[0].reset(new Blob<Dtype>(weight_shape));
     }
@@ -214,10 +205,7 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       if (APP<Dtype>::prune_method != "None") {
         this->masks_[1].reset(new Blob<Dtype>(weight_shape));
       }
-      if (APP<Dtype>::prune_method.substr(0, 2) == "PP") {
-        this->blobs_backup_[1].reset(new Blob<Dtype>(weight_shape));
-      }
-      if (APP<Dtype>::prune_method.substr(0, 2) == "PP" || APP<Dtype>::prune_method.substr(0, 3) == "Reg") {
+      if (APP<Dtype>::prune_method.substr(0, 3) == "Reg") {
         this->history_score_[1].reset(new Blob<Dtype>(weight_shape));
         this->history_punish_[1].reset(new Blob<Dtype>(weight_shape));
       }
@@ -230,7 +218,7 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     if (APP<Dtype>::prune_method != "None") {
       caffe_gpu_set(this->masks_[0]->count(), Dtype(1), this->masks_[0]->mutable_gpu_data());
     }
-    if (APP<Dtype>::prune_method.substr(0, 2) == "PP" || APP<Dtype>::prune_method.substr(0, 3) == "Reg") {
+    if (APP<Dtype>::prune_method.substr(0, 3) == "Reg") {
       caffe_gpu_set(this->history_score_[0]->count(),  Dtype(0), this->history_score_[0]->mutable_gpu_data());
       caffe_gpu_set(this->history_punish_[0]->count(), Dtype(0), this->history_punish_[0]->mutable_gpu_data());
     }
@@ -238,7 +226,7 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       if (APP<Dtype>::prune_method != "None") {
         caffe_gpu_set(this->masks_[1]->count(), Dtype(1), this->masks_[1]->mutable_gpu_data());
       }
-      if (APP<Dtype>::prune_method.substr(0, 2) == "PP" || APP<Dtype>::prune_method.substr(0, 3) == "Reg") {
+      if (APP<Dtype>::prune_method.substr(0, 3) == "Reg") {
         caffe_gpu_set(this->history_score_[1]->count(),  Dtype(0), this->history_score_[1]->mutable_gpu_data());
         caffe_gpu_set(this->history_punish_[1]->count(), Dtype(0), this->history_punish_[1]->mutable_gpu_data());
       }
@@ -251,7 +239,6 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   
   /// @mingsuntse: for pruning
   APP<Dtype>::group.push_back(this->group_);
-  APP<Dtype>::num_ = this->num_;
   this->PruneSetUp(this->layer_param_.prune_param());
 }
 

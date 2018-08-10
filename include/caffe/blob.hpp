@@ -259,16 +259,6 @@ class Blob {
   Dtype* mutable_cpu_diff();
   Dtype* mutable_gpu_diff();
   
-  /// Added by @mingsuntse
-  const Dtype* cpu_secdata() const;
-  const Dtype* gpu_secdata() const;
-  const Dtype* cpu_secdiff() const;
-  const Dtype* gpu_secdiff() const;
-  Dtype* mutable_cpu_secdata();
-  Dtype* mutable_gpu_secdata();
-  Dtype* mutable_cpu_secdiff();
-  Dtype* mutable_gpu_secdiff();
-  
   void Update();
   void FromProto(const BlobProto& proto, bool reshape = true);
   void ToProto(BlobProto* proto, bool write_diff = false) const;
@@ -312,8 +302,6 @@ class Blob {
  protected:
   shared_ptr<SyncedMemory> data_;
   shared_ptr<SyncedMemory> diff_;
-  shared_ptr<SyncedMemory> secdata_; /// Added by @mingsuntse
-  shared_ptr<SyncedMemory> secdiff_; /// Added by @mingsuntse
   
   shared_ptr<SyncedMemory> shape_data_;
   vector<int> shape_;

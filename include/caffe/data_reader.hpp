@@ -11,7 +11,7 @@
 #include "caffe/util/db.hpp"
 
 namespace caffe {
-static bool data_is_video_flag;
+
 /**
  * @brief Reads data from a source to queues available to data layers.
  * A single reading thread is created per source, even if multiple solvers
@@ -20,11 +20,9 @@ static bool data_is_video_flag;
  * subset of the database. Data is distributed to solvers in a round-robin
  * way to keep parallel training deterministic.
  */
- 
 class DataReader {
  public:
   explicit DataReader(const LayerParameter& param);
-  explicit DataReader(const LayerParameter& param, bool is_video);
   ~DataReader();
 
   inline BlockingQueue<Datum*>& free() const {
@@ -34,7 +32,6 @@ class DataReader {
     return queue_pair_->full_;
   }
 
-  
  protected:
   // Queue pairs are shared between a body and its readers
   class QueuePair {
@@ -60,7 +57,7 @@ class DataReader {
 
     const LayerParameter param_;
     BlockingQueue<shared_ptr<QueuePair> > new_queue_pairs_;
-	
+
     friend class DataReader;
 
   DISABLE_COPY_AND_ASSIGN(Body);
@@ -74,7 +71,6 @@ class DataReader {
 
   const shared_ptr<QueuePair> queue_pair_;
   shared_ptr<Body> body_;
-  
 
   static map<const string, boost::weak_ptr<DataReader::Body> > bodies_;
 

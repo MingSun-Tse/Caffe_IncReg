@@ -41,8 +41,6 @@ void Blob<Dtype>::Reshape(const vector<int>& shape) {
     capacity_ = count_;
     data_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
     diff_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
-    // secdata_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
-    // secdiff_.reset(new SyncedMemory(capacity_ * sizeof(Dtype))); /// @mingsuntse
   }
 }
 
@@ -135,61 +133,6 @@ Dtype* Blob<Dtype>::mutable_gpu_diff() {
   CHECK(diff_);
   return static_cast<Dtype*>(diff_->mutable_gpu_data());
 }
-
-
-/// ------------------------------------------------------
-/// Added by @mingsuntse to obtain second derivatives, more details in paper 'OBD 1990 LeCun'.
-// data
-template <typename Dtype>
-const Dtype* Blob<Dtype>::cpu_secdata() const {
-  CHECK(secdata_);
-  return (const Dtype*)(secdata_->cpu_data());
-}
-
-template <typename Dtype>
-const Dtype* Blob<Dtype>::gpu_secdata() const {
-  CHECK(secdata_);
-  return (const Dtype*)(secdata_->gpu_data());
-}
-
-template <typename Dtype>
-Dtype* Blob<Dtype>::mutable_cpu_secdata() {
-  CHECK(secdata_);
-  return static_cast<Dtype*>(secdata_->mutable_cpu_data());
-}
-
-template <typename Dtype>
-Dtype* Blob<Dtype>::mutable_gpu_secdata() {
-  CHECK(secdata_);
-  return static_cast<Dtype*>(secdata_->mutable_gpu_data());
-}
-
-// diff
-template <typename Dtype>
-const Dtype* Blob<Dtype>::cpu_secdiff() const {
-  CHECK(secdiff_);
-  return (const Dtype*)(secdiff_->cpu_data());
-}
-
-template <typename Dtype>
-const Dtype* Blob<Dtype>::gpu_secdiff() const {
-  CHECK(secdiff_);
-  return (const Dtype*)(secdiff_->gpu_data());
-}
-
-template <typename Dtype>
-Dtype* Blob<Dtype>::mutable_cpu_secdiff() {
-  CHECK(secdiff_);
-  return static_cast<Dtype*>(secdiff_->mutable_cpu_data());
-}
-
-template <typename Dtype>
-Dtype* Blob<Dtype>::mutable_gpu_secdiff() {
-  CHECK(secdiff_);
-  return static_cast<Dtype*>(secdiff_->mutable_gpu_data());
-}
-/// ------------------------------------------------------
-
 
 template <typename Dtype>
 void Blob<Dtype>::ShareData(const Blob& other) {

@@ -81,24 +81,18 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
       strcpy(coremthd, APP<Dtype>::prune_coremthd.c_str());
       APP<Dtype>::prune_coremthd_ = strtok(coremthd, "-");
   }
-  APP<Dtype>::ratio_once_prune = 0; // param_.ratio_once_prune();
   APP<Dtype>::prune_interval = 1; // param_.prune_interval();
-  APP<Dtype>::clear_history_interval = 1;
   APP<Dtype>::prune_begin_iter = -1;
   APP<Dtype>::AA = param_.aa();
   APP<Dtype>::target_reg = min(param_.target_reg() * IncrePR_2_TRMul(APP<Dtype>::prune_ratio_begin_ave), (Dtype)10);
-  APP<Dtype>::kk  = 0.25; //param_.kk(); 
-  APP<Dtype>::kk2 = 0.1;
+  APP<Dtype>::kk  = 0.25;
   APP<Dtype>::speedup = param_.speedup();
   APP<Dtype>::compRatio = param_.compratio();
   APP<Dtype>::IF_update_row_col = param.if_update_row_col();
   APP<Dtype>::IF_speedup_count_fc = param.if_speedup_count_fc();
   APP<Dtype>::IF_compr_count_conv = param.if_compr_count_conv();
   APP<Dtype>::IF_scheme1_when_Reg_rank = param.if_scheme1_when_reg_rank();
-  APP<Dtype>::IF_eswpf = param_.if_eswpf(); /// if early stop when prune finished
-  APP<Dtype>::prune_threshold = 0; // param_.prune_threshold();
-  // APP<Dtype>::mask_generate_mechanism = param_.mask_generate_mechanism();
-  // APP<Dtype>::score_decay = param_.score_decay();
+  APP<Dtype>::IF_eswpf = param_.if_eswpf(); // if early stop when prune finished
   
   APP<Dtype>::iter_size = (APP<Dtype>::prune_method == "None") ? 1 : param_.iter_size_prune();
   APP<Dtype>::baseline_acc = param_.baseline_acc();
@@ -106,10 +100,6 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   CHECK_GE(param_.baseline_acc(), param_.acc_borderline()); // if acc_borderline > baseline_acc, it probably will cause bugs later.
   APP<Dtype>::retrain_test_interval = param_.retrain_test_interval();
   APP<Dtype>::losseval_interval = param_.losseval_interval();
-  
-  
-  const Dtype index[] = {8, 7, 6, 5, 4, 3, 2}; // When speedup or compRatio = 8~2, snapshot.
-  APP<Dtype>::when_snapshot.insert(APP<Dtype>::when_snapshot.begin(), index, index + sizeof(index)/sizeof(index[0]));
   // ------------------------------------------
 
   CHECK_GE(param_.average_loss(), 1) << "average_loss should be non-negative.";

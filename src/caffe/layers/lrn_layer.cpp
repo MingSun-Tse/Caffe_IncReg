@@ -155,19 +155,10 @@ template <typename Dtype>
 void LRNLayer<Dtype>::WithinChannelForward(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
   split_layer_->Forward(bottom, split_top_vec_);
-  // std::cout << "LRN withinchannel 01" << std::endl;
-  
   square_layer_->Forward(square_bottom_vec_, square_top_vec_);
-  // std::cout << "LRN withinchannel 02" << std::endl;
-  
   pool_layer_->Forward(square_top_vec_, pool_top_vec_);
-  // std::cout << "LRN withinchannel 03" << std::endl;
-  
   power_layer_->Forward(pool_top_vec_, power_top_vec_);
-  // std::cout << "LRN withinchannel 04" << std::endl;
-  
   product_layer_->Forward(product_bottom_vec_, top);
-  // std::cout << "LRN withinchannel 05" << std::endl;
 }
 
 template <typename Dtype>

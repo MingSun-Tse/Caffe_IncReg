@@ -246,19 +246,17 @@ message SolverParameter {
   // -----------------------------------------
   /// @mingsuntse: hyper-parameters of APP (max index = 73, iter_size_final_retrain)
   optional string prune_method = 41 [default = "None"];
-  // optional float ratio_once_prune = 52 [default = 0]; // how many columns/rows to prune per time
   // optional int32 prune_interval = 53 [default = 1]; // how often to prune
   
   optional float AA = 55 [default = 0]; // unit punishment
   optional float target_reg = 61 [default = 0]; // ceiling punishment
   optional float speedup = 56 [default = 0];
   optional float compRatio = 62 [default = 0];
-  // optional float prune_threshold = 60 [default = 0];
  
   optional float acc_borderline = 66;
   optional float baseline_acc = 67;
-  optional int32 retrain_test_interval = 68 [default = 100];
-  optional int32 losseval_interval = 69 [default = 100];
+  optional int32 retrain_test_interval = 68 [default = 0];
+  optional int32 losseval_interval = 69 [default = 0];
   
   optional bool IF_update_row_col = 57 [default = true];
   optional bool IF_eswpf = 59 [default = true];
@@ -270,24 +268,14 @@ message SolverParameter {
   optional int32 iter_size_losseval = 71 [default = 1];
   optional int32 iter_size_retrain = 72 [default = 1];
   optional int32 iter_size_final_retrain = 73 [default = 1];
- 
-  // decrease weight decay
-  // optional string dwd_mode = 44 [default = "None"];
-  // optional int32 dwd_begin_iter = 45;
-  // optional int32 dwd_end_iter = 46;
-  // optional float wd_end = 47; 
-  // optional int32 dwd_step = 54;
   // -----------------------------------------
 }
 
 /// @mingsuntse
 message PruneParameter{
   optional float prune_ratio = 1 [default = 0];
-  optional float prune_ratio_begin = 2 [default = 0.2];
-  optional float delta = 3 [default = 0];
-  optional int32 priority = 4 [default = 0];
-  optional bool IF_update_row_col = 5 [default = true];
-  optional float prune_ratio_step = 6 [default = 0.1];
+  optional bool IF_update_row_col = 2 [default = true];
+  optional float prune_ratio_step = 3 [default = 0];
 }
  
 // Center Face Loss

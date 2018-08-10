@@ -111,7 +111,7 @@ void CuDNNConvolutionLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     // NOLINT_NEXT_LINE(whitespace/operators)
     sync_conv_groups<<<1, 1>>>();
   }
-  this->PruneBackward(top);
+  this->PruneBackward();
 }
 
 INSTANTIATE_LAYER_GPU_FUNCS(CuDNNConvolutionLayer);

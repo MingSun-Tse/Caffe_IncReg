@@ -121,10 +121,10 @@ void LRNLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
 template <typename Dtype>
 __global__ void LRNComputeDiff(const int nthreads,
     const Dtype* const bottom_data, const Dtype* const top_data,
-    const Dtype* const scale, const Dtype* const top_diff, const Dtype* const top_secdiff, 
+    const Dtype* const scale, const Dtype* const top_diff,
     const int num, const int channels, const int height,
     const int width, const int size, const Dtype negative_beta,
-    const Dtype cache_ratio, Dtype* const bottom_diff, Dtype* const bottom_secdiff) {
+    const Dtype cache_ratio, Dtype* const bottom_diff) {
   CUDA_KERNEL_LOOP(index, nthreads) {
     // find out the local offset
     const int w = index % width;
@@ -135,55 +135,42 @@ __global__ void LRNComputeDiff(const int nthreads,
     const Dtype* const bottom_off = bottom_data + offset;
     const Dtype* const top_off = top_data + offset;
     const Dtype* const scale_off = scale + offset;
-    const Dtype* const top_diff_off    = top_diff + offset;
-    // const Dtype* const top_secdiff_off = top_secdiff + offset;
-    Dtype* const bottom_diff_off    = bottom_diff + offset;
-    // Dtype* const bottom_secdiff_off = bottom_secdiff + offset;
+    const Dtype* const top_diff_off = top_diff + offset;
+    Dtype* const bottom_diff_off = bottom_diff + offset;
     int head = 0;
     const int pre_pad = size - (size + 1) / 2;
     const int post_pad = size - pre_pad - 1;
     Dtype accum_ratio = 0;
-    // Dtype accum_secratio = 0;
     // accumulate values
     while (head < post_pad && head < channels) {
-      accum_ratio    += top_diff_off[head * step]    * top_off[head * step] / scale_off[head * step];
-      // accum_secratio += top_secdiff_off[head * step] * top_off[head * step] / scale_off[head * step]; // TODO(mingsuntse): check this derivation, maybe wrong
+      accum_ratio += top_diff_off[head * step] * top_off[head * step] /
+          scale_off[head * step];
       ++head;
     }
     // both add and subtract
     while (head < channels) {
-      accum_ratio    += top_diff_off[head * step]    * top_off[head * step] / scale_off[head * step];
-      // accum_secratio += top_secdiff_off[head * step] * top_off[head * step] / scale_off[head * step];
+      accum_ratio += top_diff_off[head * step] * top_off[head * step] /
+          scale_off[head * step];
       if (head - size >= 0) {
-        accum_ratio    -= top_diff_off[(head - size) * step]    * top_off[(head - size) * step] / scale_off[(head - size) * step];
-        // accum_secratio -= top_secdiff_off[(head - size) * step] * top_off[(head - size) * step] / scale_off[(head - size) * step];
+        accum_ratio -= top_diff_off[(head - size) * step] *
+            top_off[(head - size) * step] / scale_off[(head - size) * step];
       }
       bottom_diff_off[(head - post_pad) * step] =
           top_diff_off[(head - post_pad) * step]
             * pow(scale_off[(head - post_pad) * step], negative_beta)
           - cache_ratio * bottom_off[(head - post_pad) * step] * accum_ratio;
-      /*bottom_secdiff_off[(head - post_pad) * step] =
-          top_secdiff_off[(head - post_pad) * step]
-            * pow(scale_off[(head - post_pad) * step], negative_beta)
-          - cache_ratio * bottom_off[(head - post_pad) * step] * accum_secratio;*/
-      
       ++head;
     }
     // subtract only
     while (head < channels + post_pad) {
       if (head - size >= 0) {
-        accum_ratio    -= top_diff_off[(head - size) * step]    * top_off[(head - size) * step] / scale_off[(head - size) * step];
-        // accum_secratio -= top_secdiff_off[(head - size) * step] * top_off[(head - size) * step] / scale_off[(head - size) * step];
+        accum_ratio -= top_diff_off[(head - size) * step] *
+            top_off[(head - size) * step] / scale_off[(head - size) * step];
       }
       bottom_diff_off[(head - post_pad) * step] =
           top_diff_off[(head - post_pad) * step]
             * pow(scale_off[(head - post_pad) * step], negative_beta)
           - cache_ratio * bottom_off[(head - post_pad) * step] * accum_ratio;
-      /*bottom_secdiff_off[(head - post_pad) * step] =
-          top_secdiff_off[(head - post_pad) * step]
-            * pow(scale_off[(head - post_pad) * step], negative_beta)
-          - cache_ratio * bottom_off[(head - post_pad) * step] * accum_ratio;*/
-          
       ++head;
     }
   }
@@ -197,9 +184,9 @@ void LRNLayer<Dtype>::CrossChannelBackward_gpu(
   // NOLINT_NEXT_LINE(whitespace/operators)
   LRNComputeDiff<<<CAFFE_GET_BLOCKS(n_threads), CAFFE_CUDA_NUM_THREADS>>>(
       n_threads, bottom[0]->gpu_data(), top[0]->gpu_data(),
-      scale_.gpu_data(), top[0]->gpu_diff(), /*top[0]->gpu_secdiff()*/top[0]->gpu_diff(),  num_, channels_, height_, width_,
+      scale_.gpu_data(), top[0]->gpu_diff(), num_, channels_, height_, width_,
       size_, -beta_, Dtype(2. * alpha_ * beta_ / size_),
-      bottom[0]->mutable_gpu_diff(), /*bottom[0]->mutable_gpu_secdiff()*/bottom[0]->mutable_gpu_diff());
+      bottom[0]->mutable_gpu_diff());
 }
 template void LRNLayer<float>::CrossChannelBackward_gpu(
     const vector<Blob<float>*>& top, const vector<bool>& propagate_down,
