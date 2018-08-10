@@ -1,11 +1,9 @@
 #ifndef ADAPTIVE_PROBABILISTIC_PRUNING_HPP_
 #define ADAPTIVE_PROBABILISTIC_PRUNING_HPP_
-
 #include <string>
 #include <vector>
 #include <map>
 #include <climits>
-// #define ShowTimingLog 1
 
 namespace caffe {
 using namespace std;

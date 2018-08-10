@@ -437,11 +437,11 @@ void Layer<Dtype>::PruneForward() {
                    && APP<Dtype>::pruned_rows[L-1].size()) {
           this->UpdateNumPrunedCol();
         }
-        this->UpdatePrunedRatio();
-        this->IF_layer_prune_finished();
       }
     }
-
+    this->UpdatePrunedRatio();
+    this->IF_layer_prune_finished();
+    
     // Print and check, before update probs
     // put this outside, to print even when we do not prune
     if (APP<Dtype>::show_layer.size() >= L+1 && APP<Dtype>::show_layer[L] == '1'

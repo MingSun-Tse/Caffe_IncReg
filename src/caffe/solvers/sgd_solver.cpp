@@ -300,7 +300,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             const Dtype alpha21 = (num_col_to_prune_ == 1)          ? 0 : log(1/kk2) / (num_col_to_prune_-1);
             const Dtype alpha22 = (num_col_to_prune_ == num_col_-1) ? 0 : log(1/kk2) / (num_col_-1 - num_col_to_prune_);
             
-            APP<Dtype>::IF_scheme1_when_Reg_rank = true; // scheme 2 is the default. 
+            APP<Dtype>::IF_scheme1_when_Reg_rank = false; // scheme 2 is the default.
             for (int j = 0; j < num_col_; ++j) { // j: rank
               const int col_of_rank_j = col_hrank[j + num_pruned_col].second; // Note the real rank is j + num_pruned_col
               const Dtype Delta = APP<Dtype>::IF_scheme1_when_Reg_rank
