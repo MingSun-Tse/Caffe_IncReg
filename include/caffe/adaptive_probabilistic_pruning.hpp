@@ -32,7 +32,6 @@ public:
     static Dtype learning_rate;
     static Dtype score_decay;
     static Dtype AA;
-    static Dtype base_prune_ratio_step;
     static vector<Dtype> prune_ratio_step;
     static Dtype kk;
     static Dtype kk2;
@@ -53,21 +52,21 @@ public:
     static Dtype         last_prune_ratio_incre;
     static Dtype         accumulated_ave_incre_pr;
     static Dtype         prune_ratio_begin_ave;
-    static int           last_feasible_prune_iter;
+    static int           last_feasible_prune_iter; // iter for first lr period
+    static int           last_feasible_prune_iter2; // iter for last lr period
     static vector<Dtype> last_infeasible_prune_ratio;
     static Dtype         last_feasible_acc;
+    static Dtype         last_feasible_acc2;
     static string model_prototxt;
     static int original_gpu_id;
     static int test_gpu_id;
-    static Dtype accu_borderline;
-    static Dtype loss_borderline;
+    static Dtype acc_borderline;
     static vector<Dtype> retrain_test_acc1;
     static vector<Dtype> retrain_test_acc5;
     static string prune_state;
     static int prune_stage;
     static Dtype STANDARD_SPARSITY;
-    static Dtype STANDARD_INCRE_PR;
-    static bool decay_lr;
+    static Dtype baseline_acc;
     
     static int inner_iter;
     static int step_;
@@ -135,7 +134,6 @@ public:
     template<typename Dtype>  Dtype   APP<Dtype>::learning_rate = 0;
     template<typename Dtype>  Dtype   APP<Dtype>::score_decay = 0;
     template<typename Dtype>  Dtype   APP<Dtype>::AA;
-    template<typename Dtype>  Dtype   APP<Dtype>::base_prune_ratio_step = 0.02;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::prune_ratio_step;
     template<typename Dtype>  Dtype   APP<Dtype>::kk;
     template<typename Dtype>  Dtype   APP<Dtype>::kk2;
@@ -156,21 +154,21 @@ public:
     template<typename Dtype>  Dtype         APP<Dtype>::last_prune_ratio_incre = 0;
     template<typename Dtype>  Dtype         APP<Dtype>::accumulated_ave_incre_pr = 0;
     template<typename Dtype>  Dtype         APP<Dtype>::prune_ratio_begin_ave = 0.2; // the average sparsity for the first pruning stage
-    template<typename Dtype>  int           APP<Dtype>::last_feasible_prune_iter = -1;
+    template<typename Dtype>  int           APP<Dtype>::last_feasible_prune_iter = 0;
+    template<typename Dtype>  int           APP<Dtype>::last_feasible_prune_iter2= 0;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::last_infeasible_prune_ratio;
-    template<typename Dtype>  Dtype         APP<Dtype>::last_feasible_acc = 0;
+    template<typename Dtype>  Dtype         APP<Dtype>::last_feasible_acc;
+    template<typename Dtype>  Dtype         APP<Dtype>::last_feasible_acc2;
     template<typename Dtype>  string APP<Dtype>::model_prototxt;
     template<typename Dtype>  int APP<Dtype>::original_gpu_id;
     template<typename Dtype>  int APP<Dtype>::test_gpu_id = -1;
-    template<typename Dtype>  Dtype APP<Dtype>::accu_borderline;
-    template<typename Dtype>  Dtype APP<Dtype>::loss_borderline;
+    template<typename Dtype>  Dtype APP<Dtype>::acc_borderline;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::retrain_test_acc1;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::retrain_test_acc5;
     template<typename Dtype>  string APP<Dtype>::prune_state = "prune";
     template<typename Dtype>  int    APP<Dtype>::prune_stage = 0;
     template<typename Dtype>  Dtype APP<Dtype>::STANDARD_SPARSITY = 0.5; // If this changes, the prune_ratio_step should change accordingly.
-    template<typename Dtype>  Dtype APP<Dtype>::STANDARD_INCRE_PR = 0.05;
-    template<typename Dtype>  bool APP<Dtype>::decay_lr = false;
+    template<typename Dtype>  Dtype APP<Dtype>::baseline_acc;
 
     // 1.2 Info shared between solver and layer, initailized here
     template<typename Dtype>  int   APP<Dtype>::inner_iter = 0;
@@ -220,8 +218,8 @@ public:
     template<typename Dtype>  bool    APP<Dtype>::simulate_5d = false;
     template<typename Dtype>  int     APP<Dtype>::h_off = 0; // used in data transformation
     template<typename Dtype>  int     APP<Dtype>::w_off = 0;
-    template<typename Dtype>  int APP<Dtype>::show_interval = 1; // the interval to print pruning progress log
-    template<typename Dtype>  string APP<Dtype>::show_layer = "1111"; // '1' means to print the weights of the layer with the index
+    template<typename Dtype>  int APP<Dtype>::show_interval = 10; // the interval to print pruning progress log
+    template<typename Dtype>  string APP<Dtype>::show_layer = "101"; // '1' means to print the weights of the layer with the index
     template<typename Dtype>  int APP<Dtype>::show_num_layer = 100; // work with show_interval, how many layers get printed
     template<typename Dtype>  int APP<Dtype>::show_num_weight = 20; // work with show_layer, how many weights get printed
     template<typename Dtype>  vector<Dtype> APP<Dtype>::when_snapshot;

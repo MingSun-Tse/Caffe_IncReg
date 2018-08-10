@@ -69,11 +69,10 @@ class Solver {
   void Snapshot(const string& prefix = "");
   void PrintFinalPrunedRatio();
   void GetPruneProgress(Dtype* speedup, Dtype* compRatio, Dtype* GFLOPs_origin_, Dtype* num_param_origin_);
-  void CheckPruneStage(const bool& IF_acc_far_from_borderline, const Dtype& true_val_acc = -1);
+  void CheckPruneStage(const Dtype& acc, const int& last_max_acc_iter, const Dtype& last_max_acc);
   const Dtype SetNewCurrentPruneRatio(const bool& IF_roll_back, const Dtype& val_acc);
   void SetPruneState(const string& prune_state);
   void OfflineTest();
-  void OfflineTest(int gpu_id, const int& num_iter); // TODO(mingsuntse): to be fixed
   const Dtype IncrePR_2_TRMul(const Dtype& incre_pr);
   void RemoveUselessSnapshot(const string& prefix, const int& iter);
   void UpdateSnapshotNaming();
@@ -138,20 +137,22 @@ class Solver {
   string stage_prefix_;
   string laststage_prefix_;
   string retrain_prefix_;
+  string lastretrain_prefix_;
   string finalretrain_prefix_;
   
   // used to find the max accuracy in retraining
-  int iter_first_retrain_finished_;
-  int iter_retrain_finished_;
+  int first_retrain_finished_iter_;
   Dtype current_max_acc_;
   int current_max_acc_iter_;
   int current_max_acc_index_;
   Dtype max_acc_;
   int max_acc_iter_;
-  Dtype lr_before_retrain_;
+  Dtype lr_state_start_;
+  int state_begin_iter_;
+  Dtype last_retrain_lr_;
   int cnt_decay_lr_;
   vector<Dtype> retrain_accs_;
-  vector<Dtype> retrain_iters_;
+  vector<Dtype> saved_retrain_iters_;
   vector<Dtype> snapshot_iters_;
   
   // The root solver that holds root nets (actually containing shared layers)

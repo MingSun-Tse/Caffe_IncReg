@@ -255,8 +255,8 @@ message SolverParameter {
   optional float compRatio = 62 [default = 0];
   // optional float prune_threshold = 60 [default = 0];
  
-  optional float accu_borderline = 66;
-  optional float loss_borderline = 67;
+  optional float acc_borderline = 66;
+  optional float baseline_acc = 67;
   optional int32 retrain_test_interval = 68 [default = 100];
   optional int32 losseval_interval = 69 [default = 100];
   
