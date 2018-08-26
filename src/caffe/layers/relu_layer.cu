@@ -58,17 +58,17 @@ void ReLULayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
   if (propagate_down[0]) {
     const Dtype* bottom_data = bottom[0]->gpu_data();
     const Dtype* top_diff    = top[0]->gpu_diff();
-    // const Dtype* top_secdiff = top[0]->gpu_secdiff();
+    const Dtype* top_secdiff = top[0]->gpu_secdiff();
     Dtype* bottom_diff    = bottom[0]->mutable_gpu_diff();
-    // Dtype* bottom_secdiff = bottom[0]->mutable_gpu_secdiff();
+    Dtype* bottom_secdiff = bottom[0]->mutable_gpu_secdiff();
     
     const int count = bottom[0]->count();
     Dtype negative_slope = this->layer_param_.relu_param().negative_slope();
     // NOLINT_NEXT_LINE(whitespace/operators)
     ReLUBackward<Dtype><<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
         count, top_diff, bottom_data, bottom_diff, negative_slope);
-    // ReLUBackward_sec<Dtype><<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
-        // count, top_secdiff, bottom_data, bottom_secdiff, negative_slope); /// @mingsuntse
+    ReLUBackward_sec<Dtype><<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
+        count, top_secdiff, bottom_data, bottom_secdiff, negative_slope); /// @mingsuntse
                   
     CUDA_POST_KERNEL_CHECK;
   }

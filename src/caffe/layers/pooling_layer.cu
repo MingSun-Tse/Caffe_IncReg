@@ -350,9 +350,9 @@ void PoolingLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     return;
   }
   const Dtype* top_diff    = top[0]->gpu_diff();
-  const Dtype* top_secdiff = top[0]->gpu_diff(); //secdiff();
+  const Dtype* top_secdiff = top[0]->gpu_secdiff();
   Dtype* bottom_diff    = bottom[0]->mutable_gpu_diff();
-  Dtype* bottom_secdiff = bottom[0]->mutable_gpu_diff(); //secdiff(); /// @mingsuntse
+  Dtype* bottom_secdiff = bottom[0]->mutable_gpu_secdiff(); /// @mingsuntse
   const int count = bottom[0]->count();
   caffe_gpu_set(count, Dtype(0.), bottom_diff);
   // We'll output the mask to top[1] if it's of size >1.

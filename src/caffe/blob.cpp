@@ -41,8 +41,8 @@ void Blob<Dtype>::Reshape(const vector<int>& shape) {
     capacity_ = count_;
     data_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
     diff_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
-    // secdata_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
-    // secdiff_.reset(new SyncedMemory(capacity_ * sizeof(Dtype))); /// @mingsuntse
+    secdata_.reset(new SyncedMemory(capacity_ * sizeof(Dtype)));
+    secdiff_.reset(new SyncedMemory(capacity_ * sizeof(Dtype))); /// @mingsuntse
   }
 }
 

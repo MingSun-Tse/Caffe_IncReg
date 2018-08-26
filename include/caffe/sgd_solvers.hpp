@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <complex>
 
 #include "caffe/solver.hpp"
 
@@ -22,8 +23,6 @@ class SGDSolver : public Solver<Dtype> {
   virtual inline const char* type() const { return "SGD"; }
 
   const vector<shared_ptr<Blob<Dtype> > >& history() { return history_; }
-  void ClearHistory(const int& param_id);
-  const int GetLayerIndex(const int& param_id);
 
  protected:
   void PreSolve();
@@ -38,6 +37,9 @@ class SGDSolver : public Solver<Dtype> {
   virtual void SnapshotSolverStateToHDF5(const string& model_filename);
   virtual void RestoreSolverStateFromHDF5(const string& state_file);
   virtual void RestoreSolverStateFromBinaryProto(const string& state_file);
+  const Dtype Solve3OrderEquation(Dtype p, Dtype q, const Dtype D); /// @mingsuntse, for pruning
+  void ClearHistory(const int& param_id);
+  const int GetLayerIndex(const int& param_id);
   // history maintains the historical momentum data.
   // update maintains update related data and is not needed in snapshots.
   // temp maintains other information that might be needed in computation

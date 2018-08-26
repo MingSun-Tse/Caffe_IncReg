@@ -275,7 +275,7 @@ void Layer<Dtype>::Print(char mode) {
     string info = "";
     if (APP<Dtype>::prune_coremthd.substr(0, 2) == "PP") {
       info = "HistoryProb";
-    } else if (APP<Dtype>::prune_coremthd.substr(0, 2) == "Reg") {
+    } else if (APP<Dtype>::prune_coremthd.substr(0, 3) == "Reg") {
       info = "HistoryReg";
     } else {
       info = "WeightBeforeMasked";
@@ -1021,7 +1021,7 @@ void Layer<Dtype>::PruneForward() {
         }
         
         // Apply masks
-        if (this->IF_masks_updated) {
+        if (1) {
             caffe_gpu_mul(this->blobs_[0]->count(), 
                           this->blobs_[0]->gpu_data(),
                           this->masks_[0]->gpu_data(),
@@ -1061,11 +1061,11 @@ void Layer<Dtype>::PruneBackward(const vector<Blob<Dtype>*>& top) {
        this->Print('b');
     }
     
-    if (APP<Dtype>::pruned_ratio[L] > 0) { 
-        caffe_gpu_mul(this->blobs_[0]->count(), 
-                      this->blobs_[0]->gpu_diff(), 
-                      this->masks_[0]->gpu_data(), 
-                      this->blobs_[0]->mutable_gpu_diff());
+    if (APP<Dtype>::pruned_ratio[L] > 0) {
+      caffe_gpu_mul(this->blobs_[0]->count(), 
+                    this->blobs_[0]->gpu_diff(), 
+                    this->masks_[0]->gpu_data(), 
+                    this->blobs_[0]->mutable_gpu_diff());
     }
 }
 

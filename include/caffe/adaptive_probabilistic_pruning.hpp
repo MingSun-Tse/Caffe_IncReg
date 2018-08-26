@@ -158,7 +158,7 @@ public:
     template<typename Dtype>  int     APP<Dtype>::h_off = 0; // used in data transformation
     template<typename Dtype>  int     APP<Dtype>::w_off = 0;
     template<typename Dtype>  int APP<Dtype>::show_interval = 1; 
-    template<typename Dtype>  string APP<Dtype>::show_layer = "1001";
+    template<typename Dtype>  string APP<Dtype>::show_layer = "1010";
     template<typename Dtype>  int APP<Dtype>::show_num_layer = 100;
     template<typename Dtype>  int APP<Dtype>::show_num_weight = 20;
     template<typename Dtype>  vector<Dtype> APP<Dtype>::when_snapshot;

@@ -100,7 +100,7 @@ void SoftmaxWithLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     const Dtype* top_data = top[0]->gpu_data();
     caffe_gpu_memcpy(prob_.count() * sizeof(Dtype), prob_data, bottom_diff); // Initialize to p, note that, dLoss/dzi = pi - qi
     
-    /*
+    
     // second diff of logits = pi + pi * pi
     caffe_gpu_mul(prob_.count(),
                   prob_data,
@@ -110,7 +110,7 @@ void SoftmaxWithLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
                   prob_data,
                   bottom[0]->gpu_secdiff(),
                   bottom[0]->mutable_gpu_secdiff()); /// @mingsuntse
-    */              
+              
     const Dtype* label = bottom[1]->gpu_data();
     const int dim = prob_.count() / outer_num_;
     const int nthreads = outer_num_ * inner_num_;
@@ -149,7 +149,7 @@ void SoftmaxWithLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     //           << "  loss_weight: " << loss_weight << std::endl; 
     // loss_weight is the multiplier for a loss term in total loss, usually used in the multi-loss task
     caffe_gpu_scal(prob_.count(), loss_weight , bottom_diff);
-    // caffe_gpu_scal(prob_.count(), loss_weight , bottom[0]->mutable_gpu_secdiff()); /// @mingsuntse
+    caffe_gpu_scal(prob_.count(), loss_weight , bottom[0]->mutable_gpu_secdiff()); /// @mingsuntse
   }
 }
 
