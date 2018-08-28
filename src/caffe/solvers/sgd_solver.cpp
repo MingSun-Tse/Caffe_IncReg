@@ -6,6 +6,23 @@
 #include <fstream>
 #include <ctime>
 #include <cfloat>
+
+#include <cassert>
+#include <CGAL/basic.h> // CGAL: a QP solver
+#include <CGAL/QP_models.h>
+#include <CGAL/QP_functions.h>
+
+// choose exact integral type
+// #ifdef CGAL_USE_GMP
+// #include <CGAL/Gmpz.h>
+// typedef CGAL::Gmpz ET;
+// #else
+// #include <CGAL/MP_Float.h>
+// typedef CGAL::MP_Float ET;
+// #endif
+#include <CGAL/MP_Float.h> 
+typedef CGAL::MP_Float ET;
+
 #include "caffe/sgd_solvers.hpp"
 #include "caffe/util/hdf5.hpp"
 #include "caffe/util/io.hpp"
@@ -530,7 +547,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         }
         const Dtype AA = APP<Dtype>::AA; // The fixed reg multiplier
 
-        cout << layer_name << endl;
+        cout << "\n" << layer_name << ":" << endl;
         if (APP<Dtype>::step_ % APP<Dtype>::prune_interval == 0) {
           // Get alpha
           Dtype A, B, D, E, F, alpha = 0;
@@ -646,6 +663,170 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         cout << "  after gpu add, end of Reg-Optimal_Col: " << (double)(clock() - t1)/CLOCKS_PER_SEC << "s" << endl;
 #endif
 
+
+      // Another implmentation of OptimalReg
+      // Derivation of Delta_L w.r.t Delta_lambda directly
+      } else if (regularization_type == "Reg-Optimal2_Col") {
+        // If return
+        const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[param_id].first];
+        const int L = GetLayerIndex(param_id);
+        if (L == -1) { return; }
+        MY_CNT = 0;
+#ifdef ShowTimingLog
+        cout << layer_name << " Reg-Optimal2_Col start timing" << endl;
+        clock_t t1 = clock();
+#endif
+        // Dtype* muhistory_score  = this->net_->layer_by_name(layer_name)->history_score()[0]->mutable_cpu_data();
+        Dtype* muhistory_punish = this->net_->layer_by_name(layer_name)->history_punish()[0]->mutable_cpu_data();
+        Dtype* mumasks = this->net_->layer_by_name(layer_name)->masks()[0]->mutable_cpu_data();
+        Dtype* muweight = net_params[param_id]->mutable_cpu_data();
+        const Dtype* D = net_params[param_id]->cpu_diff();
+        const Dtype* S = net_params[param_id]->cpu_secdiff();
+        const int count = net_params[param_id]->count();
+        const int num_row = net_params[param_id]->shape()[0];
+        const int num_col = count / num_row;
+        const int num_pruned_col = APP<Dtype>::num_pruned_col[L];
+        const int num_col_to_prune_ = ceil(num_col * APP<Dtype>::prune_ratio[L]) - num_pruned_col;
+        if (num_col_to_prune_ <= 0) {
+          LOG(FATAL) << "BUG: num_col_to_prune_ <= 0";
+        }
+
+        cout << "\n" << layer_name << ":" << endl;
+        if (APP<Dtype>::step_ % APP<Dtype>::prune_interval == 0) {
+          // Get A and B
+          vector<Dtype> A(num_col, 0);
+          vector<Dtype> B(num_col, 0);
+          for (int i = 0; i < count; ++i) {
+            const Dtype dw_dlambda = -muweight[i] / (S[i] + muhistory_punish[i]);
+            const Dtype d2w_dlambda2 = (muweight[i] - dw_dlambda * (S[i] + muhistory_punish[i])) / pow(S[i] + muhistory_punish[i], 2);
+            A[i % num_col] += D[i] * dw_dlambda;
+            B[i % num_col] += S[i] * pow(dw_dlambda, 2) + D[i] * d2w_dlambda2;
+            if (i < 20) {
+              cout << "  w:" << muweight[i]
+                   << "  D:" << D[i]
+                   << "  dw_dlambda:" << dw_dlambda
+                   << "  S:" << S[i]
+                   << "  d2w_dlambda2:" << d2w_dlambda2
+                   << "  A:" << D[i] * dw_dlambda 
+                   << "  B:" << S[i] * pow(dw_dlambda, 2) + D[i] * d2w_dlambda2 << endl;
+            }
+            // if (D[i] * dw_dlambda * (S[i] * pow(dw_dlambda, 2) + D[i] * d2w_dlambda2) > 0) {
+              // cout << "A and B same sign: " << i << endl;
+            //}
+          }
+
+          // program and solution types
+          typedef CGAL::Nonnegative_quadratic_program_from_iterators
+          <int**,                                                 // for A
+           Dtype*,                                                // for b
+           CGAL::Const_oneset_iterator<CGAL::Comparison_result>,  // for r
+           Dtype**,                                                // for D
+           Dtype*>                                                 // for c 
+          Program;
+          typedef CGAL::Quadratic_program_solution<ET> Solution;
+
+          int** A_ = new int*[num_col]; // row: number of variables (here is num_col); column: number of constraints (here is 1)
+          for (int i = 0; i < num_col; ++i) {
+            A_[i] = new int(1);
+          }
+          Dtype* b = new Dtype(APP<Dtype>::AA); // dim: number of constraints (here is 1)
+          CGAL::Const_oneset_iterator<CGAL::Comparison_result> r(CGAL::EQUAL); // constraints are "="
+          
+          Dtype** D = new Dtype*[num_col];
+          for (int i = 0; i < num_col; ++i) {
+            D[i] = new Dtype[num_col];
+            for (int j = 0; j < num_col; ++j) {
+              D[i][j] = (i == j) ? 0.5 * B[i] : 0;
+            }
+          }
+          Dtype* c = &A[0];
+          const int c0 = 0;
+          
+          // now construct the quadratic program; the first two parameters are
+          // the number of variables and the number of constraints (rows of A)
+          Program qp(num_col, 1, A_, b, r, D, c, c0);
+          Solution s = CGAL::solve_nonnegative_quadratic_program(qp, ET());
+          cout << s;
+          
+          /*
+          // Solve the optimization problem by hand
+          Dtype sum1 = 0, sum2 = 0;
+          for (int j = 0; j < num_col; ++j) {
+            sum1 += A[j] / B[j];
+            sum2 += 1 / B[j];
+            if (j < 10) { cout << "A:" << A[j] << " B:" << B[j] << endl; }
+          }
+          const Dtype alpha = -(U + sum1) / sum2;
+          cout << "sum1: " << sum1 << ", sum2: " << sum2 << ", alpha: " << alpha << endl;
+          */
+          
+          for (int j = 0; j < num_col; ++j) {
+            const Dtype Delta = 0; // -(alpha + A[j]) / B[j];
+            const Dtype old_reg = muhistory_punish[j];
+            const Dtype new_reg = max(old_reg + Delta, (Dtype)0);
+            if (new_reg < old_reg) {
+              cout << "reduce reg: " << layer_name << "-" << j
+                   << "   old reg: "  << old_reg
+                   << "   new reg: "  << new_reg << endl;
+            }
+            if (j < 20) { 
+              cout << Delta << "  ";
+            }
+            
+            for (int i = 0; i < num_row; ++i) {
+              muhistory_punish[i * num_col + j] = new_reg;
+            }
+            if (new_reg >= APP<Dtype>::target_reg) {
+              for (int g = 0; g < APP<Dtype>::group[L]; ++g) {
+                APP<Dtype>::IF_col_pruned[L][j][g] = true;
+              }
+              APP<Dtype>::num_pruned_col[L] += 1;
+              for (int i = 0; i < num_row; ++i) {
+                mumasks[i * num_col + j] = 0;
+                muweight[i* num_col + j] = 0;
+              }
+
+              
+              // Check whether the corresponding row in the last layer could be pruned
+              if (L != 0 && L != APP<Dtype>::conv_layer_cnt) { // Not the fist Conv and first FC layer
+                const int filter_spatial_size = net_params[param_id]->count(2);
+                const int channel = j / filter_spatial_size;
+                bool IF_consecutive_pruned = true;
+                for (int jj = channel * filter_spatial_size; jj < (channel+1) * filter_spatial_size; ++jj) {
+                  if (!APP<Dtype>::IF_col_pruned[L][jj][0]) {
+                    IF_consecutive_pruned = false;
+                    break;
+                  }
+                }
+                if (IF_consecutive_pruned) {
+                  const int num_chl_per_g = num_col / filter_spatial_size;
+                  for (int g = 0; g < APP<Dtype>::group[L]; ++g) {
+                    APP<Dtype>::rows_to_prune[L - 1].push_back(channel + g * num_chl_per_g);
+                  }
+                }
+              }
+            }
+          }
+          cout << endl;
+        } // prune_interval
+
+#ifdef ShowTimingLog
+        cout  << "  after calculate reg term: " << (double)(clock() - t1)/CLOCKS_PER_SEC << "s" << endl;
+#endif
+        caffe_gpu_mul(net_params[param_id]->count(),
+                      net_params[param_id]->gpu_data(),
+                      muhistory_punish,
+                      tmp_[param_id]->mutable_gpu_data());
+#ifdef ShowTimingLog
+        cout << "  after gpu mul: " << (double)(clock() - t1)/CLOCKS_PER_SEC << "s" << endl;
+#endif
+        caffe_gpu_add(net_params[param_id]->count(),
+                      tmp_[param_id]->gpu_data(),
+                      net_params[param_id]->gpu_diff(),
+                      net_params[param_id]->mutable_gpu_diff());
+#ifdef ShowTimingLog
+        cout << "  after gpu add, end of Reg-Optimal2_Col: " << (double)(clock() - t1)/CLOCKS_PER_SEC << "s" << endl;
+#endif
         // ******************************************************************************************
         // Got idea from cvpr rebuttal, improve SelectiveReg: 1) use L1-norm rather than rank, 2) row prune
       } else if (regularization_type == "Reg_Row") {
