@@ -714,6 +714,15 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
               // cout << "A and B same sign: " << i << endl;
             //}
           }
+          // simulate
+          Dtype rands1[num_col];
+          Dtype rands2[num_col];
+          caffe_rng_uniform(num_col, (Dtype)-1, (Dtype)1, rands1);
+          caffe_rng_uniform(num_col, (Dtype)-1, (Dtype)1, rands2);
+          for (int i = 0; i < num_col; ++i) {
+            A[i] = rands1[i] * 0.1;
+            B[i] = rands2[i];
+          }
 
           // program and solution types
           typedef CGAL::Nonnegative_quadratic_program_from_iterators
@@ -724,13 +733,15 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
            Dtype*>                                                 // for c 
           Program;
           typedef CGAL::Quadratic_program_solution<ET> Solution;
-
+          
           int** A_ = new int*[num_col]; // row: number of variables (here is num_col); column: number of constraints (here is 1)
           for (int i = 0; i < num_col; ++i) {
-            A_[i] = new int(1);
+            A_[i] = new int[2];
+            A_[i][0] = 1;
+            A_[i][1] = -1;
           }
-          Dtype* b = new Dtype(APP<Dtype>::AA); // dim: number of constraints (here is 1)
-          CGAL::Const_oneset_iterator<CGAL::Comparison_result> r(CGAL::EQUAL); // constraints are "="
+          Dtype b[] = {APP<Dtype>::AA, -APP<Dtype>::AA / 5}; // dim: number of constraints (here is 1)
+          CGAL::Const_oneset_iterator<CGAL::Comparison_result> r(CGAL::SMALLER); // constraints are "="
           
           Dtype** D = new Dtype*[num_col];
           for (int i = 0; i < num_col; ++i) {
@@ -744,21 +755,16 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
           
           // now construct the quadratic program; the first two parameters are
           // the number of variables and the number of constraints (rows of A)
-          Program qp(num_col, 1, A_, b, r, D, c, c0);
+          Program qp(num_col, 2, A_, b, r, D, c, c0);
           Solution s = CGAL::solve_nonnegative_quadratic_program(qp, ET());
           cout << s;
           
-          /*
+          
           // Solve the optimization problem by hand
-          Dtype sum1 = 0, sum2 = 0;
           for (int j = 0; j < num_col; ++j) {
-            sum1 += A[j] / B[j];
-            sum2 += 1 / B[j];
-            if (j < 10) { cout << "A:" << A[j] << " B:" << B[j] << endl; }
+            cout << j << " - A:" << A[j] << " B:" << B[j] << endl;
           }
-          const Dtype alpha = -(U + sum1) / sum2;
-          cout << "sum1: " << sum1 << ", sum2: " << sum2 << ", alpha: " << alpha << endl;
-          */
+          
           
           for (int j = 0; j < num_col; ++j) {
             const Dtype Delta = 0; // -(alpha + A[j]) / B[j];
