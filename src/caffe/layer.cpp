@@ -357,7 +357,11 @@ void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
   const int num_col = count / num_row;
   APP<Dtype>::prune_ratio.push_back(prune_param.prune_ratio());
   APP<Dtype>::prune_ratio_step.push_back(prune_param.prune_ratio_step());
-  APP<Dtype>::current_prune_ratio.push_back(min(Dtype(prune_param.prune_ratio_step() * APP<Dtype>::prune_ratio_begin_ave / APP<Dtype>::STANDARD_SPARSITY), Dtype(prune_param.prune_ratio())));
+  if (APP<Dtype>::acc_borderline <= 0) {
+    APP<Dtype>::prune_ratio_begin_ave = APP<Dtype>::STANDARD_SPARSITY;
+  }
+  APP<Dtype>::current_prune_ratio.push_back(min(Dtype(prune_param.prune_ratio_step() * APP<Dtype>::prune_ratio_begin_ave / APP<Dtype>::STANDARD_SPARSITY),
+    Dtype(prune_param.prune_ratio())));
   APP<Dtype>::pruned_ratio.push_back(0); // used in TEST
   if (this->phase_ == TEST) { return; }
 
@@ -444,7 +448,7 @@ void Layer<Dtype>::PruneForward() {
     
     // Print and check, before update probs
     // put this outside, to print even when we do not prune
-    if (APP<Dtype>::show_layer.size() >= L+1 && APP<Dtype>::show_layer[L] == '1'
+    if (APP<Dtype>::prune_method != "None" && APP<Dtype>::show_layer.size() >= L+1 && APP<Dtype>::show_layer[L] == '1'
         && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0) {
       this->Print('f');
     }
@@ -479,7 +483,7 @@ template <typename Dtype>
 void Layer<Dtype>::PruneBackward() {
   const int L = APP<Dtype>::layer_index[this->layer_param_.name()];
   // Print and check
-  if (APP<Dtype>::show_layer.size() >= L+1 && APP<Dtype>::show_layer[L] == '1'
+  if (APP<Dtype>::prune_method != "None" && APP<Dtype>::show_layer.size() >= L+1 && APP<Dtype>::show_layer[L] == '1'
       && APP<Dtype>::step_ % APP<Dtype>::show_interval == 0 && APP<Dtype>::inner_iter == 0) {
     this->Print('b');
   }

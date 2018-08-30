@@ -273,25 +273,26 @@ void Solver<Dtype>::Step(int iters) {
   const struct tm* timeinfo = localtime(&rawtime);
   strftime(time_buffer_, 50, " (%Y/%m/%d-%H:%M)", timeinfo);
   Dtype current_speedup, current_compRatio, GFLOPs_origin, num_param_origin;
-  GetPruneProgress(&current_speedup,
-                   &current_compRatio,
-                   &GFLOPs_origin,
-                   &num_param_origin);
   if (APP<Dtype>::prune_method != "None") {
+    
+    GetPruneProgress(&current_speedup,
+                     &current_compRatio,
+                     &GFLOPs_origin,
+                     &num_param_origin);
     cout << "[app] Training starts, iter: " << iter_ << time_buffer_
          << ", speedup: " << current_speedup 
          << ", compRatio: " << current_compRatio << endl;
-  }
   
-  // This is the begining of training, so snapshot as stage0's output.
-  UpdateSnapshotNaming();
-  if (iter_ == 0) {
-    Snapshot("_stage0");
-    ++ APP<Dtype>::prune_stage;
+    // This is the begining of training, so snapshot as stage0's output.
     UpdateSnapshotNaming();
-    APP<Dtype>::last_feasible_acc = APP<Dtype>::baseline_acc;
-    APP<Dtype>::accumulated_ave_incre_pr = APP<Dtype>::prune_ratio_begin_ave;
-    APP<Dtype>::last_prune_ratio_incre = APP<Dtype>::prune_ratio_begin_ave;
+    if (iter_ == 0) {
+      Snapshot("_stage0");
+      ++ APP<Dtype>::prune_stage;
+      UpdateSnapshotNaming();
+      APP<Dtype>::last_feasible_acc = APP<Dtype>::baseline_acc;
+      APP<Dtype>::accumulated_ave_incre_pr = APP<Dtype>::prune_ratio_begin_ave;
+      APP<Dtype>::last_prune_ratio_incre = APP<Dtype>::prune_ratio_begin_ave;
+    }
   }
   
   while (iter_ < stop_iter) {
@@ -380,80 +381,84 @@ void Solver<Dtype>::Step(int iters) {
     cout << "--- after ApplyUpdate: " << (double)(clock() - t1) / CLOCKS_PER_SEC << endl;
 
     // -----------------------------------------------------------------
-    // Prune finished
-    if(APP<Dtype>::prune_state == "prune" && APP<Dtype>::IF_current_target_achieved) {
-      GetPruneProgress(&current_speedup,
-                       &current_compRatio,
-                       &GFLOPs_origin,
-                       &num_param_origin);
-                       
-      cout << "[app]\n[app] Current pruning stage (stage = "
-           << APP<Dtype>::prune_stage << ") finished. Go on training for a little while before checking accuracy."
-           << " speedup: " << current_speedup
-           << ", iter: " << APP<Dtype>::stage_iter_prune_finished << time_buffer_ << endl;
-           
-      for (int L = 0; L < APP<Dtype>::layer_index.size(); ++L) {
-        if (APP<Dtype>::prune_ratio[L] == 0) { continue; }
-        cout << "[app]    " << L << " - pruned_ratio: " << APP<Dtype>::pruned_ratio_col[L] << endl;
-      }
-      SetPruneState("losseval"); // Going to prune_state 'losseval'
-      
-      // Check reg
-      map<string, int>::iterator map_it;
-      for (int L = 0; L < APP<Dtype>::layer_index.size(); ++L) {
-        if (APP<Dtype>::prune_ratio[L] == 0) { continue; }
-        string layer_name = "";
-        for (map_it = APP<Dtype>::layer_index.begin(); map_it != APP<Dtype>::layer_index.end(); ++map_it) {
-          if (map_it->second == L) {
-            layer_name = map_it->first;
-            break;
-          }
+    if (APP<Dtype>::prune_method != "None") {
+      // Prune finished
+      if(APP<Dtype>::prune_state == "prune" && APP<Dtype>::IF_current_target_achieved) {
+        GetPruneProgress(&current_speedup,
+                         &current_compRatio,
+                         &GFLOPs_origin,
+                         &num_param_origin);
+                         
+        cout << "[app]\n[app] Current pruning stage (stage = "
+             << APP<Dtype>::prune_stage << ") finished. Go on training for a little while before checking accuracy."
+             << " speedup: " << current_speedup
+             << ", iter: " << APP<Dtype>::stage_iter_prune_finished << time_buffer_ << endl;
+             
+        for (int L = 0; L < APP<Dtype>::layer_index.size(); ++L) {
+          if (APP<Dtype>::prune_ratio[L] == 0) { continue; }
+          cout << "[app]    " << L << " - pruned_ratio: " << APP<Dtype>::pruned_ratio_col[L] << endl;
         }
-        Dtype* muhistory_punish = this->net_->layer_by_name(layer_name)->history_punish()[0]->mutable_cpu_data();
-        const int num_col = this->net_->layer_by_name(layer_name)->blobs()[0]->count(1);
-        const int num_row = this->net_->layer_by_name(layer_name)->blobs()[0]->shape()[0];
-        vector<Dtype> left_reg;
-        for (int j = 0; j < num_col; ++j) {
-          if (APP<Dtype>::IF_col_pruned[L][j][0] == false && 0 < muhistory_punish[j] && muhistory_punish[j] < APP<Dtype>::target_reg) {
-            left_reg.push_back(muhistory_punish[j]);
-            for (int i = 0; i < num_row; ++i) {
-              muhistory_punish[i * num_col + j] = 0;
+        SetPruneState("losseval"); // Going to prune_state 'losseval'
+        
+        // Check reg
+        map<string, int>::iterator map_it;
+        for (int L = 0; L < APP<Dtype>::layer_index.size(); ++L) {
+          if (APP<Dtype>::prune_ratio[L] == 0) { continue; }
+          string layer_name = "";
+          for (map_it = APP<Dtype>::layer_index.begin(); map_it != APP<Dtype>::layer_index.end(); ++map_it) {
+            if (map_it->second == L) {
+              layer_name = map_it->first;
+              break;
             }
           }
-        }
-        if (left_reg.size()) {
-          cout << "[app]    " << L << " - " << left_reg.size() << " columns' left reg not cleared, now cleared:";
-          for (int i = 0; i < left_reg.size(); ++i) {
-            cout << " " << left_reg[i];
+          Dtype* muhistory_punish = this->net_->layer_by_name(layer_name)->history_punish()[0]->mutable_cpu_data();
+          const int num_col = this->net_->layer_by_name(layer_name)->blobs()[0]->count(1);
+          const int num_row = this->net_->layer_by_name(layer_name)->blobs()[0]->shape()[0];
+          vector<Dtype> left_reg;
+          for (int j = 0; j < num_col; ++j) {
+            if (APP<Dtype>::IF_col_pruned[L][j][0] == false && 0 < muhistory_punish[j] && muhistory_punish[j] < APP<Dtype>::target_reg) {
+              left_reg.push_back(muhistory_punish[j]);
+              for (int i = 0; i < num_row; ++i) {
+                muhistory_punish[i * num_col + j] = 0;
+              }
+            }
           }
-          cout << endl;
+          if (left_reg.size()) {
+            cout << "[app]    " << L << " - " << left_reg.size() << " columns' left reg not cleared, now cleared:";
+            for (int i = 0; i < left_reg.size(); ++i) {
+              cout << " " << left_reg[i];
+            }
+            cout << endl;
+          }
         }
       }
-    }
 
-    // Check acc based on loss
-    if (APP<Dtype>::prune_state == "losseval" && iter_ - APP<Dtype>::stage_iter_prune_finished == APP<Dtype>::losseval_interval) {
-      cout << "[app]    'losseval' done, retrain to check accuracy before starting a new pruning stage. iter: " << iter_ << time_buffer_ << endl;
-      SetPruneState("retrain");
-    }
-    
-    // Retrain, check acc
-    if (APP<Dtype>::prune_state == "retrain" 
-          && APP<Dtype>::retrain_test_interval 
-          && iter_ % APP<Dtype>::retrain_test_interval == 0) {
-      CheckMaxAcc("retrain", CNT_AFTER_MAX_ACC);
-    }
-    
-    // Final retrain, check acc
-    if (APP<Dtype>::prune_state == "final_retrain"
-          && APP<Dtype>::retrain_test_interval
-          && iter_ % APP<Dtype>::retrain_test_interval == 0
-          && state_begin_iter_ != iter_) { // do not test on the the first 'final_retrain' iter, because it's unnecessary and harmful
-      CheckMaxAcc("final_retrain", CNT_AFTER_MAX_ACC + 4);
-    }
+      // Check acc based on loss
+      if (APP<Dtype>::prune_state == "losseval" && iter_ - APP<Dtype>::stage_iter_prune_finished == APP<Dtype>::losseval_interval) {
+        cout << "[app]    'losseval' done, retrain to check accuracy before starting a new pruning stage. iter: " << iter_ << time_buffer_ << endl;
+        SetPruneState("retrain");
+      }
+      
+      // Retrain, check acc
+      if (APP<Dtype>::prune_state == "retrain" 
+            && APP<Dtype>::retrain_test_interval 
+            && iter_ % APP<Dtype>::retrain_test_interval == 0) {
+        if (APP<Dtype>::acc_borderline <= 0) {
+          CheckMaxAcc("retrain", CNT_AFTER_MAX_ACC + 2);
+        } else {
+          CheckMaxAcc("retrain", CNT_AFTER_MAX_ACC);
+        }
+      }
+      
+      // Final retrain, check acc
+      if (APP<Dtype>::prune_state == "final_retrain"
+            && APP<Dtype>::retrain_test_interval
+            && iter_ % APP<Dtype>::retrain_test_interval == 0
+            && state_begin_iter_ != iter_) { // do not test on the the first 'final_retrain' iter, because it's unnecessary and harmful
+        CheckMaxAcc("final_retrain", CNT_AFTER_MAX_ACC + 4);
+      }
 
-    // Print speedup & compression ratio each iter
-    if (APP<Dtype>::prune_method != "None") {
+      // Print speedup & compression ratio each iter
       GetPruneProgress(&current_speedup,
                        &current_compRatio,
                        &GFLOPs_origin,
@@ -591,6 +596,11 @@ void Solver<Dtype>::CheckMaxAcc(const string& prune_state, const int& cnt_after_
       max_acc_ = 0;
       max_acc_iter_ = 0;
       retrain_accs_.clear();
+      
+      if (APP<Dtype>::acc_borderline <= 0) {
+        cout << "[app]    'Given pr to get acc' task done!" << endl;
+        exit(0);
+      }
     }
 
     // Clear for next retraining cycle
