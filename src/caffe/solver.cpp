@@ -18,7 +18,7 @@
 
 #include "boost/algorithm/string.hpp"
 #define MUL_LR_DECAY 0.1 // the multiplier of lr decay
-#define MAX_CNT_LR_DECAY 2 // the max number of lr decay
+#define MAX_CNT_LR_DECAY 4 // the max number of lr decay
 #define ACCURACY_GAP_THRESHOLD 0.0005
 #define INCRE_PR_BOTTOMLINE 0.01
 #define CNT_AFTER_MAX_ACC 4
@@ -572,7 +572,7 @@ void Solver<Dtype>::CheckMaxAcc(const string& prune_state, const int& cnt_after_
     }
     
     // Check if retraining can be stopped in "retrain" state
-    if (cnt_decay_lr_ >= MAX_CNT_LR_DECAY + 1 || current_max_acc_ < max_acc_) {
+    if (cnt_decay_lr_ >= MAX_CNT_LR_DECAY + 1 || current_max_acc_ < max_acc_ || APP<Dtype>::learning_rate < 1e-6) {
       APP<Dtype>::learning_rate /= MUL_LR_DECAY; // restore to last lr, because this lr is not used actually.
       sprintf(logstr, "[app]    All '%s' done: lr has decayed enough OR max acc of this lr period is not better than the previous one.", prune_state.c_str());
       cout << logstr << " Output the best caffemodel, iter = " << max_acc_iter_ << ", acc1 = " << max_acc_
