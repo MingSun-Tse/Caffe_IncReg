@@ -656,10 +656,10 @@ void Solver<Dtype>::SetPruneState(const string& prune_state) {
     }
     APP<Dtype>::IF_current_target_achieved = false;
   } else if (prune_state == "losseval") {
-    APP<Dtype>::iter_size = this->param_.iter_size_losseval();
+    APP<Dtype>::iter_size = APP<Dtype>::acc_borderline > 0 ? this->param_.iter_size_losseval() : this->param_.iter_size_final_retrain();
   } else if (prune_state == "retrain") {
     lr_state_start_ = APP<Dtype>::learning_rate; // for potential restore later
-    APP<Dtype>::iter_size = this->param_.iter_size_retrain();
+    APP<Dtype>::iter_size = APP<Dtype>::acc_borderline > 0 ? this->param_.iter_size_retrain() : this->param_.iter_size_final_retrain();
   } else if (prune_state == "final_retrain") {
     state_begin_iter_ = iter_;
     APP<Dtype>::iter_size = this->param_.iter_size_final_retrain();
