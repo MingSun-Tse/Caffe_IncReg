@@ -244,7 +244,7 @@ message SolverParameter {
   optional SolverType solver_type = 30 [default = SGD];
   
   // -----------------------------------------
-  /// @mingsuntse: hyper-parameters of APP (max index = 73, iter_size_final_retrain)
+  /// @mingsuntse: hyper-parameters of APP (max index = 74, IF_use_acc1)
   optional string prune_method = 41 [default = "None"];
   // optional int32 prune_interval = 53 [default = 1]; // how often to prune
   
@@ -263,7 +263,8 @@ message SolverParameter {
   optional bool IF_speedup_count_fc = 63 [default = true];
   optional bool IF_compr_count_conv = 64 [default = true];
   optional bool IF_scheme1_when_Reg_rank = 65 [default = true];
- 
+  optional bool IF_use_acc1 = 74 [default = true];
+
   optional int32 iter_size_prune = 70 [default = 1];
   optional int32 iter_size_losseval = 71 [default = 1];
   optional int32 iter_size_retrain = 72 [default = 1];

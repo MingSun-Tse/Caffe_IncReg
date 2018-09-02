@@ -515,20 +515,21 @@ void Solver<Dtype>::CheckMaxAcc(const string& prune_state, const int& cnt_after_
   const Dtype acc5 = *max_element(test_accuracy_.begin(), test_accuracy_.end());
   APP<Dtype>::retrain_test_acc1.push_back(acc1);
   APP<Dtype>::retrain_test_acc5.push_back(acc5);
-  retrain_accs_.push_back(acc1);
+  const Dtype acc = param_.if_use_acc1() ? acc1 : acc5;
+  retrain_accs_.push_back(acc);
   saved_retrain_iters_.push_back(iter_);
 
-  if (acc1 > current_max_acc_) {
-    current_max_acc_ = acc1;
+  if (acc > current_max_acc_) {
+    current_max_acc_ = acc;
     current_max_acc_index_ = APP<Dtype>::retrain_test_acc1.size();
     current_max_acc_iter_ = iter_;
   }
-  if (acc1 > max_acc_) {
-    max_acc_ = acc1;
+  if (acc > max_acc_) {
+    max_acc_ = acc;
     max_acc_iter_ = iter_;
   }
   char logstr[500];
-  sprintf(logstr, "[app]    '%s' going on, current acc1 = %f, iter: %d", prune_state.c_str(), acc1, iter_);
+  sprintf(logstr, "[app]    '%s' going on, current acc = %f, iter: %d", prune_state.c_str(), acc, iter_);
   cout << logstr << time_buffer_ << endl;
   
   // Current lr period done
@@ -542,7 +543,7 @@ void Solver<Dtype>::CheckMaxAcc(const string& prune_state, const int& cnt_after_
     // Decay lr
     APP<Dtype>::learning_rate *= MUL_LR_DECAY; // When current learning rate has reached its ceiling accuracy, decay it.
     ++ cnt_decay_lr_;
-    sprintf(logstr, "[app]    '%s' of current lr period finished, final acc1 = %f, iter = %d, decay lr (new: %.7f)",
+    sprintf(logstr, "[app]    '%s' of current lr period finished, final acc = %f, iter = %d, decay lr (new: %.7f)",
           prune_state.c_str(), current_max_acc_, current_max_acc_iter_, APP<Dtype>::learning_rate);
     cout << logstr << time_buffer_ << endl;
     
@@ -562,9 +563,9 @@ void Solver<Dtype>::CheckMaxAcc(const string& prune_state, const int& cnt_after_
     if (prune_state == "final_retrain") {
       const Dtype final_output_acc = max(max_acc_, APP<Dtype>::last_feasible_acc2);
       const int final_output_iter = (max_acc_ > APP<Dtype>::last_feasible_acc2) ? max_acc_iter_ : APP<Dtype>::last_feasible_prune_iter2;
-      sprintf(logstr, "[app]    All '%s' done. Output the best caffemodel, iter = %d, acc1 = %f", prune_state.c_str(), max_acc_iter_, max_acc_);
+      sprintf(logstr, "[app]    All '%s' done. Output the best caffemodel, iter = %d, acc = %f", prune_state.c_str(), max_acc_iter_, max_acc_);
       cout << logstr << endl;
-      sprintf(logstr, "[app]    All prune done. Output the best caffemodel, iter = %d, acc1 = %f", final_output_iter, final_output_acc);
+      sprintf(logstr, "[app]    All prune done. Output the best caffemodel, iter = %d, acc = %f", final_output_iter, final_output_acc);
       cout << logstr << endl;
       PrintFinalPrunedRatio();
       RemoveUselessSnapshot("", snapshot_iters_.back());
@@ -575,7 +576,7 @@ void Solver<Dtype>::CheckMaxAcc(const string& prune_state, const int& cnt_after_
     if (cnt_decay_lr_ >= MAX_CNT_LR_DECAY + 1 || current_max_acc_ < max_acc_ || APP<Dtype>::learning_rate < 1e-6) {
       APP<Dtype>::learning_rate /= MUL_LR_DECAY; // restore to last lr, because this lr is not used actually.
       sprintf(logstr, "[app]    All '%s' done: lr has decayed enough OR max acc of this lr period is not better than the previous one.", prune_state.c_str());
-      cout << logstr << " Output the best caffemodel, iter = " << max_acc_iter_ << ", acc1 = " << max_acc_
+      cout << logstr << " Output the best caffemodel, iter = " << max_acc_iter_ << ", acc = " << max_acc_
            << ". Resuming from iter = " << first_retrain_finished_iter_ << endl;
       // Resume
       const string resume_file = param_.snapshot_prefix() + prefix + "_iter_" + caffe::format_int(first_retrain_finished_iter_) + ".solverstate";

@@ -357,11 +357,9 @@ void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
   const int num_col = count / num_row;
   APP<Dtype>::prune_ratio.push_back(prune_param.prune_ratio());
   APP<Dtype>::prune_ratio_step.push_back(prune_param.prune_ratio_step());
-  if (APP<Dtype>::acc_borderline <= 0) {
-    APP<Dtype>::prune_ratio_begin_ave = APP<Dtype>::STANDARD_SPARSITY;
-  }
-  APP<Dtype>::current_prune_ratio.push_back(min(Dtype(prune_param.prune_ratio_step() * APP<Dtype>::prune_ratio_begin_ave / APP<Dtype>::STANDARD_SPARSITY),
-    Dtype(prune_param.prune_ratio())));
+  const Dtype current_pr_tmp = (APP<Dtype>::acc_borderline <= 0) ? prune_param.prune_ratio()
+      : min(Dtype(prune_param.prune_ratio_step() * APP<Dtype>::prune_ratio_begin_ave / APP<Dtype>::STANDARD_SPARSITY), Dtype(prune_param.prune_ratio()));
+  APP<Dtype>::current_prune_ratio.push_back(current_pr_tmp);
   APP<Dtype>::pruned_ratio.push_back(0); // used in TEST
   if (this->phase_ == TEST) { return; }
 
