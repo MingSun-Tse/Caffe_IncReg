@@ -254,6 +254,7 @@ template <typename Dtype>
 void Solver<Dtype>::Step(int iters) {
   const int start_iter = iter_;
   const int stop_iter = iter_ + iters;
+  stop_iter_ = stop_iter;
   int average_loss = this->param_.average_loss();
   losses_.clear();
   smoothed_loss_ = 0;
@@ -553,7 +554,7 @@ void Solver<Dtype>::CheckMaxAcc(const string& prune_state, const int& cnt_after_
     // Remove useless caffemodels
     for (int i = 0; i < saved_retrain_iters_.size(); ++i) {
       if (saved_retrain_iters_[i] != first_retrain_finished_iter_ && saved_retrain_iters_[i] != max_acc_iter_) { // spare these two caffemodels, because they may be restored later
-        RemoveUselessSnapshot(prefix, saved_retrain_iters_[i]);
+        // RemoveUselessSnapshot(prefix, saved_retrain_iters_[i]);
       }
     }
     saved_retrain_iters_.clear();
@@ -568,7 +569,7 @@ void Solver<Dtype>::CheckMaxAcc(const string& prune_state, const int& cnt_after_
       sprintf(logstr, "[app]    All prune done. Output the best caffemodel, iter = %d, acc = %f", final_output_iter, final_output_acc);
       cout << logstr << endl;
       PrintFinalPrunedRatio();
-      RemoveUselessSnapshot("", snapshot_iters_.back());
+      // RemoveUselessSnapshot("", snapshot_iters_.back());
       exit(0);
     }
     
@@ -582,7 +583,7 @@ void Solver<Dtype>::CheckMaxAcc(const string& prune_state, const int& cnt_after_
       const string resume_file = param_.snapshot_prefix() + prefix + "_iter_" + caffe::format_int(first_retrain_finished_iter_) + ".solverstate";
       Restore(resume_file.c_str(), false); // Restore before removing the useless caffemodel
       if (max_acc_iter_ != first_retrain_finished_iter_) {
-        RemoveUselessSnapshot(prefix, first_retrain_finished_iter_);
+        // RemoveUselessSnapshot(prefix, first_retrain_finished_iter_);
       }
       // Clear for next cycle of retraining
       last_retrain_lr_ = APP<Dtype>::learning_rate; // for potential use in 'final_retrain'

@@ -134,6 +134,9 @@ void SGDSolver<Dtype>::ApplyUpdate() {
   ClipGradients();
   for (int param_id = 0; param_id < this->net_->learnable_params().size(); ++param_id) {
     Normalize(param_id);
+    if (this->param_.regularization_type() == "Auto-balanced" || this->param_.regularization_type() == "Auto-balanced_Row") {
+      UpdateAutobalancedReg(param_id); // implement AFP
+    }
     Regularize(param_id);
     ClearHistory(param_id);
     ComputeUpdateValue(param_id, rate);
@@ -257,6 +260,18 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         const Dtype AA = APP<Dtype>::AA;
         if (APP<Dtype>::step_ % APP<Dtype>::prune_interval == 0) {
           if (APP<Dtype>::prune_coremthd == "Reg-rank" || APP<Dtype>::prune_coremthd == "Reg") {
+            // print ave-magnitude
+            cout << "ave-magnitude_col " << this->iter_ << " " << layer_name << ":";
+            for (int j = 0; j < num_col; ++j) {
+              Dtype sum = 0;
+              for (int i = 0; i < num_row; ++i) {
+                sum += fabs(muweight[i * num_col + j]);
+              }
+              cout << " " << sum/num_row;
+            }
+            cout << endl;
+            
+            
             // Sort 01: sort by L1-norm
             typedef std::pair<Dtype, int> mypair;
             vector<mypair> col_score(num_col);
@@ -361,6 +376,170 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                       tmp_[param_id]->gpu_data(),
                       net_params[param_id]->gpu_diff(),
                       net_params[param_id]->mutable_gpu_diff());
+      
+      } else if (regularization_type == "Auto-balanced") {
+        const vector<int>& shape = this->net_->learnable_params()[param_id]->shape();
+        const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[param_id].first];
+        if (shape.size() != 4 || APP<Dtype>::layer_index.count(layer_name) == 0) { // not the Conv weights
+          caffe_gpu_axpy(net_params[param_id]->count(),
+                         local_decay,
+                         net_params[param_id]->gpu_data(),
+                         net_params[param_id]->mutable_gpu_diff());
+          return;
+        }
+        const int L = APP<Dtype>::layer_index[layer_name];
+        Dtype* muhistory_punish = this->net_->layer_by_name(layer_name)->history_punish()[0]->mutable_cpu_data();
+        const int count = net_params[param_id]->count();
+        const int num_row = net_params[param_id]->shape()[0];
+        const int num_col = count / num_row;
+        const int num_col_to_prune = ceil(num_col * APP<Dtype>::prune_ratio[L]);
+        
+        // print ave-magnitude
+        Dtype* muweight = net_params[param_id]->mutable_cpu_data();
+        cout << "ave-magnitude_col " << this->iter_ << " " << layer_name << ":";
+        for (int j = 0; j < num_col; ++j) {
+          Dtype sum = 0;
+          for (int i = 0; i < num_row; ++i) {
+            sum += fabs(muweight[i * num_col + j]);
+          }
+          cout << " " << sum/num_row;
+        }
+        cout << endl;
+        
+        const Dtype alpha = APP<Dtype>::AA; // alpha in the paper, use AA in the solver.prototxt to pass value to it
+        const Dtype tao = -pos_penalty_sum_ * alpha / (neg_penalty_sum_); // tao in the paper, >0
+        for (int i = 0; i < count; ++i) {
+          if (APP<Dtype>::lambda[L][i % num_col] > 0) { // bad columns
+            muhistory_punish[i] = APP<Dtype>::lambda[L][i % num_col] * alpha;
+          } else {
+            muhistory_punish[i] = APP<Dtype>::lambda[L][i % num_col] * tao;
+          }
+        }
+        
+        //Apply Reg
+        caffe_gpu_mul(count,
+                      net_params[param_id]->gpu_data(),
+                      muhistory_punish,
+                      tmp_[param_id]->mutable_gpu_data());
+        caffe_gpu_add(count,
+                      tmp_[param_id]->gpu_data(),
+                      net_params[param_id]->gpu_diff(),
+                      net_params[param_id]->mutable_gpu_diff());
+        
+        if (this->iter_ + 1 == this->param_.max_iter()/2) {
+          Dtype* mumasks = this->net_->layer_by_name(layer_name)->masks()[0]->mutable_cpu_data();
+          Dtype* mudiff = net_params[param_id]->mutable_cpu_diff();
+          Dtype* muweight = net_params[param_id]->mutable_cpu_data();
+          typedef std::pair<Dtype, int> mypair;
+          vector<mypair> col_score(num_col);
+          for (int j = 0; j < num_col; ++j) {
+            col_score[j].second = j;
+            col_score[j].first  = 0;
+            for (int i = 0; i < num_row; ++i) {
+              col_score[j].first += fabs(muweight[i * num_col + j]);
+            }
+          }
+          sort(col_score.begin(), col_score.end());
+          for (int rk = 0; rk < num_col; ++rk) {
+            const int col_of_rank_rk = col_score[rk].second;
+            if (rk < num_col_to_prune) {
+              for (int i = 0; i < num_row; ++i) {
+                muweight[i * num_col + col_of_rank_rk] = 0;
+                mumasks[i * num_col + col_of_rank_rk] = 0;
+                mudiff[i * num_col + col_of_rank_rk] = 0;
+              }
+              APP<Dtype>::num_pruned_col[L] += 1;
+              APP<Dtype>::IF_col_pruned[L][col_of_rank_rk][0] = true;
+              
+              // Check whether the corresponding row in the last layer could be pruned
+              if (L != 0 && L != APP<Dtype>::conv_layer_cnt) { // Not the fist Conv and first FC layer
+                const int filter_spatial_size = net_params[param_id]->count(2);
+                const int channel = col_of_rank_rk / filter_spatial_size;
+                bool IF_consecutively_pruned = true;
+                for (int j = channel * filter_spatial_size; j < (channel+1) * filter_spatial_size; ++j) {
+                  if (!APP<Dtype>::IF_col_pruned[L][j][0]) {
+                    IF_consecutively_pruned = false;
+                    break;
+                  }
+                }
+                if (IF_consecutively_pruned) {
+                  const int num_chl_per_g = num_col / filter_spatial_size;
+                  for (int g = 0; g < APP<Dtype>::group[L]; ++g) {
+                    APP<Dtype>::rows_to_prune[L - 1].push_back(channel + g * num_chl_per_g);
+                  }
+                }
+              }
+            }
+          }
+          APP<Dtype>::pruned_ratio[L] = 0.2; // just set a positive value to pass the ClearHistory check
+        }
+      } else if (regularization_type == "Auto-balanced_Row") {
+        const vector<int>& shape = this->net_->learnable_params()[param_id]->shape();
+        const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[param_id].first];
+        if (shape.size() != 4 || APP<Dtype>::layer_index.count(layer_name) == 0) { // not the Conv weights
+          caffe_gpu_axpy(net_params[param_id]->count(),
+                         local_decay,
+                         net_params[param_id]->gpu_data(),
+                         net_params[param_id]->mutable_gpu_diff());
+          return;
+        }
+        const int L = APP<Dtype>::layer_index[layer_name];
+        Dtype* muhistory_punish = this->net_->layer_by_name(layer_name)->history_punish()[0]->mutable_cpu_data();
+        const int count = net_params[param_id]->count();
+        const int num_row = net_params[param_id]->shape()[0];
+        const int num_col = count / num_row;
+        const int num_row_to_prune = ceil(num_row * APP<Dtype>::prune_ratio[L]);
+        
+        const Dtype alpha = APP<Dtype>::AA; // alpha in the paper, use AA in the solver.prototxt to pass value to it
+        const Dtype tao = -pos_penalty_sum_ * alpha / (neg_penalty_sum_); // tao in the paper, >0
+        for (int i = 0; i < count; ++i) {
+          const int index = i / num_col;
+          if (APP<Dtype>::lambda[L][index] > 0) { // bad columns
+            muhistory_punish[i] = APP<Dtype>::lambda[L][index] * alpha;
+          } else {
+            muhistory_punish[i] = APP<Dtype>::lambda[L][index] * tao;
+          }
+        }
+        
+        //Apply Reg
+        caffe_gpu_mul(count,
+                      net_params[param_id]->gpu_data(),
+                      muhistory_punish,
+                      tmp_[param_id]->mutable_gpu_data());
+        caffe_gpu_add(count,
+                      tmp_[param_id]->gpu_data(),
+                      net_params[param_id]->gpu_diff(),
+                      net_params[param_id]->mutable_gpu_diff());
+        
+        if (this->iter_ + 1 == this->param_.max_iter()/2) {
+          Dtype* mumasks = this->net_->layer_by_name(layer_name)->masks()[0]->mutable_cpu_data();
+          Dtype* mudiff = net_params[param_id]->mutable_cpu_diff();
+          Dtype* muweight = net_params[param_id]->mutable_cpu_data();
+          typedef std::pair<Dtype, int> mypair;
+          vector<mypair> group_score(num_row);
+          for (int i = 0; i < num_row; ++i) {
+            group_score[i].second = i;
+            group_score[i].first  = 0;
+            for (int j = 0; j < num_col; ++j) {
+              group_score[i].first += fabs(muweight[i * num_col + j]);
+            }
+          }
+          sort(group_score.begin(), group_score.end());
+          for (int rk = 0; rk < num_row; ++rk) {
+            const int row_of_rank_rk = group_score[rk].second;
+            if (rk < num_row_to_prune) {
+              for (int j = 0; j < num_col; ++j) {
+                muweight[row_of_rank_rk * num_col + j] = 0;
+                mumasks[row_of_rank_rk * num_col + j] = 0;
+                mudiff[row_of_rank_rk * num_col + j] = 0;
+              }
+              APP<Dtype>::num_pruned_row[L] += 1;
+              APP<Dtype>::IF_row_pruned[L][row_of_rank_rk] = true;
+              APP<Dtype>::pruned_rows[L].push_back(row_of_rank_rk);
+            }
+          }
+          APP<Dtype>::pruned_ratio[L] = 0.2; // just set a positive value to pass the ClearHistory check
+        }
       } else {
         LOG(FATAL) << "Unknown regularization type: " << regularization_type;
       }
@@ -411,6 +590,76 @@ void SGDSolver<Dtype>::ComputeUpdateValue(int param_id, Dtype rate) {
   }
   default:
     LOG(FATAL) << "Unknown caffe mode: " << Caffe::mode();
+  }
+}
+
+template <typename Dtype>
+void SGDSolver<Dtype>::UpdateAutobalancedReg(const int& param_id) {
+  const vector<Blob<Dtype>*>& net_params = this->net_->learnable_params();
+  const string layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[param_id].first];
+  if (APP<Dtype>::layer_index.count(layer_name) == 0 || net_params[param_id]->shape().size() != 4) {
+    return;
+  } // biases and FC layers are not in consideration
+  const int L = APP<Dtype>::layer_index[layer_name];
+  Dtype* muweight = net_params[param_id]->mutable_cpu_data();
+  const int count = net_params[param_id]->count();
+  const int num_row = net_params[param_id]->shape()[0];
+  const int num_col = count / num_row;
+  int num_group = 0;
+  const string unit = APP<Dtype>::prune_unit;
+  if (unit == "Col") {
+    num_group = num_col;
+  } else if (unit == "Row") {
+    num_group = num_row;
+  }
+  const int num_group_to_prune = ceil(num_group * APP<Dtype>::prune_ratio[L]);
+  
+  if (this->iter_ == 0) { // In the first iter, calculate the lambdas
+    // sort by L1-norm
+    typedef std::pair<Dtype, int> mypair;
+    vector<mypair> group_score(num_group);
+    if (unit == "Col") {
+      for (int j = 0; j < num_col; ++j) {
+        group_score[j].second = j;
+        group_score[j].first = 0;
+        for (int i = 0; i < num_row; ++i) {
+          group_score[j].first += fabs(muweight[i * num_col + j]);
+        }
+      }
+      sort(group_score.begin(), group_score.end());
+      const Dtype theta = group_score[num_group_to_prune - 1].first; // theta in the paper
+      for (int rk = 0; rk < num_col; ++rk) {
+        const int col_of_rank_rk = group_score[rk].second;
+        const Dtype M = group_score[rk].first; // M in the paper
+        APP<Dtype>::lambda[L][col_of_rank_rk] = (rk < num_group_to_prune) ? 1 + log(theta / (M + 1e-12)) : -1 - log(M / (theta + 1e-12));
+      }
+    } else if (unit == "Row") {
+      for (int i = 0; i < num_row; ++i) {
+        group_score[i].second = i;
+        group_score[i].first = 0;
+        for (int j = 0; j < num_col; ++j) {
+          group_score[i].first += fabs(muweight[i * num_col + j]);
+        }
+      }
+      sort(group_score.begin(), group_score.end());
+      const Dtype theta = group_score[num_group_to_prune - 1].first; // theta in the paper
+      for (int rk = 0; rk < num_row; ++rk) {
+        const int row_of_rank_rk = group_score[rk].second;
+        const Dtype M = group_score[rk].first; // M in the paper
+        APP<Dtype>::lambda[L][row_of_rank_rk] = (rk < num_group_to_prune) ? 1 + log(theta / (M + 1e-12)) : -1 - log(M / (theta + 1e-12));
+      }
+    }
+  }
+  
+  pos_penalty_sum_ = 0;
+  neg_penalty_sum_ = 0;
+  for (int i = 0; i < count; ++i) {
+    const int index = (unit == "Row") ? i / num_col : i % num_col;
+    if (APP<Dtype>::lambda[L][i % num_col] > 0) {
+      pos_penalty_sum_ += APP<Dtype>::lambda[L][index] * muweight[i] * muweight[i];
+    } else {
+      neg_penalty_sum_ += APP<Dtype>::lambda[L][index] * muweight[i] * muweight[i];
+    }
   }
 }
 

@@ -23,6 +23,7 @@ class SGDSolver : public Solver<Dtype> {
 
   const vector<shared_ptr<Blob<Dtype> > >& history() { return history_; }
   void ClearHistory(const int& param_id);
+  void UpdateAutobalancedReg(const int& param_id);
   const int GetLayerIndex(const int& param_id);
 
  protected:
@@ -44,6 +45,7 @@ class SGDSolver : public Solver<Dtype> {
   //   of gradients/updates and is not needed in snapshots
   vector<shared_ptr<Blob<Dtype> > > history_, update_, temp_, tmp_; /// @mingsuntse, for pruning
   vector<shared_ptr<Blob<Dtype> > > current_prune_ratio_, last_feasible_prune_ratio_, last_infeasible_prune_ratio_;
+  Dtype pos_penalty_sum_, neg_penalty_sum_, tao_;
 
   DISABLE_COPY_AND_ASSIGN(SGDSolver);
 };

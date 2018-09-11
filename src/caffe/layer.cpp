@@ -399,6 +399,13 @@ void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
   APP<Dtype>::IF_row_pruned.push_back(vector<bool>(num_row, false));
   vector<bool> vec_tmp(APP<Dtype>::group[L], false);
   APP<Dtype>::IF_col_pruned.push_back(vector<vector<bool> >(num_col, vec_tmp));
+  if (!strcmp(this->type(), "Convolution")) {
+    if (APP<Dtype>::prune_unit == "Col") {
+      APP<Dtype>::lambda.push_back(vector<Dtype>(num_col, 0));
+    } else if (APP<Dtype>::prune_unit == "Row") {
+      APP<Dtype>::lambda.push_back(vector<Dtype>(num_row, 0));
+    }
+  }
   // Info shared among layers
   APP<Dtype>::filter_spatial_size.push_back(this->blobs_[0]->shape()[2] * this->blobs_[0]->shape()[3]); // TODO(mingsuntse): check 3D CNN, this is okay?
   APP<Dtype>::iter_prune_finished.push_back(INT_MAX);

@@ -81,6 +81,7 @@ public:
     static vector<bool>  IF_update_row_col_layer;
     static vector<vector<bool> > IF_row_pruned;
     static vector<vector<vector<bool> > > IF_col_pruned;
+    static vector<vector<Dtype> > lambda; // lambda in AFP paper
     static vector<int> iter_prune_finished;
     static int stage_iter_prune_finished;
     static vector<Dtype> prune_ratio;
@@ -166,6 +167,7 @@ public:
     template<typename Dtype>  vector<int>    APP<Dtype>::num_pruned_weight;
     template<typename Dtype>  vector<vector<bool> >   APP<Dtype>::IF_row_pruned;
     template<typename Dtype>  vector<vector<vector<bool> > >  APP<Dtype>::IF_col_pruned;
+    template<typename Dtype>  vector<vector<Dtype> >  APP<Dtype>::lambda;
     template<typename Dtype>  vector<int>    APP<Dtype>::iter_prune_finished;
     template<typename Dtype>  int            APP<Dtype>::stage_iter_prune_finished = INT_MAX;
     template<typename Dtype>  vector<Dtype>  APP<Dtype>::prune_ratio;
