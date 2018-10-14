@@ -462,8 +462,12 @@ void Layer<Dtype>::PruneForward() {
     if (mthd != "None" && L < APP<Dtype>::show_num_layer) {
       cout << layer_name << "  IF_prune: " << IF_prune;
            // << "  pruned_ratio: " << APP<Dtype>::pruned_ratio[L];
-      // cout << "  pruned_ratio_row: " << APP<Dtype>::num_pruned_row[L] * 1.0 / num_row << "(" << APP<Dtype>::num_pruned_row[L] << ")"
-      cout << "  pruned_ratio_col: " << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << "(" << APP<Dtype>::num_pruned_col[L] << ")";
+      
+      if (APP<Dtype>::prune_unit == "Col") {
+        cout << "  pruned_ratio_col: " << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << "(" << APP<Dtype>::num_pruned_col[L] << ")";
+      } else if (APP<Dtype>::prune_unit == "Row") {
+        cout << "  pruned_ratio_row: " << APP<Dtype>::num_pruned_row[L] * 1.0 / num_row << "(" << APP<Dtype>::num_pruned_row[L] << ")";
+      }
       cout << "  current_prune_ratio: "  << APP<Dtype>::current_prune_ratio[L];
       // cout << "  prune_ratio: "  << APP<Dtype>::prune_ratio[L];
       cout << "  iter_prune_finished: " << APP<Dtype>::iter_prune_finished[L];

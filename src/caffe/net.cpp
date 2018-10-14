@@ -791,7 +791,6 @@ void Net<Dtype>::CopyTrainedLayersFrom(const NetParameter& param) {
         layer_names_[target_layer_id] != source_layer_name) {
       ++target_layer_id;
     }
-
     if (target_layer_id == layer_names_.size()) {
       LOG(INFO) << "Ignoring source layer " << source_layer_name;
       continue;
@@ -816,7 +815,6 @@ void Net<Dtype>::CopyTrainedLayersFrom(const NetParameter& param) {
         const bool kReshape = false;
         target_blobs[j]->FromProto(source_layer.blobs(j), kReshape);
     }
-    
     // ---------------------------------------------------------------------------------------------
     /// @mingsuntse, restore masks
     if (APP<Dtype>::prune_method != "None" && phase_ == TRAIN && target_blobs.size() && APP<Dtype>::layer_index.count(source_layer_name)) {
