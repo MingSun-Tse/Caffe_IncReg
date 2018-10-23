@@ -492,6 +492,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         const int num_col_to_prune = ceil(num_col * APP<Dtype>::prune_ratio[L]);
         
         // print ave-magnitude
+        /*
         Dtype* muweight = net_params[param_id]->mutable_cpu_data();
         cout << "ave-magnitude_col " << this->iter_ << " " << layer_name << ":";
         for (int j = 0; j < num_col; ++j) {
@@ -502,6 +503,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
           cout << " " << sum/num_row;
         }
         cout << endl;
+        */
         
         const Dtype alpha = APP<Dtype>::AA; // alpha in the paper, use AA in the solver.prototxt to pass value to it
         const Dtype tao = -pos_penalty_sum_ * alpha / (neg_penalty_sum_); // tao in the paper, >0
@@ -523,6 +525,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                       net_params[param_id]->gpu_diff(),
                       net_params[param_id]->mutable_gpu_diff());
         
+        // default: in the first half time: AFP regularization; last half time: finetuning
         if (this->iter_ + 1 == this->param_.max_iter()/2) {
           Dtype* mumasks = this->net_->layer_by_name(layer_name)->masks()[0]->mutable_cpu_data();
           Dtype* mudiff = net_params[param_id]->mutable_cpu_diff();

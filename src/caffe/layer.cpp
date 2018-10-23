@@ -27,11 +27,10 @@ void Layer<Dtype>::Unlock() {
 template<typename Dtype>
 void Layer<Dtype>::IF_layer_prune_finished() {
   const string layer_name = this->layer_param_.name();
-  const int num_col = this->blobs_[0]->count(1);
   if (APP<Dtype>::layer_index.count(layer_name) != 0) {
     const int L = APP<Dtype>::layer_index[layer_name];
     if (APP<Dtype>::iter_prune_finished[L] == INT_MAX) {
-      const bool layer_finish = APP<Dtype>::num_pruned_col[L] >= ceil(num_col * APP<Dtype>::current_prune_ratio[L]); // layer pruning target achieved
+      const bool layer_finish = APP<Dtype>::pruned_ratio_for_comparison[L] >= APP<Dtype>::current_prune_ratio[L]; // layer pruning target achieved
       const bool net_finish_speed = APP<Dtype>::IF_speedup_achieved;   // net pruning target of speed achieved
       const bool net_finish_param = APP<Dtype>::IF_compRatio_achieved; // net pruning target of compression achieved
 
