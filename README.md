@@ -8,14 +8,15 @@ Caffe is released under the [BSD 2-Clause license](https://github.com/BVLC/caffe
 The BVLC reference models are released for unrestricted use.
 
 Please cite these in your publications if this code helps your research:
+
     @proceedins{huan2019increg,
-      Author = {Wang, Huan and Zhang, Qiming and Wang, Yuehai and Hu, Haoji},
+      Author = {Wang, Huan and Zhang, Qiming and Wang, Yuehai and Yu, Lu and Hu, Haoji},
       Title = {Structured Pruning for Efficient ConvNets via Incremental Regularization},
       Booktitle = {IJCNN},
       Year = {2019},
     }
     @proceedins{huan2018spp,
-      Author = {Wang, Huan and Zhang, Qiming and Wang, Yuehai and Yu, Lu and Hu, Haoji},
+      Author = {Wang, Huan and Zhang, Qiming and Wang, Yuehai and Hu, Haoji},
       Title = {Structured probabilistic pruning for convolutional neural network acceleration},
       Booktitle = {BMVC},
       Year = {2018},
