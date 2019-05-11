@@ -19,8 +19,6 @@ weight_decay: 0.00025 # original is 0.0005, recommended: original / 2
 
 AA: 0.00025 # recommended: weight_decay
 target_reg: 0.05 # recommended: (5e3 ~ 1e4) * AA. Here we set it smaller for faster demo.
-speedup: 1000
-compRatio: 1000
 
 iter_size_prune: 1
 iter_size_losseval: 2
@@ -33,9 +31,4 @@ acc_borderline: -1
 # baseline_acc: 0.992
 losseval_interval: 1000 # recommended: 5000 ~ 20000. Here we set it smaller for faster demo.
 retrain_test_interval: 500 # recommended: 500 or 1000
-
-IF_eswpf: false
-IF_speedup_count_fc: false
-IF_update_row_col: true
-IF_scheme1_when_Reg_rank: true
 # ---------------------------
