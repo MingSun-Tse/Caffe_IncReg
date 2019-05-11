@@ -15,16 +15,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <numeric>
-
 #include "boost/algorithm/string.hpp"
-#define MUL_LR_DECAY 0.1 // the multiplier of lr decay
-#define MAX_CNT_LR_DECAY 4 // the max number of lr decay
-#define ACCURACY_GAP_THRESHOLD 0.0005
-#define INCRE_PR_BOTTOMLINE 0.01
-#define CNT_AFTER_MAX_ACC 4
-#define COEEF_ACC_2_PR 10 // multiplier of acc margin to incre_pr
-#define TR_MUL_BOTTOM 0.25 // the bottomline of target_reg multiplier
-#define STANDARD_INCRE_PR 0.05
 
 namespace caffe {
 
@@ -434,7 +425,6 @@ void Solver<Dtype>::Step(int iters) {
         }
       }
 
-      // Check acc based on loss
       if (APP<Dtype>::prune_state == "losseval" && iter_ - APP<Dtype>::stage_iter_prune_finished == APP<Dtype>::losseval_interval) {
         cout << "[app]    'losseval' done, retrain to check accuracy before starting a new pruning stage. iter: " << iter_ << time_buffer_ << endl;
         SetPruneState("retrain");
@@ -445,9 +435,9 @@ void Solver<Dtype>::Step(int iters) {
             && APP<Dtype>::retrain_test_interval 
             && iter_ % APP<Dtype>::retrain_test_interval == 0) {
         if (APP<Dtype>::acc_borderline <= 0) {
-          CheckMaxAcc("retrain", CNT_AFTER_MAX_ACC + 2);
+          CheckMaxAcc("retrain", APP<Dtype>::CNT_AFTER_MAX_ACC + 2);
         } else {
-          CheckMaxAcc("retrain", CNT_AFTER_MAX_ACC);
+          CheckMaxAcc("retrain", APP<Dtype>::CNT_AFTER_MAX_ACC);
         }
       }
       
@@ -456,7 +446,7 @@ void Solver<Dtype>::Step(int iters) {
             && APP<Dtype>::retrain_test_interval
             && iter_ % APP<Dtype>::retrain_test_interval == 0
             && state_begin_iter_ != iter_) { // do not test on the the first 'final_retrain' iter, because it's unnecessary and harmful
-        CheckMaxAcc("final_retrain", CNT_AFTER_MAX_ACC + 4);
+        CheckMaxAcc("final_retrain", APP<Dtype>::CNT_AFTER_MAX_ACC + 4);
       }
 
       // Print speedup & compression ratio each iter
@@ -542,7 +532,7 @@ void Solver<Dtype>::CheckMaxAcc(const string& prune_state, const int& cnt_after_
     }
     
     // Decay lr
-    APP<Dtype>::learning_rate *= MUL_LR_DECAY; // When current learning rate has reached its ceiling accuracy, decay it.
+    APP<Dtype>::learning_rate *= APP<Dtype>::MUL_LR_DECAY; // When current learning rate has reached its ceiling accuracy, decay it.
     ++ cnt_decay_lr_;
     sprintf(logstr, "[app]    '%s' of current lr period finished, final acc = %f, iter = %d, decay lr (new: %.7f)",
           prune_state.c_str(), current_max_acc_, current_max_acc_iter_, APP<Dtype>::learning_rate);
@@ -569,13 +559,13 @@ void Solver<Dtype>::CheckMaxAcc(const string& prune_state, const int& cnt_after_
       sprintf(logstr, "[app]    All prune done. Output the best caffemodel, iter = %d, acc = %f", final_output_iter, final_output_acc);
       cout << logstr << endl;
       PrintFinalPrunedRatio();
-      // RemoveUselessSnapshot("", snapshot_iters_.back());
+      RemoveUselessSnapshot("", snapshot_iters_.back());
       exit(0);
     }
     
     // Check if retraining can be stopped in "retrain" state
-    if (cnt_decay_lr_ >= MAX_CNT_LR_DECAY + 1 || current_max_acc_ < max_acc_ || APP<Dtype>::learning_rate < 1e-6) {
-      APP<Dtype>::learning_rate /= MUL_LR_DECAY; // restore to last lr, because this lr is not used actually.
+    if (cnt_decay_lr_ >= APP<Dtype>::MAX_CNT_LR_DECAY + 1 || current_max_acc_ < max_acc_ || APP<Dtype>::learning_rate < 1e-6) {
+      APP<Dtype>::learning_rate /= APP<Dtype>::MUL_LR_DECAY; // restore to last lr, because this lr is not used actually.
       sprintf(logstr, "[app]    All '%s' done: lr has decayed enough OR max acc of this lr period is not better than the previous one.", prune_state.c_str());
       cout << logstr << " Output the best caffemodel, iter = " << max_acc_iter_ << ", acc = " << max_acc_
            << ". Resuming from iter = " << first_retrain_finished_iter_ << endl;
@@ -674,7 +664,7 @@ void Solver<Dtype>::SetPruneState(const string& prune_state) {
 
 template <typename Dtype>
 void Solver<Dtype>::CheckPruneStage(const Dtype& acc, const int& last_max_acc_iter, const Dtype& last_max_acc) {
-  if (APP<Dtype>::acc_borderline - acc > ACCURACY_GAP_THRESHOLD) { // accuracy bad
+  if (APP<Dtype>::acc_borderline - acc > APP<Dtype>::ACCURACY_GAP_THRESHOLD) { // accuracy bad
     for (int L = 0; L < APP<Dtype>::layer_index.size(); ++L) {
       if (APP<Dtype>::prune_ratio[L] == 0) { continue; }
       APP<Dtype>::last_infeasible_prune_ratio[L] = APP<Dtype>::pruned_ratio_for_comparison[L];
@@ -687,8 +677,8 @@ void Solver<Dtype>::CheckPruneStage(const Dtype& acc, const int& last_max_acc_it
     Restore(resume_file.c_str(), false); // Note to restore after SetNewCurrentPruneRatio, because restore will change the state of network, like num_pruned_col
     SetPruneState("prune");
     // Check if incre_pr is large enough
-    if (incre_pr < INCRE_PR_BOTTOMLINE) {
-      cout << "[app]\n[app] Stop: incre_pr is too small (<" << INCRE_PR_BOTTOMLINE << "), so another pruning stage is meaningless. Go to 'final_retrain'." << endl;
+    if (incre_pr < APP<Dtype>::INCRE_PR_BOTTOMLINE) {
+      cout << "[app]\n[app] Stop: incre_pr is too small (<" << APP<Dtype>::INCRE_PR_BOTTOMLINE << "), so another pruning stage is meaningless. Go to 'final_retrain'." << endl;
       const string resume_file = param_.snapshot_prefix() + lastretrain_prefix_ + "_iter_" + caffe::format_int(APP<Dtype>::last_feasible_prune_iter2) + ".solverstate";
       Restore(resume_file.c_str(), false);
       cout << "[app]    ===== resuming from: " << resume_file << endl;
@@ -747,7 +737,7 @@ const Dtype Solver<Dtype>::SetNewCurrentPruneRatio(const bool& IF_roll_back, con
     incre_pr = APP<Dtype>::last_prune_ratio_incre / (APP<Dtype>::last_feasible_acc - val_acc) 
                                                   * (APP<Dtype>::last_feasible_acc - APP<Dtype>::acc_borderline);
   } else {
-    incre_pr = min(max((Dtype)INCRE_PR_BOTTOMLINE, (val_acc - APP<Dtype>::acc_borderline) * COEEF_ACC_2_PR), (Dtype)0.2); // range: [INCRE_PR_BOTTOMLINE, 0.2]
+    incre_pr = min(max((Dtype)APP<Dtype>::INCRE_PR_BOTTOMLINE, (val_acc - APP<Dtype>::acc_borderline) * APP<Dtype>::COEEF_ACC_2_PR), (Dtype)0.2); // range: [APP<Dtype>::INCRE_PR_BOTTOMLINE, 0.2]
   }
   // Check incre_pr
   APP<Dtype>::last_prune_ratio_incre = incre_pr;
@@ -950,13 +940,13 @@ const Dtype Solver<Dtype>::IncrePR_2_TRMul(const Dtype& incre_pr) {
   y1 = 3 * (y0 - 0.5) + 1  constrain the range be in (-0.5, 2.5)
 
   s.t.
-  x = INCRE_PR_BOTTOMLINE  ->  y1 = 0.2 
-  x = STANDARD_INCRE_PR   ->  y1 = 1
+  x = APP<Dtype>::INCRE_PR_BOTTOMLINE  ->  y1 = 0.2 
+  x = APP<Dtype>::STANDARD_INCRE_PR   ->  y1 = 1
   */
-  const Dtype y0 = (TR_MUL_BOTTOM - 1) / 3 + 0.5;
-  const Dtype k = log(1/y0 - 1) / (STANDARD_INCRE_PR - INCRE_PR_BOTTOMLINE);
+  const Dtype y0 = (APP<Dtype>::TR_MUL_BOTTOM - 1) / 3 + 0.5;
+  const Dtype k = log(1/y0 - 1) / (APP<Dtype>::STANDARD_INCRE_PR - APP<Dtype>::INCRE_PR_BOTTOMLINE);
 
-  const Dtype y0_ = 1 / (1 + exp(-k * (incre_pr - STANDARD_INCRE_PR)));
+  const Dtype y0_ = 1 / (1 + exp(-k * (incre_pr - APP<Dtype>::STANDARD_INCRE_PR)));
   const Dtype y1_ = 3 * (y0_ - 0.5) + 1;
   return y1_;
 }

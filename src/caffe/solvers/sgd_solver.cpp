@@ -227,7 +227,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                        temp_[param_id]->gpu_data(),
                        net_params[param_id]->mutable_gpu_diff());
 
-      } else if (regularization_type == "SelectiveReg") {
+      } else if (regularization_type == "Reg_Col") {
         // add weight decay, weight decay still used
         caffe_gpu_axpy(net_params[param_id]->count(),
                        local_decay,
@@ -261,6 +261,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
         if (APP<Dtype>::step_ % APP<Dtype>::prune_interval == 0) {
           if (APP<Dtype>::prune_coremthd == "Reg-rank" || APP<Dtype>::prune_coremthd == "Reg") {
             // print ave-magnitude
+            /*
             cout << "ave-magnitude_col " << this->iter_ << " " << layer_name << ":";
             for (int j = 0; j < num_col; ++j) {
               Dtype sum = 0;
@@ -270,7 +271,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
               cout << " " << sum/num_row;
             }
             cout << endl;
-            
+            */
             
             // Sort 01: sort by L1-norm
             typedef std::pair<Dtype, int> mypair;
@@ -315,7 +316,6 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             const Dtype alpha21 = (num_col_to_prune_ == 1)          ? 0 : log(1/kk2) / (num_col_to_prune_-1);
             const Dtype alpha22 = (num_col_to_prune_ == num_col_-1) ? 0 : log(1/kk2) / (num_col_-1 - num_col_to_prune_);
             
-            APP<Dtype>::IF_scheme1_when_Reg_rank = false; // scheme 2 is the default.
             for (int j = 0; j < num_col_; ++j) { // j: rank
               const int col_of_rank_j = col_hrank[j + num_pruned_col].second; // Note the real rank is j + num_pruned_col
               const Dtype Delta = APP<Dtype>::IF_scheme1_when_Reg_rank
@@ -336,7 +336,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                   mumasks[i * num_col + col_of_rank_j] = 0;
                   muweight[i* num_col + col_of_rank_j] = 0;
                 }
-                muhistory_score[col_of_rank_j] = APP<Dtype>::step_ - 1000000 - (muhistory_punish[col_of_rank_j] - APP<Dtype>::target_reg); // This is to 
+                muhistory_score[col_of_rank_j] = APP<Dtype>::step_ - 1000000 - (muhistory_punish[col_of_rank_j] - APP<Dtype>::target_reg);
                 // make the pruned weight group sorted in left in sort 01 and 02 above, and the earlier pruned the lefter sorted
 
                 // Check whether the corresponding row in the last layer could be pruned
@@ -474,7 +474,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                       net_params[param_id]->gpu_diff(),
                       net_params[param_id]->mutable_gpu_diff());
                       
-      } else if (regularization_type == "Auto-balanced") {
+      } else if (regularization_type == "AFP_Col") {
         const vector<int>& shape = this->net_->learnable_params()[param_id]->shape();
         const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[param_id].first];
         if (shape.size() != 4 || APP<Dtype>::layer_index.count(layer_name) == 0) { // not the Conv weights
@@ -573,7 +573,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
           }
           APP<Dtype>::pruned_ratio[L] = 0.2; // just set a positive value to pass the ClearHistory check
         }
-      } else if (regularization_type == "Auto-balanced_Row") {
+      } else if (regularization_type == "AFP_Row") {
         const vector<int>& shape = this->net_->learnable_params()[param_id]->shape();
         const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[param_id].first];
         if (shape.size() != 4 || APP<Dtype>::layer_index.count(layer_name) == 0) { // not the Conv weights

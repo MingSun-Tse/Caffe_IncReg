@@ -97,7 +97,17 @@ public:
     static string show_layer;
     static int show_num_layer;
     static int show_num_weight;
-}; 
+    
+    // Some constants used to control the pruning process in solver.cpp
+    static Dtype MUL_LR_DECAY; // the multiplier of lr decay
+    static int MAX_CNT_LR_DECAY; // the max number of lr decay
+    static Dtype ACCURACY_GAP_THRESHOLD;
+    static Dtype INCRE_PR_BOTTOMLINE;
+    static int CNT_AFTER_MAX_ACC;
+    static Dtype COEEF_ACC_2_PR; // multiplier of acc margin to incre_pr
+    static Dtype TR_MUL_BOTTOM; // the bottomline of target_reg multiplier
+    static Dtype STANDARD_INCRE_PR;
+};
 
     template<typename Dtype>  string  APP<Dtype>::prune_method    = "None"; /// initialized for caffe test, which has no solver but this info is still needed in layer.
     template<typename Dtype>  string  APP<Dtype>::prune_unit      = "None";
@@ -180,10 +190,19 @@ public:
     template<typename Dtype>  vector<Dtype>  APP<Dtype>::num_param;
     
     // 3. Logging
-    template<typename Dtype>  int APP<Dtype>::show_interval = 10; // the interval to print pruning progress log
-    template<typename Dtype>  string APP<Dtype>::show_layer = "0111"; // '1' means to print the weights of the layer with the index
-    template<typename Dtype>  int APP<Dtype>::show_num_layer = 100; // work with show_interval, how many layers get printed
-    template<typename Dtype>  int APP<Dtype>::show_num_weight = 20; // work with show_layer, how many weights get printed
+    template<typename Dtype> int    APP<Dtype>::show_interval = 10; // the interval to print pruning progress log
+    template<typename Dtype> string APP<Dtype>::show_layer = "0111"; // '1' means to print the weights of the layer with the index
+    template<typename Dtype> int    APP<Dtype>::show_num_layer = 100; // work with show_interval, how many layers get printed
+    template<typename Dtype> int    APP<Dtype>::show_num_weight = 20; // work with show_layer, how many weights get printed
+    
+    template<typename Dtype> Dtype APP<Dtype>::MUL_LR_DECAY = 0.1;
+    template<typename Dtype> int   APP<Dtype>::MAX_CNT_LR_DECAY = 4;
+    template<typename Dtype> Dtype APP<Dtype>::ACCURACY_GAP_THRESHOLD = 5e-4;
+    template<typename Dtype> Dtype APP<Dtype>::INCRE_PR_BOTTOMLINE = 0.01;
+    template<typename Dtype> int   APP<Dtype>::CNT_AFTER_MAX_ACC = 4;
+    template<typename Dtype> Dtype APP<Dtype>::COEEF_ACC_2_PR = 10;
+    template<typename Dtype> Dtype APP<Dtype>::TR_MUL_BOTTOM = 0.25;
+    template<typename Dtype> Dtype APP<Dtype>::STANDARD_INCRE_PR = 0.05;
 }
 
 #endif
