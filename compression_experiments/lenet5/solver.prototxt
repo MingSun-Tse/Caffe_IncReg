@@ -1,0 +1,34 @@
+display: 20
+test_iter: 1000
+test_interval: 1000000
+test_initialization: false
+snapshot: 1000
+snapshot_prefix: "compression_experiments/lenet5/weights/"
+            net: "compression_experiments/lenet5/train_val.prototxt"
+solver_mode: GPU
+
+momentum: 0.9
+base_lr: 0.0005 # original is 0.01, recommended: original / 20
+lr_policy: "fixed"
+max_iter : 10000000
+
+# ---------------------------
+prune_method: "Reg_Col"
+regularization_type: "Reg_Col"
+weight_decay: 0.00025 # original is 0.0005, recommended: original / 2
+
+AA: 0.00025 # recommended: weight_decay
+target_reg: 0.05 # recommended: (5e3 ~ 1e4) * AA. Here we set it smaller for faster demo.
+
+iter_size_prune: 1
+iter_size_losseval: 2
+iter_size_retrain: 2
+iter_size_final_retrain: 8
+
+acc_borderline: -1
+# If acc_borderline < 0, it means the task at hand is "given pruning ratio, output the model with best accuracy", then you don't have to set baseline_acc below.
+# If acc_borderline > 0, it means the task at hand is "given the bottome accuracy, output the model with largest sparsity", then you have to set baseline_acc below.
+# baseline_acc: 0.992
+losseval_interval: 1000 # recommended: 5000 ~ 20000. Here we set it smaller for faster demo.
+retrain_test_interval: 500 # recommended: 500 or 1000
+# ---------------------------

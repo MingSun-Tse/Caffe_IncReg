@@ -250,8 +250,8 @@ message SolverParameter {
   
   optional float AA = 55 [default = 0]; // unit punishment
   optional float target_reg = 61 [default = 0]; // ceiling punishment
-  optional float speedup = 56 [default = 0];
-  optional float compRatio = 62 [default = 0];
+  optional float speedup = 56 [default = 10000];
+  optional float compRatio = 62 [default = 10000];
  
   optional float acc_borderline = 66;
   optional float baseline_acc = 67;
@@ -259,9 +259,9 @@ message SolverParameter {
   optional int32 losseval_interval = 69 [default = 0];
   
   optional bool IF_update_row_col = 57 [default = true];
-  optional bool IF_eswpf = 59 [default = true];
-  optional bool IF_speedup_count_fc = 63 [default = true];
-  optional bool IF_compr_count_conv = 64 [default = true];
+  optional bool IF_eswpf = 59 [default = false];
+  optional bool IF_speedup_count_fc = 63 [default = false];
+  optional bool IF_compr_count_conv = 64 [default = false];
   optional bool IF_scheme1_when_Reg_rank = 65 [default = true];
   optional bool IF_use_acc1 = 74 [default = true];
 

@@ -1,6 +1,9 @@
 *.pyc
 *.exe
 *.o
+*.caffemodel
+*.solverstate
 00Test_project/
 build
 .build_release/
+
