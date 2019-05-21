@@ -1,23 +1,23 @@
 
 
-## Trained models
-https://drive.google.com/open?id=112OyHziceXoww6rZ_aIjTUzpKElg0sFd
-
-(More discriptions will be updated soon update.)
-
-| model | original accuracy | speedup ratio | pruned accuracy |
+## Pruned models
+| Model | Baseline accuracy (%) | Speedup ratio | Pruned accuracy(%) |
 | :-: | :-: | :-: | :-: |
-| vgg16 |       [0.702/0.896](xx)     | 2x | [0.702/0.896](xx) |
-| resnet50 |    [0.702/0.896](xx)     | 2x | [0.702/0.896](xx) |
-| inceptionv3 | [0.702/0.896](xx)     | 2x | [0.702/0.896](xx) |
+| vgg16 |       [70.62/89.56](http://www.robots.ox.ac.uk/~vgg/research/very_deep/) | 5x | [67.62/88.04](https://drive.google.com/open?id=112OyHziceXoww6rZ_aIjTUzpKElg0sFd) |
+| resnet50 |    [72.92/91.18](https://github.com/KaimingHe/deep-residual-networks) | 2x | [72.47/91.05](https://drive.google.com/open?id=112OyHziceXoww6rZ_aIjTUzpKElg0sFd) |
 
-Note: speedup ratio is the theoretical value measured by FLOPs reduction in *only conv* layers.
+Note: 
+- Speedup ratio is the theoretical value measured by FLOPs reduction in *only conv* layers.
+- The baseline accuracies are obtained by evaluating the downloaded model *without* finetuning them on our produced ImageNet dataset.
+- The provided pruned caffemodels are only zero-masked, without taking out the zero weight filters or columns. So they are literally of the same size as their baseline counterparts.
 
 
 ## Environment
 - Ubuntu 1404
+- Caffe
 - Python 2.7
-- Use cudnn
+- Use cuDNN
+
 
 ## How to run the code
 1. Download this repo and compile: `make -j24`, see Caffe's [official guide](http://caffe.berkeleyvision.org/installation.html). Make sure you get it through. 
@@ -28,7 +28,7 @@ Note: speedup ratio is the theoretical value measured by FLOPs reduction in *onl
     - (We have set up an experiment folder in `compression_experiments/lenet5`, where there are three files: `train.sh, solver.prototxt, train_val.prototxt`. There are some path settings in them and pruning configs in `solver.prototxt`, where we have done that for you, but you are free to change them.)
     - In your caffe root path, run `nohup  sh  compression_experiments/lenet5/train.sh  <gpu_id>  >  /dev/null  &`, then you are all set! Check your log at `compression_experiments/lenet5/weights`.
 
-For vgg16, resnet50, and inceptionv3, we also provided their experiment folders in `compression_experiments`, check them out and have a try!
+For vgg16, resnet50, we also provided their experiment folders in `compression_experiments`, check them out and have a try!
 
 ## Check the log
 There are two logs generated during pruning: `log_<TimeID>_acc.txt` and `log_<TimeID>_prune.txt`. The former saves the logs printed by the original Caffe; the latter saves the logs printed by our added codes.
@@ -46,13 +46,13 @@ The BVLC reference models are released for unrestricted use.
 
 Please cite these in your publications if this code helps your research:
 
-    @proceedins{huan2019increg,
+    @proceedins{wang2019increg,
       Author = {Wang, Huan and Zhang, Qiming and Wang, Yuehai and Yu, Lu and Hu, Haoji},
       Title = {Structured Pruning for Efficient ConvNets via Incremental Regularization},
       Booktitle = {IJCNN},
       Year = {2019}
     }
-    @proceedins{huan2018spp,
+    @proceedins{wang2018spp,
       Author = {Wang, Huan and Zhang, Qiming and Wang, Yuehai and Hu, Haoji},
       Title = {Structured probabilistic pruning for convolutional neural network acceleration},
       Booktitle = {BMVC},
