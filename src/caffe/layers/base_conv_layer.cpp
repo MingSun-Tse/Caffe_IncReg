@@ -203,7 +203,7 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     if (bias_term_) {
       this->blobs_[1].reset(new Blob<Dtype>(bias_shape));
       if (APP<Dtype>::prune_method != "None") {
-        this->masks_[1].reset(new Blob<Dtype>(weight_shape));
+        this->masks_[1].reset(new Blob<Dtype>(bias_shape));
       }
       if (APP<Dtype>::prune_method.substr(0, 3) == "Reg") {
         this->history_score_[1].reset(new Blob<Dtype>(weight_shape));
