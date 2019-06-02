@@ -125,7 +125,7 @@ void Layer<Dtype>::UpdatePrunedRatio() {
       }
       bool IF_whole_row_pruned = true;
       for (int j = 0; j < num_col; ++j) {
-        if (!weight[i * num_col + j]) {
+        if (weight[i * num_col + j] != 0) {
           IF_whole_row_pruned = false;
           break;
         }
@@ -141,7 +141,7 @@ void Layer<Dtype>::UpdatePrunedRatio() {
       }
       bool IF_whole_col_pruned = true;
       for (int i = 0; i < num_row; ++i) {
-        if (!weight[i * num_col + j]) {
+        if (weight[i * num_col + j] != 0) {
           IF_whole_col_pruned = false;
           break;
         }
