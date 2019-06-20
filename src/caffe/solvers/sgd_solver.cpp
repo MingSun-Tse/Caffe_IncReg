@@ -377,6 +377,130 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                       net_params[param_id]->gpu_diff(),
                       net_params[param_id]->mutable_gpu_diff());
       
+      } else if (regularization_type == "RegSpa_Col") {
+        // add weight decay, weight decay still used
+        caffe_gpu_axpy(net_params[param_id]->count(),
+                       local_decay,
+                       net_params[param_id]->gpu_data(),
+                       net_params[param_id]->mutable_gpu_diff());
+        // If return
+        const string& layer_name = this->net_->layer_names()[this->net_->param_layer_indices()[param_id].first];
+        const int L = GetLayerIndex(param_id);
+        if (L == -1) { return; }
+        
+        Dtype* muhistory_score  = this->net_->layer_by_name(layer_name)->history_score()[0]->mutable_cpu_data();
+        Dtype* muhistory_punish = this->net_->layer_by_name(layer_name)->history_punish()[0]->mutable_cpu_data();
+        Dtype* mumasks          = this->net_->layer_by_name(layer_name)->masks()[0]->mutable_cpu_data();
+        Dtype* muweight   = net_params[param_id]->mutable_cpu_data();
+        const int count   = net_params[param_id]->count();
+        const int num_row = net_params[param_id]->shape()[0];
+        const int num_chl = net_params[param_id]->shape()[1];
+        const int num_col = count / num_row;
+        const int num_spa = net_params[param_id]->count(2);
+        const int num_pruned_spa = APP<Dtype>::num_pruned_col[L] / num_chl;
+        const int num_spa_ = num_spa - num_pruned_spa;
+        const int num_spa_to_prune_ = ceil(num_spa * APP<Dtype>::current_prune_ratio[L]) - num_pruned_spa;
+        
+        // This should not happen, but check here in case.
+        // If it happens unluckily, it usually does not affect the result.
+        if (num_spa_to_prune_ <= 0) {
+          cout << "BUG: num_spa_to_prune_ = " << num_spa_to_prune_ << endl;
+          return;
+        }
+        
+        const Dtype AA = APP<Dtype>::AA;
+        if (APP<Dtype>::step_ % APP<Dtype>::prune_interval == 0) {
+          if (APP<Dtype>::prune_coremthd == "Reg-rank" || APP<Dtype>::prune_coremthd == "Reg") {            
+            // Sort 01: sort by L1-norm
+            typedef std::pair<Dtype, int> mypair;
+            vector<mypair> spa_score(num_spa);
+            for (int s = 0; s < num_spa; ++s) {
+              spa_score[s].second = s;
+              if (APP<Dtype>::IF_col_pruned[L][s][0]) {
+                spa_score[s].first = muhistory_score[s]; // make the pruned sink down
+                continue;
+              }
+              spa_score[s].first = 0;
+              for (int i = 0; i < num_row; ++i) {
+                for (int c = 0; c < num_chl; ++ c) {
+                  spa_score[s].first += fabs(muweight[i * num_col + c * num_spa + s]);
+                }
+              }
+            }
+            sort(spa_score.begin(), spa_score.end());
+
+            // Make new criteria, i.e., history_rank, by rank
+            const int n = this->iter_ + 1; // No.n iter (n starts from 1)
+            for (int rk = 0; rk < num_spa; ++rk) {
+              const int spa_of_rank_rk = spa_score[rk].second;
+              if (APP<Dtype>::IF_col_pruned[L][spa_of_rank_rk][0]) { continue; }
+              muhistory_score[spa_of_rank_rk] = ((n-1) * muhistory_score[spa_of_rank_rk] + rk) / n;
+            }
+
+            // Sort 02: sort by history_rank
+            vector<mypair> spa_hrank(num_spa); // the history_rank of each column, history_rank is like the new score
+            for (int s = 0; s < num_spa; ++s) {
+              spa_hrank[s].first  = muhistory_score[s];
+              spa_hrank[s].second = s;
+            }
+            sort(spa_hrank.begin(), spa_hrank.end());
+
+            // scheme 1, the exponential center-symmetrical function
+            const Dtype kk = APP<Dtype>::kk; // u in the paper
+            const Dtype alpha = log(2/kk) / (num_spa_to_prune_);
+            const Dtype N1 = -log(kk)/alpha; // the symmetry point
+            
+            // scheme 2, the dis-continual function
+            const Dtype kk2 = max((APP<Dtype>::pruned_ratio_for_comparison[L] - APP<Dtype>::last_feasible_prune_ratio[L]) 
+                  / (APP<Dtype>::current_prune_ratio[L] - APP<Dtype>::last_feasible_prune_ratio[L]) * (Dtype)0.75, (Dtype)0.05) ; // feasible range: (0, 1)
+            const Dtype alpha21 = (num_spa_to_prune_ == 1)          ? 0 : log(1/kk2) / (num_spa_to_prune_-1);
+            const Dtype alpha22 = (num_spa_to_prune_ == num_spa_-1) ? 0 : log(1/kk2) / (num_spa_-1 - num_spa_to_prune_);
+            
+            for (int j = 0; j < num_spa_; ++j) { // j: rank
+              const int spa_of_rank_j = spa_hrank[j + num_pruned_spa].second; // Note the real rank is j + num_pruned_spa
+              const Dtype Delta = APP<Dtype>::IF_scheme1_when_Reg_rank
+                                  ? (j < N1                ? AA * exp(-alpha   * j) : 2*kk*AA - AA * exp(-alpha   * (2 * N1     - j)))
+                                  : (j < num_spa_to_prune_ ? AA * exp(-alpha21 * j) :         - AA * exp(-alpha22 * (num_spa_-1 - j)));
+
+              const Dtype old_reg = muhistory_punish[spa_of_rank_j];
+              const Dtype new_reg = std::max(old_reg + Delta, Dtype(0));
+              for (int i = 0; i < num_row; ++i) {
+                for (int c = 0; c < num_chl; ++c) {
+                  muhistory_punish[i * num_col + c * num_spa + spa_of_rank_j] = new_reg;
+                }
+              }
+              // TODO: Use if to check.
+
+              if (new_reg >= APP<Dtype>::target_reg) {
+                for (int c = 0; c < num_chl; ++c) {
+                  for (int g = 0; g < APP<Dtype>::group[L]; ++g) {
+                    APP<Dtype>::IF_col_pruned[L][c * num_spa + spa_of_rank_j][g] = true;
+                  }
+                }
+                APP<Dtype>::num_pruned_col[L] += num_chl;
+                for (int i = 0; i < num_row; ++i) {
+                  for (int c = 0; c < num_chl; ++c) {
+                    mumasks[i * num_col + c * num_spa + spa_of_rank_j] = 0;
+                    muweight[i * num_col + c * num_spa + spa_of_rank_j] = 0;
+                  }
+                }
+                muhistory_score[spa_of_rank_j] = APP<Dtype>::step_ - 1000000 - (muhistory_punish[spa_of_rank_j] - APP<Dtype>::target_reg);
+                // make the pruned weight group sorted in left in sort 01 and 02 above, and the earlier pruned the lefter sorted
+              }
+            }
+          }
+        }
+        
+        //Apply Reg
+        caffe_gpu_mul(count,
+                      net_params[param_id]->gpu_data(),
+                      muhistory_punish,
+                      tmp_[param_id]->mutable_gpu_data());
+        caffe_gpu_add(count,
+                      tmp_[param_id]->gpu_data(),
+                      net_params[param_id]->gpu_diff(),
+                      net_params[param_id]->mutable_gpu_diff());
+      
       } else if (regularization_type == "Reg_Row") {
         // add weight decay, weight decay still used
         caffe_gpu_axpy(net_params[param_id]->count(),
