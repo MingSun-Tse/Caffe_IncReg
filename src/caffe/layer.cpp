@@ -50,6 +50,11 @@ void Layer<Dtype>::IF_layer_prune_finished() {
                   << "  pruned_ratio_col: " << rcol
                   << "  current prune_ratio: " << APP<Dtype>::current_prune_ratio[L] << std::endl;
 
+        if (APP<Dtype>::current_prune_ratio[L] != 0){
+          cout << layer_name << "  current_target_achieved, start to reshape the kernel：" << endl;
+          this->ReshapeKernel();
+        }
+        
         APP<Dtype>::IF_current_target_achieved = true;
         for (int i = 0; i < APP<Dtype>::conv_layer_cnt + APP<Dtype>::fc_layer_cnt; ++i) {
           if (APP<Dtype>::iter_prune_finished[i] == INT_MAX) {
@@ -409,6 +414,62 @@ void Layer<Dtype>::PruneSetUp(const PruneParameter& prune_param) {
   APP<Dtype>::filter_spatial_size.push_back(this->blobs_[0]->shape()[2] * this->blobs_[0]->shape()[3]); // TODO(mingsuntse): check 3D CNN, this is okay?
   APP<Dtype>::iter_prune_finished.push_back(INT_MAX);
   LOG(INFO) << "Pruning setup done: " << layer_name;
+}
+
+template <typename Dtype>
+void Layer<Dtype>::ReshapeKernel() {
+  const string layer_name;
+  Dtype* mumasks = this->masks()[0]->mutable_cpu_data();
+  const int kernel_H = this->blobs_[0]->shape()[2];
+  float min_value = 10000000;
+  float value = 0;
+  const int count   = this->blobs_[0]->count();
+  const int num_row = this->blobs_[0]->shape()[0];
+  const int num_col = count / num_row;
+  const int num_spa = this->blobs_[0]->count(2);
+  const int num_chl = this->blobs_[0]->shape()[1];
+  vector<int> min_rec;
+  vector<vector<int> > rec(kernel_H, vector<int>(kernel_H));
+  for (int h = 0; h < kernel_H; ++h ) {
+    for (int w = 0; w < kernel_H; ++w) {
+      for (int m = h; m < kernel_H; ++m) {
+        for (int n = w; n < kernel_H; ++n) {
+          for (int H = 0; H < kernel_H; ++H) {//create the rectangle
+            for (int W = 0; W < kernel_H; ++W) {
+              if (H >= h && H <= m && W >= w && W <= n){
+                rec[H][W] = 1;
+              }else {
+                rec[H][W] = 0;
+              }
+            }
+          }
+          value = 0;
+          for (int H = 0; H < kernel_H; ++H) {
+            for (int W = 0; W < kernel_H; ++W) {
+              value += fabs(mumasks[H * kernel_H + W] - rec[H][W]);
+            }
+          }
+          if (value < min_value) {
+            min_value = value;
+            min_rec.clear();
+            for (int H = 0; H < kernel_H; ++H) {
+              for (int W = 0; W < kernel_H; ++W) {
+                min_rec.push_back(rec[H][W]);
+              }
+            }       
+          }
+        }
+      }
+    }
+  }
+  for (int s = 0; s < num_spa; ++s) {
+    for (int i = 0; i < num_row; ++i) {
+      for (int k = 0; k < num_chl; ++k) {
+        int a = min_rec[s];
+        this->masks_[0]->mutable_cpu_data()[i * num_col + k * num_spa + s] = a;
+      }
+    }   
+  }
 }
 
 template <typename Dtype>

@@ -79,6 +79,7 @@ class Layer {
   /// Added by @mingsuntse, for pruning
   // Tool functions
   void RestoreMasks();
+  void ReshapeKernel();
   void IF_layer_prune_finished();
   void UpdateNumPrunedRow();
   void UpdateNumPrunedCol();
