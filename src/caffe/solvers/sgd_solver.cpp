@@ -408,9 +408,10 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
           return;
         }
         
+        // clock_t t1 = clock();
         const Dtype AA = APP<Dtype>::AA;
         if (APP<Dtype>::step_ % APP<Dtype>::prune_interval == 0) {
-          if (APP<Dtype>::prune_coremthd == "Reg-rank" || APP<Dtype>::prune_coremthd == "Reg") {            
+          if (APP<Dtype>::prune_coremthd == "Reg-rank" || APP<Dtype>::prune_coremthd == "Reg") {
             // Sort 01: sort by L1-norm
             typedef std::pair<Dtype, int> mypair;
             vector<mypair> spa_score(num_spa);
@@ -428,7 +429,8 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
               }
             }
             sort(spa_score.begin(), spa_score.end());
-
+            // cout << "  - after sort 01: " << (double)(clock() - t1) / CLOCKS_PER_SEC << " (" << layer_name << ")" << endl;
+            
             // Make new criteria, i.e., history_rank, by rank
             const int n = this->iter_ + 1; // No.n iter (n starts from 1)
             for (int rk = 0; rk < num_spa; ++rk) {
@@ -444,6 +446,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
               spa_hrank[s].second = s;
             }
             sort(spa_hrank.begin(), spa_hrank.end());
+            // cout << "  - after sort 02: " << (double)(clock() - t1) / CLOCKS_PER_SEC << " (" << layer_name << ")" << endl; 
 
             // scheme 1, the exponential center-symmetrical function
             const Dtype kk = APP<Dtype>::kk; // u in the paper
@@ -490,6 +493,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
             }
           }
         }
+        // cout << "  - after punish func: " << (double)(clock() - t1) / CLOCKS_PER_SEC << " (" << layer_name << ")" << endl; 
         
         //Apply Reg
         caffe_gpu_mul(count,
@@ -500,6 +504,7 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
                       tmp_[param_id]->gpu_data(),
                       net_params[param_id]->gpu_diff(),
                       net_params[param_id]->mutable_gpu_diff());
+        // cout << "  - after apply reg: " << (double)(clock() - t1) / CLOCKS_PER_SEC << " (" << layer_name << ")" << endl; 
       
       } else if (regularization_type == "Reg_Row") {
         // add weight decay, weight decay still used
