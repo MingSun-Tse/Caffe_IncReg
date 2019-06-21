@@ -1,0 +1,33 @@
+display: 20
+test_iter: 5000
+test_interval: 1000000
+test_initialization: false
+snapshot: 1000
+solver_mode: GPU
+
+momentum: 0.9
+base_lr: 0.0005
+lr_policy: "fixed"
+max_iter : 10000000
+iter_size: 2
+
+# ---------------------------
+prune_method: "Reg_Col"
+regularization_type: "RegSpa_Col"
+weight_decay: 0.00025 # origin is 0.0005
+
+AA: 0.00025
+target_reg: 2.03915 # 1e4 * AA
+
+iter_size_prune: 1
+iter_size_losseval: 2
+iter_size_retrain: 2
+iter_size_final_retrain: 8
+
+# baseline_acc: 0.687
+acc_borderline: -1
+losseval_interval: 20000
+retrain_test_interval: 1000
+# ---------------------------
+snapshot_prefix: "compression_experiments/resnet50_spa/weights/"
+            net: "compression_experiments/resnet50_spa/train_val.prototxt"
