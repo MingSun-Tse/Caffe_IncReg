@@ -27,11 +27,9 @@ void Layer<Dtype>::Unlock() {
 template<typename Dtype>
 void Layer<Dtype>::IF_layer_prune_finished() {
   const string layer_name = this->layer_param_.name();
-  const int L = APP<Dtype>::layer_index[this->layer_param_.name()];
   const int count   = this->blobs_[0]->count();
   const int num_row = this->blobs_[0]->shape()[0];
   const int num_col = count / num_row;
-  const int group = APP<Dtype>::group[L];
   const Dtype* weight = this->blobs_[0]->cpu_data();
   const string mthd = APP<Dtype>::prune_method;
 
@@ -58,11 +56,11 @@ void Layer<Dtype>::IF_layer_prune_finished() {
                   << "  pruned_ratio_col: " << rcol
                   << "  current prune_ratio: " << APP<Dtype>::current_prune_ratio[L] << std::endl;
 
-        if (APP<Dtype>::current_prune_ratio[L] != 0 and APP<Dtype>::prune_method == "RegSpa_Col"){
+        if (APP<Dtype>::current_prune_ratio[L] != 0 && APP<Dtype>::prune_method == "RegSpa_Col") {
           cout << layer_name << "  current_target_achieved, start to reshape the kernel" << endl;
           this->ReshapeKernel();
 
-          //update prune_ratio
+          // update pruned ratio
           APP<Dtype>::num_pruned_col[L] = 0;
           for (int j = 0; j < num_col; ++j) { // Column
             bool IF_whole_col_pruned = true;
@@ -76,23 +74,8 @@ void Layer<Dtype>::IF_layer_prune_finished() {
               APP<Dtype>::num_pruned_col[L] += 1;
             }
           }
-
-          APP<Dtype>::pruned_ratio_col[L] = APP<Dtype>::num_pruned_col[L] / num_col;
-
-          // Summary print
-          if (mthd != "None" && L < APP<Dtype>::show_num_layer) {
-            cout << layer_name << "  IF_prune: " << IF_prune;
-            cout << "  pruned_ratio_col: " << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << "(" << APP<Dtype>::num_pruned_col[L] << ")";
-            cout << "  current_prune_ratio: "  << APP<Dtype>::current_prune_ratio[L];
-            cout << "  iter_prune_finished: " << APP<Dtype>::iter_prune_finished[L];
-            cout << "  (" << APP<Dtype>::prune_state;
-            cout << "-" << APP<Dtype>::learning_rate;
-            cout << "-" << APP<Dtype>::iter_size;
-            cout << "-" << APP<Dtype>::target_reg;
-            cout << ")" << endl;
-          }
-          //this->UpdatePrunedRatio();
-          // TODO: add update num_pruned_col
+          this->UpdatePrunedRatio();
+          cout << layer_name << "  pruned_ratio_col: " << APP<Dtype>::pruned_ratio_col[L] << "(" << APP<Dtype>::num_pruned_col[L] << ")" << endl; // print to check if ratios updated properly
         }
         
         APP<Dtype>::IF_current_target_achieved = true;
@@ -199,10 +182,11 @@ void Layer<Dtype>::UpdatePrunedRatio() {
       }
     }
   }
-
+  
+  // Update 4 ratios: pruned_ratio, pruned_ratio_col, pruned_ratio_row, pruned_ratio_for_comparison
   APP<Dtype>::pruned_ratio_col[L] = APP<Dtype>::num_pruned_col[L] / num_col;
   APP<Dtype>::pruned_ratio_row[L] = APP<Dtype>::num_pruned_row[L] * 1.0 / num_row;
-  APP<Dtype>::pruned_ratio_for_comparison[L] = APP<Dtype>::pruned_ratio_col[L];
+  APP<Dtype>::pruned_ratio_for_comparison[L] = APP<Dtype>::pruned_ratio_col[L]; // default: compare with the column ratios
   if (APP<Dtype>::prune_unit == "Weight") {
     APP<Dtype>::pruned_ratio[L] = APP<Dtype>::num_pruned_weight[L] * 1.0 / count;
     APP<Dtype>::pruned_ratio_for_comparison[L] = APP<Dtype>::pruned_ratio[L];
@@ -514,9 +498,6 @@ void Layer<Dtype>::ReshapeKernel() {
 
 template <typename Dtype>
 void Layer<Dtype>::PruneForward() {
-  const int count = this->blobs_[0]->count();
-  const int num_row = this->blobs_[0]->shape()[0];
-  const int num_col = count / num_row;
   const string layer_name = this->layer_param_.name();
   const string mthd = APP<Dtype>::prune_method;
   const int L = APP<Dtype>::layer_index[layer_name];
@@ -562,8 +543,8 @@ void Layer<Dtype>::PruneForward() {
     if (mthd != "None" && L < APP<Dtype>::show_num_layer) {
       cout << layer_name << "  IF_prune: " << IF_prune;
       cout << "  pruned_ratio: " << APP<Dtype>::pruned_ratio[L];
-      cout << "  pruned_ratio_col: " << APP<Dtype>::num_pruned_col[L] * 1.0 / num_col << "(" << APP<Dtype>::num_pruned_col[L] << ")";
-      cout << "  pruned_ratio_row: " << APP<Dtype>::num_pruned_row[L] * 1.0 / num_row << "(" << APP<Dtype>::num_pruned_row[L] << ")";
+      cout << "  pruned_ratio_col: " << APP<Dtype>::pruned_ratio_col[L] << "(" << APP<Dtype>::num_pruned_col[L] << ")";
+      cout << "  pruned_ratio_row: " << APP<Dtype>::pruned_ratio_row[L] << "(" << APP<Dtype>::num_pruned_row[L] << ")";
       cout << "  current_prune_ratio: "  << APP<Dtype>::current_prune_ratio[L];
       cout << "  iter_prune_finished: " << APP<Dtype>::iter_prune_finished[L];
       cout << "  (" << APP<Dtype>::prune_state;
