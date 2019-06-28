@@ -78,7 +78,6 @@ void Layer<Dtype>::IF_layer_prune_finished() {
           }
 
           APP<Dtype>::pruned_ratio_col[L] = APP<Dtype>::num_pruned_col[L] / num_col;
-          APP<Dtype>::pruned_ratio_row[L] = APP<Dtype>::num_pruned_row[L] * 1.0 / num_row;
 
           // Summary print
           if (mthd != "None" && L < APP<Dtype>::show_num_layer) {
