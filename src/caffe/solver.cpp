@@ -63,6 +63,11 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   // copy prune params
   APP<Dtype>::prune_method = param_.prune_method();
   if (APP<Dtype>::prune_method != "None") {
+      assert(APP<Dtype>::prune_method == "Reg_Col" ||
+             APP<Dtype>::prune_method == "Reg_Row" ||
+             APP<Dtype>::prune_method == "AFP_Col" ||
+             APP<Dtype>::prune_method == "AFP_Row" ||
+             APP<Dtype>::prune_method == "RegSpa_Col");
       char* mthd = new char[strlen(APP<Dtype>::prune_method.c_str()) + 1];
       strcpy(mthd, APP<Dtype>::prune_method.c_str());
       APP<Dtype>::prune_coremthd = strtok(mthd, "_"); // mthd is like "Reg_Col", the first split is `Reg`
