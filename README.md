@@ -35,10 +35,6 @@ There are two logs generated during pruning: `log_<TimeID>_acc.txt` and `log_<Ti
 
 Go to the project folder, e.g., `compression_experiments/lenet5` for lenet5, then run `cat weights/*prune.txt | grep app` you will see the pruning and retraining course.
 
-## Detailed explanation of the options in solver.prototxt
-- target_reg:
-- IF_eswpf:
-
 ## License and Citation
 
 Caffe is released under the [BSD 2-Clause license](https://github.com/BVLC/caffe/blob/master/LICENSE).
@@ -46,6 +42,12 @@ The BVLC reference models are released for unrestricted use.
 
 Please cite these in your publications if this code helps your research:
 
+    @article{wang2019jstsp,
+      Author = {Wang, Huan and Hu, Xinyi and Zhang, Qiming and Wang, Yuehai and Yu, Lu and Hu, Haoji},
+      Title = {Structured Pruning for Efficient Convolutional Neural Networks via Incremental Regularization},
+      Journal = {IEEE Journal of Selected Topics in Signal Processing},
+      Year = {2019}
+    }
     @proceedins{wang2019increg,
       Author = {Wang, Huan and Zhang, Qiming and Wang, Yuehai and Yu, Lu and Hu, Haoji},
       Title = {Structured Pruning for Efficient ConvNets via Incremental Regularization},
